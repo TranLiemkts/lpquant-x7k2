@@ -346,5 +346,136 @@
   }
  },
  "fred": {},
- "live": null
+ "live": {
+  "t": "2026-11-02T17:38:01.993Z",
+  "spot": 3958.79,
+  "set": "near",
+  "gmode": "build",
+  "gex": {
+   "cme": -50.44,
+   "gld": 44.29,
+   "at_spot": -7.02,
+   "at_spot_all": -678.54
+  },
+  "flip": 4065.75,
+  "hedge": [],
+  "levels": [
+   {
+    "key": "CW",
+    "name": "Call Wall",
+    "pool": "GC",
+    "xau": 3988,
+    "strike": 4000,
+    "hard": 100,
+    "doi": 13,
+    "gex": -14.3501
+   },
+   {
+    "key": "T1",
+    "name": "Tường phụ 1",
+    "pool": "GC",
+    "xau": 4013,
+    "strike": 4025,
+    "hard": 2,
+    "doi": 6,
+    "gex": -0.0593
+   },
+   {
+    "key": "T2",
+    "name": "Tường phụ 2",
+    "pool": "GC",
+    "xau": 3938,
+    "strike": 3950,
+    "hard": 2,
+    "doi": 0,
+    "gex": -0.4495
+   },
+   {
+    "key": "PW",
+    "name": "Put Wall",
+    "pool": "GC",
+    "xau": 3963,
+    "strike": 3975,
+    "hard": 100,
+    "doi": 29,
+    "gex": -27.8956
+   },
+   {
+    "key": "MAG",
+    "name": "Magnet tăng tốc",
+    "pool": "GC",
+    "xau": 3963,
+    "strike": 3975,
+    "gex": -27.8956
+   },
+   {
+    "key": "MP",
+    "name": "Max Pain",
+    "pool": "GC",
+    "xau": 4038,
+    "strike": 4050
+   },
+   {
+    "key": "FLIP",
+    "name": "Gamma Flip",
+    "pool": "GC+GLD",
+    "xau": 4065.75,
+    "strike": 4077.75
+   },
+   {
+    "key": "GCW",
+    "name": "Call Wall",
+    "pool": "GLD",
+    "xau": 4147.05,
+    "strike": 380,
+    "hard": 100,
+    "doi": 0,
+    "gex": 1.586
+   },
+   {
+    "key": "GPW",
+    "name": "Put Wall",
+    "pool": "GLD",
+    "xau": 3819.66,
+    "strike": 350,
+    "hard": 100,
+    "doi": 0,
+    "gex": -0.2738
+   }
+  ],
+  "plans": [
+   {
+    "id": "KH1",
+    "side": "BUY",
+    "lo": 3934,
+    "hi": 3942,
+    "prob": 37,
+    "st": "CHỜ",
+    "sl": 3931,
+    "tp": 3963
+   },
+   {
+    "id": "KH2",
+    "side": "BUY",
+    "lo": 3959,
+    "hi": 3967,
+    "prob": 27,
+    "st": "CHỜ",
+    "sl": 3959,
+    "tp": 3988
+   },
+   {
+    "id": "KH3",
+    "side": "SELL",
+    "lo": 3959,
+    "hi": 3967,
+    "prob": 36,
+    "st": "TRONG VÙNG",
+    "sl": 3970,
+    "tp": 3938
+   }
+  ],
+  "dxy": null,
+  "btc": 77112
+ }
 }
