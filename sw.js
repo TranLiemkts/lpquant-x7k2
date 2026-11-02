@@ -7,3 +7,5 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || u.origin !== location.origin || u.pathname.includes('/api/')) return;
   e.respondWith(fetch(e.request).then(r => { const c = r.clone(); caches.open(C).then(x => x.put(e.request, c)); return r; }).catch(() => caches.match(e.request)));
 });
+self.addEventListener('notificationclick', e => { e.notification.close();   // bấm thông báo → mở lại dashboard
+  e.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(l => l.length ? l[0].focus() : self.clients.openWindow('./'))); });
