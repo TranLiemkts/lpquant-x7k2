@@ -1,4 +1,4 @@
-// LP Quant — service worker: luôn lấy bản mới từ mạng, mất mạng thì mở bản đã lưu
+// TVL Quant — service worker: luôn lấy bản mới từ mạng, mất mạng thì mở bản đã lưu
 const C = 'lpq-v1';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
