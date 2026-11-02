@@ -1,6 +1,6 @@
 {
- "name": "LP Quant — Options Flow Vàng",
- "short_name": "LP Quant",
+ "name": "TVL Quant — Options Flow Vàng",
+ "short_name": "TVL Quant",
  "start_url": "./",
  "scope": "./",
  "display": "standalone",
