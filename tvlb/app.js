@@ -1,4 +1,4 @@
-/* Bildol Gold Terminal — giao diện kiểu RyanFX.
+/* TVLB (từ Bildol Gold Terminal của anh Thắng; sửa 1 dòng: ẩn vạch strike phụ theo menu TVLB+) — giao diện kiểu RyanFX.
    Giá realtime: Binance XAUUSDT perp (dự phòng PAXG/USDT; kline có taker-buy volume => CVD theo phe chủ động).
    Mốc Options / vĩ mô: backend /api/state, làm mới mỗi 20 giây.
    Lớp phủ (canvas) vẽ mốc GC bên trái, GLD bên phải, đường cong Net GEX ngay trên chart.
@@ -391,6 +391,7 @@ function drawOverlay() {
       const oi = s.call_oi + s.put_oi, share = oi / maxOI;
       const isCW = s.strike === o.call_wall, isPW = s.strike === o.put_wall;
       if (share < 0.12 && !isCW && !isPW) continue;
+      if (window.TVLB_MINOR === false && !labelSet.has(s.strike) && !isCW && !isPW) continue;   // TVLB+: ẩn vạch strike phụ không có nhãn
       const lc = isCW ? C.down : isPW ? C.up : color;
       hline(ctx, y, 0, plotW, lc, isCW || isPW ? 1.6 : 1, isCW || isPW ? [] : [4, 4], isCW || isPW ? 0.95 : 0.25 + 0.6 * share);
       if (labelSet.has(s.strike) || isCW || isPW) {
