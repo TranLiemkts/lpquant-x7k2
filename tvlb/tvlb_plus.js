@@ -211,7 +211,8 @@
       sp.addEventListener("pointermove", mv); sp.addEventListener("pointerup", up); });
     sp.addEventListener("dblclick", () => { delete W.right; saveW(); setCols(); window.dispatchEvent(new Event("resize")); });
     // nút ⇔ trên mỗi bảng trong hàng có 2 bảng: bảng đó chiếm hết bề ngang hàng, bấm lại để chia đôi
-    document.querySelectorAll(".right .duo").forEach((duo, di) => {
+    const bindDuos = () => document.querySelectorAll(".right .duo").forEach((duo, di) => {
+      if (duo.dataset.wxb) return; duo.dataset.wxb = "1";
       const key = "d" + di; if (W[key] != null) duo.dataset.wide = W[key];
       [...duo.children].forEach((pn, i) => { const h = pn.querySelector(":scope > header"); if (!h) return;
         const b = document.createElement("button"); b.type = "button"; b.className = "wx";
@@ -220,6 +221,7 @@
           saveW(); duo.querySelectorAll(".wx").forEach((x) => x._sync && x._sync()); window.dispatchEvent(new Event("resize")); };
         b._sync = sync; sync(); const mx2 = h.querySelector(".mx"); h.insertBefore(b, mx2 || null); });
     });
+    bindDuos(); [800, 2000, 5000].forEach((t) => setTimeout(bindDuos, t));   // trang ③ ④ (tạo sau) cũng có nút ⇔
   })();
 
   // ───────────────────── chart mượt khi kéo / cuộn (như LP Quant) ─────────────────────

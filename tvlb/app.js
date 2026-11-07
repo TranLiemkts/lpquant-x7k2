@@ -385,7 +385,7 @@ function drawOverlay() {
     const o = optV(src);
     if (!o || !on) continue;
     const maxOI = Math.max(1, ...o.strikes.map((s) => s.call_oi + s.put_oi));
-    const labelSet = new Set([...o.strikes].sort((x, y) => (y.call_oi + y.put_oi) - (x.call_oi + x.put_oi)).slice(0, 10).map((s) => s.strike));
+    const labelSet = new Set([...o.strikes].sort((x, y) => (y.call_oi + y.put_oi) - (x.call_oi + x.put_oi)).slice(0, window.TVLB_TOPN || 10).map((s) => s.strike));   // TVLB+: số tường có nhãn mỗi nguồn (menu)
     for (const s of o.strikes) {
       const y = Y(s.chart); if (y == null) continue;
       const oi = s.call_oi + s.put_oi, share = oi / maxOI;
