@@ -36,7 +36,7 @@
 
   // ───────────────────── menu ẩn bên trái ─────────────────────
   const box = document.createElement("div"); box.id = "tvlbPlus";
-  box.innerHTML = `<div class="pm"><h3>TVLB+ · riêng</h3>
+  box.innerHTML = `<div class="pm"><h3>TVLB+</h3>
     <button class="pb" data-k="tips"></button><button class="pb" data-k="fast"></button><button class="pb" data-k="cd"></button><button class="pb" data-k="grid"></button>
     <div class="ps">Web xem trên điện thoại</div><button class="pb" id="pGh">🌐 Copy link web GitHub</button>
     <div class="ps" id="pGhUrl" style="word-break:break-all"></div>
@@ -72,7 +72,7 @@
     "#lyGLD": "Bật/tắt các mốc của <b>GLD</b> (quyền chọn ETF vàng), đã quy đổi về giá XAU theo hệ số XAU/GLD hiện tại.",
     "#lyGex": "Đường cong <b>Net GEX</b> theo giá (bên phải chart): dương = dealer kìm giá (hay đảo chiều tại tường), âm = dealer đẩy theo giá (dễ phá tường). TVLB dùng trọng số kỳ hạn <b>40/40/20</b>.",
     "#lyVP": "Volume Profile phiên: <b>POC</b> (giá khớp nhiều nhất), <b>VAH/VAL</b> (biên vùng giá trị 70%). Giá trong VA → hay đi ngang; ra ngoài VA → dễ chạy xa.",
-    "#lySMC": "Lớp SMC của anh Thắng (CL1/CL2 × KB1–KB3): đỉnh/đáy, BOS/CHoCH, vùng chờ lệnh, Premium/Discount, OTE H4.",
+    "#lySMC": "Lớp SMC Tip (CL1/CL2 × KB1–KB3): đỉnh/đáy, BOS/CHoCH, vùng chờ lệnh, Premium/Discount, OTE H4.",
     "#lyMk": "Mũi tên tín hiệu trên nến: Options Flow (tại tường) và lệnh SMC đã khớp.",
     "#primarySrc": "Nguồn <b>tường chính</b> dùng cho tín hiệu và Agent: GC (CME, chuẩn) hoặc GLD.",
     "#btnCopyTV": "Copy đoạn dữ liệu <b>TVLB v2</b> để dán tay vào ô “Dữ liệu engine” của indicator TVLB trên TradingView. Thường không cần: lịch 06:20 / 13:35 tự dán.",
