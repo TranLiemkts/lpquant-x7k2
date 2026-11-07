@@ -184,4 +184,22 @@
     cd.textContent = `⏱ ${S.tf} ${h ? h + ":" : ""}${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`; cd.hidden = false;
   }
   setInterval(cdTick, 1000);
+
+  // ───────────────────── chart mượt khi kéo / cuộn (như LP Quant) ─────────────────────
+  // Bản gốc vẽ lại lớp tường/nhãn mỗi 400 ms → khi kéo chart các vạch "chạy theo không kịp". Vẽ lại ngay ở khung hình kế tiếp
+  // mỗi khi chart đổi khung nhìn / di chuột / cuộn, và vẽ liên tục thêm 0,6 s sau khi thả chuột (quán tính cuộn).
+  let rq = false, until = 0;
+  const kick = () => { if (rq) return; rq = true; requestAnimationFrame(() => { rq = false; try { drawOverlay(); } catch (e) { } }); };
+  const loop = () => { kick(); if (Date.now() < until) requestAnimationFrame(loop); };
+  const burst = () => { const go = Date.now() >= until; until = Date.now() + 600; if (go) loop(); };
+  (function hook(n) {
+    try {
+      if (typeof chart === "undefined" || !chart || !chart.timeScale) throw 0;
+      chart.timeScale().subscribeVisibleLogicalRangeChange(kick);
+      chart.subscribeCrosshairMove(kick);
+      const cw = $1("#chartWrap");
+      ["wheel", "pointerdown", "pointerup", "touchmove"].forEach((ev) => cw.addEventListener(ev, burst, { passive: true }));
+      cw.addEventListener("pointermove", (e) => { if (e.buttons) burst(); }, { passive: true });
+    } catch (e) { if (n < 60) setTimeout(() => hook(n + 1), 500); }
+  })(0);
 })();
