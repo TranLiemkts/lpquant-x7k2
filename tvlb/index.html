@@ -7,6 +7,41 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="style.css?v=12a613f745">
+<style>
+/* TVLB: bố cục theo trang như TVL Quant — ① Strike · AI · Agent  ② Hedge · Nhật ký · Tài khoản  ③ TradingView;
+   nút ⤢ trên mỗi hàng: hàng đó chiếm hết chỗ, hàng kia chỉ còn tiêu đề; bấm ⇕ để chia đều lại. Màn hình rộng: vừa khít, không cuộn trang. */
+.pgbar { display: flex; gap: 6px; flex-wrap: wrap; }
+.pgbar button { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; padding: 5px 12px; font: 600 12.5px var(--f-body); cursor: pointer; }
+.pgbar button.on { background: var(--gold); color: #111; border-color: var(--gold); }
+.page[hidden] { display: none !important; }
+.page { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.row { display: flex; flex-direction: column; min-height: 0; }
+.row > .duo { grid-template-rows: minmax(0, 1fr); }
+.mx { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 7px; font-size: 13px; line-height: 20px; cursor: pointer; }
+.mx:hover { color: var(--gold); border-color: var(--gold); }
+.row.min .panel > :not(header) { display: none !important; }
+.row.min .panel > header { margin-bottom: 0; }
+@media (min-width: 1251px) {
+  html, body { height: 100%; overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+  main.grid { flex: 1 1 auto; min-height: 0; padding-bottom: 6px; }
+  .chartcol { min-height: 0; }
+  .chartwrap { flex: 1 1 auto; min-height: 0; }
+  .chart { height: 100%; min-height: 0; }
+  .right { min-height: 0; overflow: hidden; gap: 8px; }
+  .page { flex: 1 1 auto; }
+  .row { flex: 1 1 0; }
+  .row.min { flex: 0 0 auto; }
+  .row > .duo { flex: 1 1 auto; min-height: 0; }
+  .row .panel { min-height: 0; overflow: auto; }
+  .row > .panel { flex: 1 1 auto; }
+  .row .sp { display: flex; flex-direction: column; overflow: hidden; }
+  .row .sp .tablewrap { flex: 1 1 auto; min-height: 0; max-height: none; }
+  .row .aiout { max-height: none; }
+  .page[data-pg="3"] .pinebox { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  .foot { padding-top: 2px; padding-bottom: 4px; }
+}
+</style>
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#0b0e12">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -65,6 +100,9 @@
   </section>
 
   <aside class="right">
+    <nav class="pgbar" id="pgbar"><button type="button" data-pg="1" class="on">① Strike · AI · Agent</button><button type="button" data-pg="2">② Hedge · Nhật ký · Tài khoản</button><button type="button" data-pg="3">③ TradingView</button></nav>
+    <div class="page" data-pg="1">
+    <div class="row" data-row="top">
     <section class="panel sp">
       <header><h2>Strike Profile</h2>
         <div class="tabs" id="profTabs"><button data-src="GC" class="on">GC</button><button data-src="GLD">GLD</button></div>
@@ -80,6 +118,8 @@
       </table></div>
     </section>
 
+    </div>
+    <div class="row" data-row="bot">
     <div class="duo">
       <section class="panel llm">
         <header><h2>LLM Phân Tích Prediction</h2><span id="aiMeta" class="muted small">Claude</span></header>
@@ -96,6 +136,10 @@
       </section>
     </div>
 
+    </div>
+    </div>
+    <div class="page" data-pg="2" hidden>
+    <div class="row" data-row="top">
     <div class="duo">
       <section class="panel hedgep">
         <header><h2 title="Bước 5: mô phỏng LP / Market Maker cân bằng Delta (Delta Hedging Rebalance) khi giá chạy">Rebalance Hedge LP</h2><span class="muted small" id="hedgeMeta">—</span></header>
@@ -108,6 +152,8 @@
       </section>
     </div>
 
+    </div>
+    <div class="row" data-row="bot">
     <div class="duo">
       <section class="panel acct">
         <header><h2>Account · Paper</h2><label class="auto"><input type="checkbox" id="autoTrade"> Tự vào lệnh theo tín hiệu</label></header>
@@ -131,7 +177,11 @@
       </section>
     </div>
 
-    <details class="panel pinebox"><summary><h2>Xuất sang TradingView (indicator TVLB)</h2></summary><div id="pineOut" class="pine"></div></details>
+    </div>
+    </div>
+    <div class="page" data-pg="3" hidden>
+    <details class="panel pinebox" open><summary><h2>Xuất sang TradingView (indicator TVLB)</h2></summary><div id="pineOut" class="pine"></div></details>
+    </div>
   </aside>
 </main>
 <footer class="foot">OI cập nhật 1 lần/ngày sau phiên · GEX/DEX dựa trên giả định vị thế LP · Tài khoản Paper là giả lập · Không phải lời khuyên đầu tư.</footer>
@@ -139,5 +189,39 @@
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="smc.js?v=d7d89a76e0"></script>
 <script src="app.js?v=0c59efa7c0"></script>
+<script>
+// TVLB: chuyển trang + thu gọn / phóng to từng hàng (nhớ lựa chọn trong trình duyệt)
+(function () {
+  const K = "tvlb.layout"; let st = { pg: "1", max: {} };
+  try { Object.assign(st, JSON.parse(localStorage.getItem(K) || "{}")); } catch (e) { }
+  const save = () => { try { localStorage.setItem(K, JSON.stringify(st)); } catch (e) { } };
+  const pages = [...document.querySelectorAll(".right .page")];
+  const kick = () => setTimeout(() => window.dispatchEvent(new Event("resize")), 30);
+  function apply(p) {
+    const pg = pages.find((x) => x.dataset.pg === p); if (!pg) return;
+    const m = st.max[p] || "";
+    pg.querySelectorAll(".row").forEach((r) => {
+      const on = m === r.dataset.row;
+      r.classList.toggle("min", !!m && !on); r.classList.toggle("max", on);
+      const b = r.querySelector(".mx");
+      if (b) { b.textContent = on ? "⇕" : "⤢"; b.title = on ? "Chia đều lại 2 hàng" : "Phóng to hàng này (hàng kia thu gọn còn tiêu đề)"; }
+    });
+  }
+  function show(p) {
+    if (!pages.some((x) => x.dataset.pg === p)) p = "1";
+    st.pg = p; pages.forEach((x) => { x.hidden = x.dataset.pg !== p; });
+    document.querySelectorAll("#pgbar button").forEach((b) => b.classList.toggle("on", b.dataset.pg === p));
+    apply(p); save(); kick();
+  }
+  document.querySelectorAll(".right .row").forEach((r) => {
+    const hs = r.querySelectorAll(".panel > header"), h = hs[hs.length - 1]; if (!h) return;
+    const b = document.createElement("button"); b.type = "button"; b.className = "mx";
+    b.onclick = (e) => { e.stopPropagation(); const p = r.closest(".page").dataset.pg; st.max[p] = st.max[p] === r.dataset.row ? "" : r.dataset.row; apply(p); save(); kick(); };
+    h.appendChild(b);
+  });
+  document.querySelectorAll("#pgbar button").forEach((b) => { b.onclick = () => show(b.dataset.pg); });
+  show(st.pg);
+})();
+</script>
 </body>
 </html>
