@@ -1,7 +1,7 @@
 {
  "schema": "lpquant.levels.v1",
- "built": "07/11/2026 20:56",
- "build_ms": 1794059745516,
+ "built": "07/11/2026 21:05",
+ "build_ms": 1794060295255,
  "spot": 4070.93,
  "basis": 12.0,
  "gld_mult": 10.9281,
@@ -18,7 +18,7 @@
     "cme": -235.94,
     "gld": 59.13,
     "at_spot": -149.59,
-    "at_spot_all": 33.81
+    "at_spot_all": 33.82
    },
    "hedge": [],
    "levels": [
@@ -114,10 +114,10 @@
    "date": "2026-11-06",
    "rank": "gex",
    "gex": {
-    "cme": 56.2,
+    "cme": 56.21,
     "gld": 59.13,
-    "at_spot": 123.85,
-    "at_spot_all": 33.81
+    "at_spot": 123.87,
+    "at_spot_all": 33.82
    },
    "hedge": [],
    "levels": [
@@ -129,7 +129,7 @@
      "strike": 4100.0,
      "hard": 100,
      "doi": -31,
-     "gex": 22.4452,
+     "gex": 22.485,
      "oi": 208,
      "side": "c"
     },
@@ -139,9 +139,9 @@
      "pool": "GC",
      "xau": 4063.0,
      "strike": 4075.0,
-     "hard": 72,
+     "hard": 73,
      "doi": -16,
-     "gex": 14.1647,
+     "gex": 14.1977,
      "oi": 136,
      "side": "c"
     },
@@ -153,7 +153,7 @@
      "strike": 4025.0,
      "hard": 48,
      "doi": 8,
-     "gex": 14.9862,
+     "gex": 14.9936,
      "oi": 169,
      "side": "p"
     },
@@ -165,7 +165,7 @@
      "strike": 4050.0,
      "hard": 100,
      "doi": 183,
-     "gex": -5.6283,
+     "gex": -5.6386,
      "oi": 249,
      "side": "p"
     },
@@ -177,7 +177,7 @@
      "strike": 4100.0,
      "hard": null,
      "doi": null,
-     "gex": 22.4452,
+     "gex": 22.485,
      "oi": null,
      "side": null
     },
@@ -213,10 +213,10 @@
    "date": "2026-11-06",
    "rank": "gex",
    "gex": {
-    "cme": 66.29,
+    "cme": 66.28,
     "gld": 59.13,
-    "at_spot": 144.49,
-    "at_spot_all": 33.81
+    "at_spot": 144.5,
+    "at_spot_all": 33.82
    },
    "hedge": [],
    "levels": [
@@ -228,7 +228,7 @@
      "strike": 4100.0,
      "hard": 100,
      "doi": -28,
-     "gex": 17.8866,
+     "gex": 17.9218,
      "oi": 480,
      "side": "c"
     },
@@ -240,7 +240,7 @@
      "strike": 4200.0,
      "hard": 99,
      "doi": 756,
-     "gex": 38.3479,
+     "gex": 38.303,
      "oi": 1557,
      "side": "c"
     },
@@ -252,7 +252,7 @@
      "strike": 4025.0,
      "hard": 79,
      "doi": 315,
-     "gex": 1.2705,
+     "gex": 1.2666,
      "oi": 689,
      "side": "p"
     },
@@ -264,7 +264,7 @@
      "strike": 4050.0,
      "hard": 100,
      "doi": 354,
-     "gex": -10.5949,
+     "gex": -10.6125,
      "oi": 669,
      "side": "p"
     },
@@ -276,7 +276,7 @@
      "strike": 4200.0,
      "hard": null,
      "doi": null,
-     "gex": 38.3479,
+     "gex": 38.303,
      "oi": null,
      "side": null
     },
@@ -312,10 +312,10 @@
    "date": "2026-11-06",
    "rank": "gex",
    "gex": {
-    "cme": -68.9,
+    "cme": -68.92,
     "gld": 59.13,
-    "at_spot": 33.81,
-    "at_spot_all": 33.81
+    "at_spot": 33.82,
+    "at_spot_all": 33.82
    },
    "hedge": [],
    "levels": [
@@ -327,7 +327,7 @@
      "strike": 4200.0,
      "hard": 100,
      "doi": 861,
-     "gex": 108.5146,
+     "gex": 108.4547,
      "oi": 6970,
      "side": "c"
     },
@@ -339,7 +339,7 @@
      "strike": 4100.0,
      "hard": 87,
      "doi": -42,
-     "gex": 55.128,
+     "gex": 55.1749,
      "oi": 4108,
      "side": "c"
     },
@@ -351,7 +351,7 @@
      "strike": 4050.0,
      "hard": 95,
      "doi": 360,
-     "gex": -27.6801,
+     "gex": -27.7035,
      "oi": 3168,
      "side": "p"
     },
@@ -363,7 +363,7 @@
      "strike": 4000.0,
      "hard": 100,
      "doi": 374,
-     "gex": -72.891,
+     "gex": -72.8975,
      "oi": 5487,
      "side": "p"
     },
@@ -375,7 +375,7 @@
      "strike": 4200.0,
      "hard": null,
      "doi": null,
-     "gex": 108.5146,
+     "gex": 108.4547,
      "oi": null,
      "side": null
     },
@@ -445,136 +445,5 @@
   }
  },
  "fred": {},
- "live": {
-  "t": "2026-11-07T13:59:11.998Z",
-  "spot": 4066.09,
-  "set": "all",
-  "gmode": "build",
-  "gex": {
-   "cme": -68.9,
-   "gld": 59.13,
-   "at_spot": 33.81,
-   "at_spot_all": 33.81
-  },
-  "flip": 4065.2,
-  "hedge": [],
-  "levels": [
-   {
-    "key": "CW",
-    "name": "Call Wall",
-    "pool": "GC",
-    "xau": 4188,
-    "strike": 4200,
-    "hard": 100,
-    "doi": 861,
-    "gex": 108.5146
-   },
-   {
-    "key": "T1",
-    "name": "Tường phụ 1",
-    "pool": "GC",
-    "xau": 4088,
-    "strike": 4100,
-    "hard": 87,
-    "doi": -42,
-    "gex": 55.128
-   },
-   {
-    "key": "T2",
-    "name": "Tường phụ 2",
-    "pool": "GC",
-    "xau": 4038,
-    "strike": 4050,
-    "hard": 95,
-    "doi": 360,
-    "gex": -27.6801
-   },
-   {
-    "key": "PW",
-    "name": "Put Wall",
-    "pool": "GC",
-    "xau": 3988,
-    "strike": 4000,
-    "hard": 100,
-    "doi": 374,
-    "gex": -72.891
-   },
-   {
-    "key": "MAG",
-    "name": "Magnet hút",
-    "pool": "GC",
-    "xau": 4188,
-    "strike": 4200,
-    "gex": 108.5146
-   },
-   {
-    "key": "MP",
-    "name": "Max Pain",
-    "pool": "GC",
-    "xau": 4118,
-    "strike": 4130
-   },
-   {
-    "key": "FLIP",
-    "name": "Gamma Flip",
-    "pool": "GC+GLD",
-    "xau": 4065.2,
-    "strike": 4077.2
-   },
-   {
-    "key": "GCW",
-    "name": "Call Wall",
-    "pool": "GLD",
-    "xau": 4207.32,
-    "strike": 385,
-    "hard": 100,
-    "doi": 0,
-    "gex": 6.8276
-   },
-   {
-    "key": "GPW",
-    "name": "Put Wall",
-    "pool": "GLD",
-    "xau": 3934.12,
-    "strike": 360,
-    "hard": 100,
-    "doi": 0,
-    "gex": -0.5802
-   }
-  ],
-  "plans": [
-   {
-    "id": "KH1",
-    "side": "BUY",
-    "lo": 4061.2,
-    "hi": 4069.2,
-    "prob": 0,
-    "st": "HUỶ",
-    "sl": 4062.2,
-    "tp": 4088
-   },
-   {
-    "id": "KH2",
-    "side": "BUY",
-    "lo": 4084,
-    "hi": 4092,
-    "prob": 38,
-    "st": "CHỜ",
-    "sl": 4084,
-    "tp": 4188
-   },
-   {
-    "id": "KH3",
-    "side": "SELL",
-    "lo": 4084,
-    "hi": 4092,
-    "prob": 62,
-    "st": "CHỜ",
-    "sl": 4091,
-    "tp": 4065.2
-   }
-  ],
-  "dxy": null,
-  "btc": 75936.02
- }
+ "live": null
 }
