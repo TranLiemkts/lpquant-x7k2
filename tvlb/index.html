@@ -38,7 +38,6 @@
   .row .sp { display: flex; flex-direction: column; overflow: hidden; }
   .row .sp .tablewrap { flex: 1 1 auto; min-height: 0; max-height: none; }
   .row .aiout { max-height: none; }
-  .page[data-pg="3"] .pinebox { flex: 1 1 auto; min-height: 0; overflow: auto; }
   .foot { padding-top: 2px; padding-bottom: 4px; }
 }
 </style>
@@ -70,7 +69,7 @@
   </div>
   <label class="sel">Wall chính <select id="primarySrc"><option value="GC">GC</option><option value="GLD">GLD</option></select></label>
   <div class="actions">
-    <button id="btnCopyTV" class="ghost" title="Copy đoạn 'BILDOL v2' để dán vào ô Dữ liệu engine của indicator TVLB (dự phòng khi lịch tự dán lỗi)">Copy cho TradingView</button>
+    <button id="btnCopyTV" class="ghost" title="Copy đoạn dữ liệu 'TVLB v2' để dán vào ô Dữ liệu engine (Settings) của indicator TVLB trên TradingView — chỉ cần khi lịch tự dán bị lỗi">Copy cho TradingView</button>
     <button id="btnRefresh" class="ghost">Làm mới Options</button>
     <button id="btnAI" class="primary">AI phân tích</button>
   </div>
@@ -100,7 +99,7 @@
   </section>
 
   <aside class="right">
-    <nav class="pgbar" id="pgbar"><button type="button" data-pg="1" class="on">① Strike · AI · Agent</button><button type="button" data-pg="2">② Hedge · Nhật ký · Tài khoản</button><button type="button" data-pg="3">③ TradingView</button></nav>
+    <nav class="pgbar" id="pgbar"><button type="button" data-pg="1" class="on">① Strike · AI · Agent</button><button type="button" data-pg="2">② Hedge · Nhật ký · Tài khoản</button></nav>
     <div class="page" data-pg="1">
     <div class="row" data-row="top">
     <section class="panel sp">
@@ -179,9 +178,7 @@
 
     </div>
     </div>
-    <div class="page" data-pg="3" hidden>
-    <details class="panel pinebox" open><summary><h2>Xuất sang TradingView (indicator TVLB)</h2></summary><div id="pineOut" class="pine"></div></details>
-    </div>
+    <div id="pineOut" hidden></div><!-- TVLB: bỏ khung xuất trùng với nút "Copy cho TradingView" (cùng một đoạn dữ liệu) -->
   </aside>
 </main>
 <footer class="foot">OI cập nhật 1 lần/ngày sau phiên · GEX/DEX dựa trên giả định vị thế LP · Tài khoản Paper là giả lập · Không phải lời khuyên đầu tư.</footer>
