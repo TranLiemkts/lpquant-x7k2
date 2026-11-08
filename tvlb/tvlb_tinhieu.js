@@ -514,7 +514,7 @@ function drawTH(ctx, plotW, h) {
   const btn5 = document.createElement("button"); btn5.type = "button"; btn5.dataset.pg = "5"; btn5.className = "v3btn"; btn5.textContent = "⑤ Backtest"; bar.appendChild(btn5);
   const page5 = document.createElement("div"); page5.className = "page"; page5.dataset.pg = "5"; page5.hidden = true;
   page5.innerHTML = `<div class="row" data-row="top">
-      <section class="panel"><header><h2>Backtest mọi tín hiệu · tìm EDGE</h2><span class="muted small" id="t4bn"></span><label class="muted small" style="margin-left:auto;margin-right:6px" title="Lệnh chưa chạm SL/TP sau số nến này sẽ đóng ở giá lúc đó (Hết giờ)">Đóng sau <select id="t4to" class="btn sm">${[24, 36, 72, 144].map((v) => `<option value="${v}">${v} nến</option>`).join("")}</select></label></header><div id="t4bt" style="font-size:12px"></div></section></div>
+      <section class="panel"><header><h2>Backtest mọi tín hiệu · tìm EDGE</h2><span class="muted small" id="t4bn"></span><span class="muted small" id="t5ver" style="margin-left:10px;opacity:.75" title="Phiên bản giao diện TVLB+ (file web) · phiên bản máy chủ (server.py). Sau khi cập nhật: tắt / mở lại máy chủ rồi Ctrl+F5."></span><label class="muted small" style="margin-left:auto;margin-right:6px" title="Lệnh chưa chạm SL/TP sau số nến này sẽ đóng ở giá lúc đó (Hết giờ)">Đóng sau <select id="t4to" class="btn sm">${[24, 36, 72, 144].map((v) => `<option value="${v}">${v} nến</option>`).join("")}</select></label></header><div id="t4bt" style="font-size:12px"></div></section></div>
     <div class="row" data-row="bot"><div class="duo">
       <section class="panel"><header><h2>So sánh cách chốt lời</h2><span class="muted small" id="t5cn"></span></header><div id="t5cmp" style="font-size:12px"></div></section>
       <section class="panel"><header><h2>SMC Tip dài hạn</h2><span class="muted small" id="t5tn"></span></header><div id="t5tip" style="font-size:12px"></div></section></div></div>`;
@@ -580,7 +580,7 @@ function drawTH(ctx, plotW, h) {
     const verdict = `<div style="border:1px solid #2b3440;border-radius:6px;padding:7px 9px;margin-bottom:6px;background:#11161d;line-height:1.6">
       <b style="color:#e0a83a">KẾT LUẬN EDGE</b> <span class="muted">(${res.length} tín hiệu · ${bars.length} nến ${S.tf} · chốt lời: ${TPM[O.tpm]} · đóng sau ${O.tout} nến)</span><br>
       ${tot ? `Toàn bộ: Avg R <b class="${tot.avg >= 0 ? "win" : "loss"}">${sg(tot.avg, (v) => v.toFixed(2))}R / lệnh</b> · PF ${pfT(tot.pf)} · Win ${tot.wr == null ? "—" : tot.wr.toFixed(0) + "%"} → <b style="color:${edgeOf(tot)[1]}">${edgeOf(tot)[0]}</b><br>` : ""}
-      ${(() => { const w = whInfo(); return whUse() ? `📅 <b>Tường theo từng ngày:</b> ${w.gc} ngày GC · ${w.gld} ngày GLD (${w.from} → ${w.to}${w.imp ? `, ${w.imp} bản nhập từ TVL Quant` : ""}). Nến trước ngày OI đầu tiên: không tính tín hiệu tường. <span style="color:#ffb74d">≈</span> = loại còn dùng dữ liệu hiện tại (Option Flow, vùng Hedge) → không xếp CÓ EDGE.<br>`
+      ${(() => { const w = whInfo(); return whUse() ? `📅 <b>Tường theo từng ngày:</b> ${w.gc} ngày GC · ${w.gld} ngày GLD (${w.from} → ${w.to}). Nến trước ngày OI đầu tiên: không tính tín hiệu tường. <span style="color:#ffb74d">≈</span> = loại còn dùng dữ liệu hiện tại (Option Flow, vùng Hedge) → không xếp CÓ EDGE.<br>`
         : `<span style="color:#ffb74d">⚠ Đang dùng mốc tường HÔM NAY cho cả quá khứ</span> (${w.n ? "đã tắt tường theo ngày ở menu TP / SL" : whErr === "old" ? "<b>máy chủ TVLB đang chạy bản cũ</b> — tắt cửa sổ máy chủ rồi mở lại 01_MO_DASHBOARD_TVLB.bat" : whErr === "empty" ? "máy chủ không đọc được ngày nào trong data\\oi_history (thiếu nến 1h hoặc giá cơ sở) — xem cửa sổ máy chủ" : "chưa có data\\oi_history — chạy 07_NHAP_OI_TU_TVLQUANT.bat hoặc để TVLB tự lưu mỗi ngày"}) → các dòng <span style="color:#ffb74d">≈</span> có thể đẹp hơn thực tế.<br>`; })()}
       🟢 <b>Có EDGE:</b> ${okE.length ? li(okE) : "chưa có loại nào đạt đủ chuẩn"}<br>
       ${mayE.length ? `🟡 <b>Có thể có edge (cần thêm mẫu):</b> ${li(mayE)}<br>` : ""}
@@ -778,5 +778,12 @@ function drawTH(ctx, plotW, h) {
   }
   setInterval(tick, 2000); setTimeout(tick, 3000);
   bar.addEventListener("click", () => setTimeout(() => { key = ""; tick(); }, 60));
+  // ── số phiên bản (để biết đang chạy bản nào) ──
+  const WEB_VER = "web 11 · 08/11";
+  window.TVLB_WEB_VER = WEB_VER;
+  function showVer() { fetch(API("/api/version")).then((r) => r.json()).then((v) => { const t = `${WEB_VER} · máy chủ ${v.version || "?"}`;
+      const e = document.querySelector("#t5ver"); if (e) e.textContent = t; const h = document.querySelector("#tvlbPlus .pm h3"); if (h) h.innerHTML = `TVLB+ <span style="font-size:10px;font-weight:400;opacity:.7">${t}</span>`; })
+    .catch(() => { const e = document.querySelector("#t5ver"); if (e) e.textContent = WEB_VER + " · máy chủ ?"; }); }
+  setTimeout(showVer, 2500); setInterval(showVer, 10 * 60 * 1000);
   window.tvlbSig = () => ({ SIG, TH, RX, FWD });
 })();
