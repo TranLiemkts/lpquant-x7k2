@@ -92,6 +92,8 @@
     const fl = flipX(); if (fl != null) add(spot >= fl ? 10 : -10, spot >= fl ? "Gamma dương (tường hay giữ)" : "Gamma âm (tường dễ bị phá)");
     if (inHedge(l.xau)) add(-8, "nằm trong Vùng Hedge");
     if (l.flipped) add(-5, "tường đã bị phá, đang đổi vai");
+    try { const h = window.tvlbRxFor ? window.tvlbRxFor(l.xau) : [], hb = h.filter((r) => r.res === "Bật lại").length;   // lịch sử phản ứng tại tường (trang ④)
+      if (h.length >= 2) add(Math.round((hb / h.length - 0.5) * 30), `lịch sử bật ${hb}/${h.length} lần chạm`); } catch (e) { }
     s = Math.max(0, Math.min(100, s)); const st = s >= 80 ? 5 : s >= 65 ? 4 : s >= 50 ? 3 : s >= 35 ? 2 : 1;
     return { s, st, txt: ["", "Rất yếu", "Yếu", "Trung bình", "Mạnh", "Rất mạnh"][st], plus, minus };
   }
@@ -248,8 +250,8 @@
   function menuBtns() {
     const pm = document.querySelector("#tvlbPlus .pm"); if (!pm || pm.querySelector("#v3m")) return;
     const wrap = document.createElement("div"); wrap.id = "v3m";
-    wrap.innerHTML = `<div class="ps">Phần riêng (LP Quant)</div><button class="pb" id="v3mP"></button><button class="pb" id="v3mS"></button>`;
-    pm.insertBefore(wrap, pm.querySelector(".ps"));
+    wrap.innerHTML = `<div class="ps">Trang thêm</div><button class="pb" id="v3mP"></button><button class="pb" id="v3mS"></button>`;
+    pm.insertBefore(wrap, pm.querySelector(":scope > .ps"));
     const sync = () => { const a = document.querySelector("#v3mP"), b = document.querySelector("#v3mS");
       a.textContent = `③ Trang Vào lệnh: ${VP.p3 ? "HIỆN" : "ẨN"}`; a.classList.toggle("on", VP.p3);
       b.textContent = `📷 Chế độ chụp màn hình: ${VP.shot ? "BẬT (ẩn phần riêng)" : "TẮT"}`; b.classList.toggle("on", VP.shot); };
@@ -357,5 +359,6 @@
   }
   setInterval(tick, 1500); setTimeout(tick, 2500);
   bar.addEventListener("click", (e) => { if (e.target.closest("button")) setTimeout(tick, 50); });
-  window.tvlbPlans = () => ({ PLANS, AG, L, ZON, TRK });   // để kiểm tra / mở rộng (lớp vẽ chart, cảnh báo)
+  window.tvlbPlans = () => ({ PLANS, AG, L, ZON, TRK });
+  window.tvlbScore = (l) => (spot ? wallScore(l) : null);   // uy tín tường cho phần giải thích khi rê chuột   // để kiểm tra / mở rộng (lớp vẽ chart, cảnh báo)
 })();
