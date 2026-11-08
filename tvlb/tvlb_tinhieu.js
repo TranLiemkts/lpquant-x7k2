@@ -15,7 +15,7 @@
   const ZONE = 4, SLU = 3;
   const O = Object.assign({ thSt: true, thSg: true, sig: true, kh: true, box: true, snd: true, tg: true, tout: 36,
     k: { wall: true, oh: true, oht: true, conf: true, pro: true, m: true, sw: true }, minG: "C", kh1: true, kh2: true, kh3: true,
-    tpm: "auto", boxn: 3, slmax: 0, al: { kh: true, khz: true, sig: true, hedge: true, div: true, news: true }, sty: "beep", vol: 60, diff: true, minor: true, topn: 10 }, st_.get("o3", {}));
+    tpm: "auto", boxn: 3, slmax: 0, al: { kh: true, khz: true, sig: true, hedge: true, div: true, news: true }, sty: "beep", vol: 60, diff: true, minor: true, topn: 10, wh: true }, st_.get("o3", {}));
   ["k", "al"].forEach((k) => { O[k] = Object.assign({}, { k: { wall: true, oh: true, oht: true, conf: true, pro: true, m: true, sw: true }, al: { kh: true, khz: true, sig: true, hedge: true, div: true, news: true } }[k], O[k] || {}); });
   window.TVLB_MINOR = O.minor !== false; window.TVLB_TOPN = O.topn || 10;
   const saveO = () => st_.set("o3", O);
@@ -219,6 +219,35 @@ function drawTH(ctx, plotW, h) {
   const KCOL = { wall: ["#26a69a", "#ef5350"], oh: ["#40c4ff", "#ff6e40"], oht: ["#69f0ae", "#ea80fc"], conf: ["#ffd600", "#ffd600"] };
   const kcol = (x) => (KCOL[x.kind] || SMC_COL[x.kind] || ["#ccc", "#ccc"])[x.dir > 0 ? 0 : 1];
   let L = [], SIG = [], spot = null, flipV = null;
+  // ── Tường theo TỪNG NGÀY (data/oi_history, /api/wallhist): mỗi nến dùng mốc của bản OI mới nhất đã có TRƯỚC nến đó ──
+  const NMH = { CW: "Call Wall", PW: "Put Wall", T1: "Tường phụ 1", T2: "Tường phụ 2", GCW: "GLD Call Wall", GPW: "GLD Put Wall", MAG: "Magnet", FLIP: "Gamma Flip", MP: "Max Pain" };
+  let WH = [], whAt = 0, whMemo = new Map(), whErr = "";
+  function loadWH() { try { fetch(API("/api/wallhist")).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then((r) => { whErr = r && r.ok ? (r.days && r.days.length ? "" : "empty") : "srv"; if (r && r.ok) { WH = r.days || []; whMemo = new Map(); key = ""; } }).catch(() => { whErr = "old"; key = ""; }); } catch (e) { } whAt = Date.now(); }
+  function whLevels(e) {
+    const out = [], st = e.strikes || [], c = e.chart || {}, sp = e.underlying * e.ratio, byK = (k) => st.find((x) => Math.abs(x.strike - k) < 1e-6);
+    const maxC = Math.max(1, ...st.map((x) => x.call_oi || 0)), maxP = Math.max(1, ...st.map((x) => x.put_oi || 0));
+    const mk = (key, strike, x, side) => { if (x == null) return; const s0 = strike != null ? byK(strike) : null, oi = s0 ? (side === "c" ? s0.call_oi : s0.put_oi) : null;
+      out.push({ key, name: NMH[key], pool: e.src, xau: x, strike, oi, hard: oi != null ? Math.round((100 * oi) / (side === "c" ? maxC : maxP)) : null, day: e.day }); };
+    if (e.src === "GC") { mk("CW", e.call_wall, c.call_wall, "c"); mk("PW", e.put_wall, c.put_wall, "p");
+      const t1 = st.filter((x) => x.chart > sp && x.strike !== e.call_wall).sort((a, b) => b.call_oi - a.call_oi)[0], t2 = st.filter((x) => x.chart < sp && x.strike !== e.put_wall).sort((a, b) => b.put_oi - a.put_oi)[0];
+      if (t1) mk("T1", t1.strike, t1.chart, "c"); if (t2) mk("T2", t2.strike, t2.chart, "p");
+      if (c.gamma_flip != null) out.push({ key: "FLIP", name: NMH.FLIP, pool: "GC", xau: c.gamma_flip, day: e.day });
+      if (c.magnet != null) out.push({ key: "MAG", name: NMH.MAG, pool: "GC", xau: c.magnet, day: e.day });
+      if (c.max_pain != null) out.push({ key: "MP", name: NMH.MP, pool: "GC", xau: c.max_pain, day: e.day });
+    } else { mk("GCW", e.call_wall, c.call_wall, "c"); mk("GPW", e.put_wall, c.put_wall, "p"); }
+    return out;
+  }
+  const whUse = () => O.wh !== false && WH.length > 0;
+  function Lat(i) {   // mốc Option áp dụng cho nến i
+    if (!whUse()) return L; const b = bars[i]; if (!b) return [];
+    const t = b.time, pick = (src) => { let best = null; for (const e of WH) { if (e.src !== src) continue; if (e.avail <= t) best = e; else break; } return best && t - best.avail <= 5 * 86400 ? best : null; };
+    const g = pick("GC"), d = pick("GLD"), k = (g ? g.avail : 0) + "|" + (d ? d.avail : 0);
+    if (!whMemo.has(k)) whMemo.set(k, (g ? whLevels(g) : []).concat(d ? whLevels(d) : []));
+    return whMemo.get(k);
+  }
+  const flipAt = (i) => (whUse() ? (Lat(i).find((l) => l.key === "FLIP") || {}).xau ?? null : flipV);
+  const whInfo = () => { const g = WH.filter((e) => e.src === "GC"), d = WH.filter((e) => e.src === "GLD"), dd = (e) => e && e.day;
+    return { n: WH.length, gc: g.length, gld: d.length, from: dd(WH[0]), to: dd(WH[WH.length - 1]), imp: WH.filter((e) => e.imported).length, est: WH.filter((e) => e.ratio_est).length }; };
   const levels = () => { try { return (window.tvlbPlans && window.tvlbPlans().L) || []; } catch (e) { return []; } };
   const cinfo = (i) => { const b = bars[i]; return { up: b.high - Math.max(b.open, b.close), lo: Math.min(b.open, b.close) - b.low, body: Math.abs(b.close - b.open), rng: Math.max(b.high - b.low, 0.01), d: b.delta || 0, b }; };
   const rejSell = (c) => c.up >= Math.max(c.body, 0.4 * c.rng) && c.d < 0, rejBuy = (c) => c.lo >= Math.max(c.body, 0.4 * c.rng) && c.d > 0;
@@ -226,13 +255,14 @@ function drawTH(ctx, plotW, h) {
   const inHedge = (p) => hzones().find((z) => p >= z.lo && p <= z.hi) || null;
   const usSess = (t) => { try { return inUsSession(t); } catch (e) { return false; } };
   function optTouch(i, d) {
+    const LL = Lat(i);
     for (let j = i; j >= Math.max(0, i - 2); j--) { const b = bars[j];
-      const l = L.filter((x) => OPT_W[x.key] && (d < 0 ? Math.abs(b.high - x.xau) <= ZONE && x.xau >= b.close - ZONE : Math.abs(b.low - x.xau) <= ZONE && x.xau <= b.close + ZONE)).sort((a, b2) => OPT_W[b2.key] - OPT_W[a.key])[0];
+      const l = LL.filter((x) => OPT_W[x.key] && (d < 0 ? Math.abs(b.high - x.xau) <= ZONE && x.xau >= b.close - ZONE : Math.abs(b.low - x.xau) <= ZONE && x.xau <= b.close + ZONE)).sort((a, b2) => OPT_W[b2.key] - OPT_W[a.key])[0];
       if (l) return { x: l.xau, n: `${l.pool} – ${l.name}`, w: OPT_W[l.key] || 10, key: l.key }; }
     return null;
   }
-  function optNext(e, d, risk, skip) {
-    const v = S.state?.volume_profile, c = L.filter((l) => OPT_W[l.key]).map((l) => ({ x: l.xau, n: `${l.pool} ${l.name}` })).concat(v && v.poc != null ? [{ x: v.poc, n: "POC" }] : []);
+  function optNext(e, d, risk, skip, i) {
+    const v = S.state?.volume_profile, c = (i != null ? Lat(i) : L).filter((l) => OPT_W[l.key]).map((l) => ({ x: l.xau, n: `${l.pool} ${l.name}` })).concat(v && v.poc != null ? [{ x: v.poc, n: "POC" }] : []);
     const f = c.filter((l) => (l.x - e) * d >= Math.max(3, 0.5 * risk)).sort((a, b) => (a.x - b.x) * d);
     return f[skip || 0] || null;
   }
@@ -248,6 +278,7 @@ function drawTH(ctx, plotW, h) {
         add(t === d ? 15 : rev ? 0 : pro ? -25 : -10, `Cấu trúc chính ${t === 1 ? "TĂNG" : "GIẢM"} → ${t === d ? "cùng" : "ngược"} hướng lệnh${t !== d && rev ? " (Sweep = bắt đảo chiều: không trừ)" : ""}`); }
       const it = TH.itr[i]; if (it) add(it === d ? 10 : -5, `Cấu trúc internal ${it === 1 ? "tăng" : "giảm"} → ${it === d ? "cùng" : "ngược"} hướng`); }
     const tr_ = TH && TH.tr[i];
+    const flipV = flipAt(i);
     if (flipV != null) { if (b.close >= flipV) add(5, `Gamma dương (giá trên Flip ${f2(flipV)}): dealer kìm giá → tín hiệu tại mốc đáng tin hơn`);
       else if (tr_ && tr_ !== d) add(-10, `Gamma âm (giá dưới Flip ${f2(flipV)}): lệnh ngược xu hướng rủi ro`); else add(5, "Gamma âm: lệnh thuận xu hướng được ưu tiên"); }
     const hz = inHedge(b.close);
@@ -255,18 +286,17 @@ function drawTH(ctx, plotW, h) {
     const dl = b.delta || 0; if (dl) add(Math.sign(dl) === d ? 5 : -5, `Delta nến ${sg(dl, f0)} ${Math.sign(dl) === d ? "cùng" : "ngược"} hướng`);
     if (usSess(b.time)) add(5, "Trong phiên Mỹ 19–23h (thanh khoản cao)");
     if (i >= bars.length - 3) { const dx = S.state?.macro?.DXY?.chg_n_pct; if (dx != null && Math.abs(dx) >= 0.03) add(Math.sign(-dx) === d ? 5 : -5, `DXY ${sg(dx, (v) => v.toFixed(3))}%/5p → ${Math.sign(-dx) === d ? "ủng hộ" : "ngược"} hướng`); }
-    const risk = Math.max(Math.abs(b.close - x.sl), 0.01), nx = optNext(b.close, d, risk);
+    const risk = Math.max(Math.abs(b.close - x.sl), 0.01), nx = optNext(b.close, d, risk, 0, i);
     if (nx) { const rr = Math.abs(nx.x - b.close) / risk; add(rr >= 2 ? 10 : rr >= 1.5 ? 5 : -10, `Mốc kế tiếp ${nx.n} ${f2(nx.x)} → R:R ${rr.toFixed(1)}${rr < 1.5 ? " (dư địa hẹp)" : ""}`); }
     x.P = P; x.sc = Math.max(0, Math.min(100, P.reduce((s, p) => s + p[0], 0))); x.grade = x.sc >= 70 ? "A" : x.sc >= 50 ? "B" : "C";
   }
   function buildSignals() {
     const n = bars.length - 1, W = [], Hs = [];
-    const walls = L.filter((l) => RES.includes(l.key) || SUP.includes(l.key));
-    for (let i = 21; i < n; i++) { const b = bars[i], c = cinfo(i), got = {};
+    for (let i = 21; i < n; i++) { const b = bars[i], c = cinfo(i), got = {}, walls = Lat(i).filter((l) => RES.includes(l.key) || SUP.includes(l.key));
       walls.forEach((l) => [-1, 1].forEach((d) => { if (got[d]) return;
         const ok = d < 0 ? RES.includes(l.key) && Math.abs(b.high - l.xau) <= ZONE && rejSell(c) : SUP.includes(l.key) && Math.abs(b.low - l.xau) <= ZONE && rejBuy(c);
         if (!ok) return; got[d] = 1; const px = d < 0 ? b.high : b.low;
-        W.push({ kind: "wall", dir: d, i, t: b.time, e: b.close, sl: d < 0 ? Math.max(b.high, l.xau) + SLU : Math.min(b.low, l.xau) - SLU, label: `${l.pool} – ${l.name}`, ot: { x: l.xau, n: `${l.pool} – ${l.name}`, w: OPT_W[l.key] || 10 },
+        W.push({ kind: "wall", dir: d, i, t: b.time, e: b.close, sl: d < 0 ? Math.max(b.high, l.xau) + SLU : Math.min(b.low, l.xau) - SLU, label: `${l.pool} – ${l.name}`, wday: l.day, ot: { x: l.xau, n: `${l.pool} – ${l.name}`, w: OPT_W[l.key] || 10 },
           why: [`${l.pool} – ${l.name} ${f2(l.xau)}: ${d < 0 ? "đỉnh" : "đáy"} nến ${f2(px)} cách tường ${f2(Math.abs(px - l.xau))}$ (≤ ${ZONE}$)`,
             d < 0 ? `Râu trên ${f2(c.up)} ≥ max(thân ${f2(c.body)}, 40% biên độ ${f2(0.4 * c.rng)}) → từ chối giá cao` : `Râu dưới ${f2(c.lo)} ≥ max(thân ${f2(c.body)}, 40% biên độ ${f2(0.4 * c.rng)}) → từ chối giá thấp`,
             `Delta nến ${sg(c.d, f0)} ${d < 0 ? "< 0: bán chủ động thắng" : "> 0: mua chủ động thắng"}`] }); })); }
@@ -314,8 +344,8 @@ function drawTH(ctx, plotW, h) {
   const TPM = { auto: "Tự động theo Gamma", part: "Chốt 2 phần (mốc 1 + 2)", w1: "Mốc Option kế tiếp", w2: "Mốc Option thứ 2", r15: "Cố định 1.5R" };
   function sim(x, mode) {
     const d = x.dir, e = x.e, sl0 = x.sl, risk = Math.abs(e - sl0); if (!(risk > 0)) return null;
-    const n1 = optNext(e, d, risk, 0), n2 = optNext(e, d, risk, 1);
-    let m = mode || O.tpm; if (m === "auto") m = flipV != null && e >= flipV ? "w1" : "part";
+    const n1 = optNext(e, d, risk, 0, x.i), n2 = optNext(e, d, risk, 1, x.i), fv = flipAt(x.i);
+    let m = mode || O.tpm; if (m === "auto") m = fv != null && e >= fv ? "w1" : "part";
     const tp1 = m === "r15" ? e + 1.5 * risk * d : n1 ? n1.x : e + 2 * risk * d, tp2 = n2 ? n2.x : tp1 + risk * d;
     let sl = sl0, half = false, rAcc = 0;
     const end = Math.min(bars.length - 1, x.i + 1 + (O.tout || 36));
@@ -431,7 +461,7 @@ function drawTH(ctx, plotW, h) {
           cx.fillText(`${t.code}${t.res ? (t.res === "TP" ? " ✓" : " ✗") : ""}`, (x0 + x1) / 2, (ye + yt) / 2 + 3); }); }
       // hộp SL/TP của tín hiệu LP Quant (lệnh gần nhất + N lệnh trước, theo cách chốt lời đang chọn)
       if (O.box && O.boxn >= 0 && O.sig) { const L2 = SIG.slice(-(O.boxn === 999 ? 1e9 : O.boxn + 1));
-        L2.forEach((x) => { const r = sim(x); if (!r) return; const risk = Math.abs(x.e - x.sl), n1 = optNext(x.e, x.dir, risk), tp = O.tpm === "r15" ? x.e + 1.5 * risk * x.dir : n1 ? n1.x : x.e + 2 * risk * x.dir;
+        L2.forEach((x) => { const r = sim(x); if (!r) return; const risk = Math.abs(x.e - x.sl), n1 = optNext(x.e, x.dir, risk, 0, x.i), tp = O.tpm === "r15" ? x.e + 1.5 * risk * x.dir : n1 ? n1.x : x.e + 2 * risk * x.dir;
           const x0 = X(x.i), x1 = X(r.j != null ? r.j : bars.length + 4), ye = Y(x.e), yt = Y(tp), ys = Y(x.sl); if (!ok(x0, x1, ye, yt, ys)) return;
           cx.fillStyle = "rgba(38,166,154,.10)"; cx.fillRect(x0, Math.min(ye, yt), x1 - x0, Math.abs(yt - ye)); cx.fillStyle = "rgba(239,83,80,.10)"; cx.fillRect(x0, Math.min(ye, ys), x1 - x0, Math.abs(ys - ye));
           cx.fillStyle = "rgba(220,220,220,.6)"; cx.font = "600 9px sans-serif"; cx.textAlign = "center";
@@ -463,7 +493,7 @@ function drawTH(ctx, plotW, h) {
     return prevTip ? prevTip(e) : null;
   };
   function sigTip(x) {
-    const b = bars[x.i], risk = Math.abs(x.e - x.sl), nx = optNext(x.e, x.dir, risk), r = sim(x);
+    const b = bars[x.i], risk = Math.abs(x.e - x.sl), nx = optNext(x.e, x.dir, risk, 0, x.i), r = sim(x);
     return `<div style="font-weight:700;font-size:13px;color:${kcol(x)};margin-bottom:4px">${KNAME[x.kind] || x.kind} · ${x.dir < 0 ? "SELL" : "BUY"} · hạng ${x.grade} (${x.sc}/100)</div>
       ${new Date(x.t * 1000).toLocaleString("vi-VN")} · khung ${S.tf} · ${x.label || ""}<br>Vào ${f2(x.e)} (giá đóng nến) · SL ${f2(x.sl)} (${f2(risk)}$) · TP ${nx ? `${f2(nx.x)} (${nx.n}, R:R ${(Math.abs(nx.x - x.e) / risk).toFixed(1)})` : "2R"}
       <div style="margin-top:5px;border-top:1px solid #2b3440;padding-top:4px"><b>Vì sao có tín hiệu</b><br>${(x.why || []).join("<br>")}</div>
@@ -507,8 +537,11 @@ function drawTH(ctx, plotW, h) {
     [/^Pro tiếp diễn$/, "Pro"], [/^Sweep cấu trúc chính \(M\)$/, "Sweep M"], [/^Sweep internal \(sw\)$/, "Sweep sw"], [/ tại /, " @ "], [/ \(tín hiệu có chấm điểm\)$/, ""]];
   const PRE = { "Option Flow": "OF", "SMC Tip": "Tip", "SMC hub": "Hub" };
   const shortNm = (nm, pre) => { const m = pre && nm.match(/^(Option Flow|SMC Tip|SMC hub) · /), r = SHORT.reduce((a, [re, b]) => a.replace(re, b), nm); return m ? PRE[m[1]] + " · " + r : r; };
-  const stRow = (nm, s, pre) => { const e = edgeOf(s), full = nm.replace(/<[^>]+>/g, "");
-    return `<tr><td class="nm" title="${full}">${shortNm(nm, pre)}</td><td>${s.closed}</td><td><span class="win">${s.w}</span><i class="sep">/</i><span class="loss">${s.l}</span><i class="sep">/</i><span class="muted">${s.t}</span></td><td>${s.wr == null ? "—" : s.wr.toFixed(0) + "%"}</td><td>${s.half || "—"}</td>
+  const apxKinds = () => (whUse() ? ["of", "oh", "oht"] : ["of", "oh", "oht", "wall", "conf"]);
+  const isApx = (nm) => apxKinds().some((k) => nm.replace(/<[^>]+>/g, "").startsWith(FAM[k]));
+  const edgeA = (s, nm) => { const e = edgeOf(s); return isApx(nm) && e[3] === "🟢 CÓ" ? ["🟡 Có thể (≈)", "#ffd54f", e[2] + " — nhưng loại này còn dùng mốc/vùng HIỆN TẠI cho quá khứ (≈) nên chưa được xếp CÓ EDGE", "🟡 ≈"] : e; };
+  const stRow = (nm, s, pre) => { const e = edgeA(s, nm), apx = isApx(nm), full = nm.replace(/<[^>]+>/g, "") + (apx ? " — ≈ dùng mốc/vùng hiện tại cho quá khứ, kết quả có thể đẹp hơn thực tế" : "");
+    return `<tr><td class="nm" title="${full}">${apx ? '<span style="color:#ffb74d">≈ </span>' : ""}${shortNm(nm, pre)}</td><td>${s.closed}</td><td><span class="win">${s.w}</span><i class="sep">/</i><span class="loss">${s.l}</span><i class="sep">/</i><span class="muted">${s.t}</span></td><td>${s.wr == null ? "—" : s.wr.toFixed(0) + "%"}</td><td>${s.half || "—"}</td>
     <td class="${s.R >= 0 ? "win" : "loss"}">${sg(s.R, (v) => v.toFixed(1))}R</td><td class="${(s.avg || 0) >= 0 ? "win" : "loss"}"><b>${s.avg == null ? "—" : sg(s.avg, (v) => v.toFixed(2)) + "R"}</b></td><td>${pfT(s.pf)}</td>
     <td><span class="win">${s.aw == null ? "—" : "+" + s.aw.toFixed(2)}</span><i class="sep">/</i><span class="loss">${s.al == null ? "—" : s.al.toFixed(2)}</span></td><td>${s.dd.toFixed(1)}R</td><td style="color:${e[1]};white-space:nowrap" title="${e[0]}: ${e[2]}">${e[3]}</td><td>${s.n - s.closed}</td></tr>`; };
   const grpRow = (t) => `<tr><td colspan="12" style="text-align:left;color:#e0a83a;font-weight:700;padding-top:6px">${t}</td></tr>`;
@@ -542,15 +575,17 @@ function drawTH(ctx, plotW, h) {
     const eqB = res.filter((o) => o.r.res !== "O").sort((a, b) => (a.r.j ?? 1e9) - (b.r.j ?? 1e9)).map((o) => o.r.r);
     const groups = {}; res.forEach((o) => (groups[famOf(o.x)] = groups[famOf(o.x)] || []).push(o.r));
     const ev = Object.entries(groups).map(([k, v]) => ({ k, s: statsOf(v) })).filter((o) => o.s.closed).sort((a, b) => (b.s.avg ?? -9) - (a.s.avg ?? -9));
-    const okE = ev.filter((o) => edgeOf(o.s)[0].includes("CÓ")), mayE = ev.filter((o) => edgeOf(o.s)[0].includes("Có thể")), noE = ev.filter((o) => edgeOf(o.s)[0].includes("Không")), tot = res.length ? statsOf(res.map((o) => o.r)) : null;
-    const li = (arr) => arr.map((o) => `${o.k} (${sg(o.s.avg, (v) => v.toFixed(2))}R, ${o.s.closed} lệnh, PF ${pfT(o.s.pf)})`).join(" · ");
+    const okE = ev.filter((o) => edgeA(o.s, o.k)[3] === "🟢 CÓ"), mayE = ev.filter((o) => edgeA(o.s, o.k)[3].startsWith("🟡")), noE = ev.filter((o) => edgeA(o.s, o.k)[3] === "🔴 Không"), tot = res.length ? statsOf(res.map((o) => o.r)) : null;
+    const li = (arr) => arr.map((o) => `${isApx(o.k) ? "≈ " : ""}${o.k} (${sg(o.s.avg, (v) => v.toFixed(2))}R, ${o.s.closed} lệnh, PF ${pfT(o.s.pf)})`).join(" · ");
     const verdict = `<div style="border:1px solid #2b3440;border-radius:6px;padding:7px 9px;margin-bottom:6px;background:#11161d;line-height:1.6">
       <b style="color:#e0a83a">KẾT LUẬN EDGE</b> <span class="muted">(${res.length} tín hiệu · ${bars.length} nến ${S.tf} · chốt lời: ${TPM[O.tpm]} · đóng sau ${O.tout} nến)</span><br>
       ${tot ? `Toàn bộ: Avg R <b class="${tot.avg >= 0 ? "win" : "loss"}">${sg(tot.avg, (v) => v.toFixed(2))}R / lệnh</b> · PF ${pfT(tot.pf)} · Win ${tot.wr == null ? "—" : tot.wr.toFixed(0) + "%"} → <b style="color:${edgeOf(tot)[1]}">${edgeOf(tot)[0]}</b><br>` : ""}
+      ${(() => { const w = whInfo(); return whUse() ? `📅 <b>Tường theo từng ngày:</b> ${w.gc} ngày GC · ${w.gld} ngày GLD (${w.from} → ${w.to}${w.imp ? `, ${w.imp} bản nhập từ TVL Quant` : ""}). Nến trước ngày OI đầu tiên: không tính tín hiệu tường. <span style="color:#ffb74d">≈</span> = loại còn dùng dữ liệu hiện tại (Option Flow, vùng Hedge) → không xếp CÓ EDGE.<br>`
+        : `<span style="color:#ffb74d">⚠ Đang dùng mốc tường HÔM NAY cho cả quá khứ</span> (${w.n ? "đã tắt tường theo ngày ở menu TP / SL" : whErr === "old" ? "<b>máy chủ TVLB đang chạy bản cũ</b> — tắt cửa sổ máy chủ rồi mở lại 01_MO_DASHBOARD_TVLB.bat" : whErr === "empty" ? "máy chủ không đọc được ngày nào trong data\\oi_history (thiếu nến 1h hoặc giá cơ sở) — xem cửa sổ máy chủ" : "chưa có data\\oi_history — chạy 07_NHAP_OI_TU_TVLQUANT.bat hoặc để TVLB tự lưu mỗi ngày"}) → các dòng <span style="color:#ffb74d">≈</span> có thể đẹp hơn thực tế.<br>`; })()}
       🟢 <b>Có EDGE:</b> ${okE.length ? li(okE) : "chưa có loại nào đạt đủ chuẩn"}<br>
       ${mayE.length ? `🟡 <b>Có thể có edge (cần thêm mẫu):</b> ${li(mayE)}<br>` : ""}
       ${noE.length ? `🔴 <b>Không có edge (nên bỏ):</b> ${li(noE)}<br>` : ""}
-      <span class="muted">EDGE = Avg R dương và <b>khoảng tin cậy 95%</b> của Avg R vẫn > 0 (không phải do may mắn) + Profit factor ≥ 1.3 + ≥ 30 lệnh đã đóng. Đây là kiểm tra trong mẫu: mốc tường hôm nay áp cho quá khứ, chưa trừ phí/spread → xác nhận lại bằng Nhật ký live (trang ④) và đổi khung (M5/M15/1h) trước khi tăng khối lượng.</span></div>`;
+      <span class="muted">EDGE = Avg R dương và <b>khoảng tin cậy 95%</b> của Avg R vẫn > 0 (không phải do may mắn) + Profit factor ≥ 1.3 + ≥ 30 lệnh đã đóng. Đây là kiểm tra trong mẫu, chưa trừ phí/spread → xác nhận lại bằng Nhật ký live (trang ④) và đổi khung (M5/M15/1h) trước khi tăng khối lượng.</span></div>`;
     document.querySelector("#t4bt").innerHTML = verdict + eqSvg(eqB, `Equity Backtest (${TPM[O.tpm]}, ${S.tf})`) + tbl(HEAD, famRows.concat(grade.length ? [grpRow("Theo hạng (tín hiệu có chấm điểm A/B/C)"), ...grade] : []).concat(res.length ? [grpRow("Tổng"), stRow("<b>TẤT CẢ</b>", statsOf(res.map((o) => o.r)))] : []))
       + `<div class="muted" style="margin-top:4px">Gồm MỌI tín hiệu: Option Flow · SMC Tip · Tường Option / OF·HEDGE / Hợp lưu · SMC hub, chạy lại trên các nến đang xem (đổi khung để thử khung khác). Avg R / lệnh = kỳ vọng mỗi lệnh. Rê chuột vào ô EDGE để xem lý do.</div>`;
     document.querySelector("#t5cn").textContent = `${ALL.length} tín hiệu · cùng SL, chỉ khác TP`;
@@ -688,7 +723,7 @@ function drawTH(ctx, plotW, h) {
       ${CK("O", "sig", "Tường Option · OF·HEDGE · Hợp lưu (ký hiệu + hạng)", 1)}<div class="sub">Kế hoạch giao dịch</div>${CK("O", "kh", "Vùng KH trên chart")}${CK("O", "kh1", "KH1 — Kế hoạch chính")}${CK("O", "kh2", "KH2 — Kế hoạch phụ")}${CK("O", "kh3", "KH3 — Đảo chiều / Phá biên")}
       <div class="sub">Tường Option & vùng Hedge (−Γ)</div>${CK("O.k", "wall", "B / S — Từ chối tại tường Option")}${CK("O.k", "oh", "OF·H — Đi theo vùng Hedge (−Γ)")}${CK("O.k", "oht", "H-T — Bẫy tại vùng Hedge")}${CK("O.k", "conf", "HL — Hợp lưu Option + SMC")}
       <div class="sub">SMC hub (ký hiệu + hạng)</div>${CK("O.k", "pro", "Pro")}${CK("O.k", "m", "Sweep M")}${CK("O.k", "sw", "Sweep sw")}${SEL("minG", [["C", "Mọi hạng (A, B, C)"], ["B", "Chỉ hạng A + B"], ["A", "Chỉ hạng A"]], "Hạng tối thiểu hiển thị / thống kê")}`],
-    ["tp", "📏 TP / SL", `${SEL("tpm", Object.entries(TPM), "🎯 Cách chốt lời (thống kê mọi tín hiệu)")}${SEL("boxn", [[-1, "Hộp SL/TP: Tắt"], [0, "Lệnh gần nhất + hiện tại"], [1, "+ 1 lệnh gần nhất"], [3, "+ 3 lệnh"], [5, "+ 5 lệnh"], [10, "+ 10 lệnh"], [20, "+ 20 lệnh"], [999, "+ Tất cả lệnh"]], "📐 Hộp SL/TP trên chart")}
+    ["tp", "📏 TP / SL", `${SEL("tpm", Object.entries(TPM), "🎯 Cách chốt lời (thống kê mọi tín hiệu)")}${CK("O", "wh", "Backtest dùng tường theo TỪNG NGÀY (OI lịch sử, không nhìn trước)")}${SEL("boxn", [[-1, "Hộp SL/TP: Tắt"], [0, "Lệnh gần nhất + hiện tại"], [1, "+ 1 lệnh gần nhất"], [3, "+ 3 lệnh"], [5, "+ 5 lệnh"], [10, "+ 10 lệnh"], [20, "+ 20 lệnh"], [999, "+ Tất cả lệnh"]], "📐 Hộp SL/TP trên chart")}
       ${SEL("slmax", [[0, "SL tối đa: không giới hạn"], [6, "Bỏ lệnh SL > 6$"], [8, "Bỏ lệnh SL > 8$"], [10, "Bỏ lệnh SL > 10$"], [12, "Bỏ lệnh SL > 12$"], [15, "Bỏ lệnh SL > 15$"]], "🛡 SL tối đa")}${SEL("tout", [[24, "Đóng lệnh sau 24 nến"], [36, "Đóng sau 36 nến"], [72, "Đóng sau 72 nến"], [144, "Đóng sau 144 nến"]], "⏱ Hết giờ")}${CK("O", "box", "Hiện hộp SL/TP + mã lệnh KH (K1-xxxx)")}
       <div class="sub">Cơ chế SL/TP gốc của TVLB</div><div class="note"><b>Option Flow:</b> vào giá đóng nến tín hiệu · SL = tường ± 3$ (Trap: râu nến ± 3$; HEDGE: cực trị 3 nến ± 3$) · TP1 = strike kế tiếp theo hướng lệnh · TP2 = strike sau đó (Trap: tường đối diện).<br><b>SMC CL/KB:</b> lệnh LIMIT tại 50% râu nến quét (KB2: vùng FVG/IMB) · SL = râu nến quét ± 3$ · TP1 = mốc cấu trúc gần nhất (bỏ lệnh nếu &lt; 1R, tối đa 3R) · hết hạn sau 6 nến H4.<br>Nhật ký / backtest gốc chỉ tính tới TP1; cùng nến chạm SL và TP thì tính SL.</div>`],
     ["al", "🔔 Cảnh báo", `${CK("O", "snd", "Âm thanh trên máy này", 1)}<div class="sub">Loại cảnh báo</div>${CK("O.al", "kh", "✅ KH1–3 XÁC NHẬN")}${CK("O.al", "khz", "⏳ Giá vào vùng KH")}${CK("O.al", "sig", "🎯 Tín hiệu mới hạng A–B")}${CK("O.al", "hedge", "🟥 Giá vào vùng Hedge")}${CK("O.al", "div", "📉 Phân kỳ CVD")}${CK("O.al", "news", "📰 Tin đỏ USD (trước 30 & 5 phút)")}
@@ -734,8 +769,9 @@ function drawTH(ctx, plotW, h) {
   function tick() {
     try {
       if (typeof S === "undefined" || !S.candles || S.candles.length < 40 || !S.state) return;
+      if (Date.now() - whAt > 30 * 60 * 1000) loadWH();
       bars = S.candles; spot = lastPrice(); L = levels(); flipV = (L.find((l) => l.key === "FLIP") || {}).xau ?? null;
-      const k = `${S.tf}|${bars.length}|${bars[bars.length - 2].time}|${L.length}|${S.state.options_updated || ""}`;
+      const k = `${S.tf}|${bars.length}|${bars[bars.length - 2].time}|${L.length}|${S.state.options_updated || ""}|${WH.length}|${O.wh}`;
       if (k !== key) { key = k; smcCalc(); buildSignals(); buildAll(); calcRx(); fwdUpdate(); }
       alertChecks(); render4(); draw();
     } catch (e) { console.error("TVLB tín hiệu:", e); }
