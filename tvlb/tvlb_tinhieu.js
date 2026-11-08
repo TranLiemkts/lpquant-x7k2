@@ -489,21 +489,29 @@ function drawTH(ctx, plotW, h) {
       <section class="panel"><header><h2>So sánh cách chốt lời</h2><span class="muted small" id="t5cn"></span></header><div id="t5cmp" style="font-size:12px"></div></section>
       <section class="panel"><header><h2>SMC Tip dài hạn</h2><span class="muted small" id="t5tn"></span></header><div id="t5tip" style="font-size:12px"></div></section></div></div>`;
   aside.insertBefore(page5, aside.querySelector("#pineOut") || null);
-  const tbl = (head, rows) => `<div class="tablewrap" style="max-height:none"><table class="htable"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("") || `<tr><td colspan="${head.length}" class="muted">Chưa có.</td></tr>`}</tbody></table></div>`;
-  const HEAD = ["Loại tín hiệu", "Đóng", "Thắng", "Thua", "Hết giờ", "Win%", "Chốt ½", "Tổng R", "Avg R / lệnh", "Profit factor", "Avg thắng", "Avg thua", "DD", "EDGE", "Đang chạy"];
+  const HT = { "Hết giờ": "Hết<br>giờ", "Chốt ½": "Chốt<br>½", "Tổng R": "Tổng<br>R", "Avg R / lệnh": "Avg R<br>/ lệnh", "Profit factor": "Profit<br>factor", "Thắng · Thua · Hết giờ": "Thắng·Thua<br>·Hết giờ", "Avg thắng · Avg thua": "Avg thắng<br>· thua", "Win%": "Win<br>%", "Đang chạy": "Đang<br>chạy" };
+  const tbl = (head, rows) => `<div class="tablewrap" style="max-height:none"><table class="htable bt3"><thead><tr>${head.map((h) => `<th title="${h}">${HT[h] || h}</th>`).join("")}</tr></thead><tbody>${rows.join("") || `<tr><td colspan="${head.length}" class="muted">Chưa có.</td></tr>`}</tbody></table></div>`;
+  const HEAD = ["Loại tín hiệu", "Đóng", "Thắng · Thua · Hết giờ", "Win%", "Chốt ½", "Tổng R", "Avg R / lệnh", "Profit factor", "Avg thắng · Avg thua", "DD", "EDGE", "Đang chạy"];
   function edgeOf(s) {   // EDGE = kỳ vọng R dương CÓ Ý NGHĨA THỐNG KÊ: khoảng tin cậy 95% của Avg R > 0, PF ≥ 1.3, ≥ 30 lệnh đã đóng
-    if (!s.closed || s.closed < 10) return ["⚪ Ít mẫu", "#9aa4b2", "dưới 10 lệnh đã đóng — chưa kết luận được"];
+    if (!s.closed || s.closed < 10) return ["⚪ Ít mẫu", "#9aa4b2", "dưới 10 lệnh đã đóng — chưa kết luận được", "⚪ Ít"];
     const lo = s.sd != null ? s.avg - (1.96 * s.sd) / Math.sqrt(s.closed) : null;
-    if (s.avg > 0 && lo != null && lo > 0 && s.pf >= 1.3 && s.closed >= 30) return ["🟢 CÓ EDGE", "#26a69a", `Avg R ${s.avg.toFixed(2)} · khoảng tin cậy 95% thấp nhất ${lo.toFixed(2)}R > 0 · PF ${s.pf.toFixed(2)} · ${s.closed} lệnh`];
-    if (s.avg > 0 && (s.pf == null || s.pf > 1)) return ["🟡 Có thể", "#ffd54f", `Avg R dương (${s.avg.toFixed(2)}) nhưng${s.closed < 30 ? ` mới ${s.closed} lệnh (< 30)` : ""}${lo != null && lo <= 0 ? ` · khoảng tin cậy 95% còn chạm ${lo.toFixed(2)}R ≤ 0` : ""}${s.pf != null && s.pf < 1.3 ? ` · PF ${s.pf.toFixed(2)} < 1.3` : ""} → cần thêm mẫu`];
-    return ["🔴 Không", "#ef5350", `Avg R ${s.avg.toFixed(2)} ≤ 0 hoặc PF ${s.pf == null ? "—" : s.pf.toFixed(2)} ≤ 1 → đang thua kỳ vọng`];
+    if (s.avg > 0 && lo != null && lo > 0 && s.pf >= 1.3 && s.closed >= 30) return ["🟢 CÓ EDGE", "#26a69a", `Avg R ${s.avg.toFixed(2)} · khoảng tin cậy 95% thấp nhất ${lo.toFixed(2)}R > 0 · PF ${s.pf.toFixed(2)} · ${s.closed} lệnh`, "🟢 CÓ"];
+    if (s.avg > 0 && (s.pf == null || s.pf > 1)) return ["🟡 Có thể", "#ffd54f", `Avg R dương (${s.avg.toFixed(2)}) nhưng${s.closed < 30 ? ` mới ${s.closed} lệnh (< 30)` : ""}${lo != null && lo <= 0 ? ` · khoảng tin cậy 95% còn chạm ${lo.toFixed(2)}R ≤ 0` : ""}${s.pf != null && s.pf < 1.3 ? ` · PF ${s.pf.toFixed(2)} < 1.3` : ""} → cần thêm mẫu`, "🟡 Có thể"];
+    return ["🔴 Không", "#ef5350", `Avg R ${s.avg.toFixed(2)} ≤ 0 hoặc PF ${s.pf == null ? "—" : s.pf.toFixed(2)} ≤ 1 → đang thua kỳ vọng`, "🔴 Không"];
   }
+  if (!document.getElementById("bt3css")) { const st = document.createElement("style"); st.id = "bt3css";
+    st.textContent = ".htable.bt3{width:100%;font-size:11px;table-layout:auto;font-family:'IBM Plex Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums}.htable.bt3 th,.htable.bt3 td{font-family:inherit;letter-spacing:0}.htable.bt3 th{white-space:normal;line-height:1.15;padding:3px 4px;font-size:10px;vertical-align:bottom}.htable.bt3 td{padding:2px 4px;white-space:nowrap}.htable.bt3 i.sep{font-style:normal;color:#5b6573;margin:0 3px}.htable.bt3 td.nm{text-align:left;max-width:150px;overflow:hidden;text-overflow:ellipsis}";
+    document.head.appendChild(st); }
   const pfT = (v) => (v == null ? "—" : v === Infinity ? "∞" : v.toFixed(2));
-  const stRow = (nm, s) => { const e = edgeOf(s);
-    return `<tr><td style="text-align:left;white-space:nowrap">${nm}</td><td>${s.closed}</td><td class="win">${s.w}</td><td class="loss">${s.l}</td><td>${s.t}</td><td>${s.wr == null ? "—" : s.wr.toFixed(0) + "%"}</td><td>${s.half || "—"}</td>
+  const SHORT = [[/^(Option Flow|SMC Tip|SMC hub) · /, ""], [/^Tường Option B\/S$/, "Tường B/S"], [/^Hợp lưu Option \+ SMC$/, "Hợp lưu"], [/^OF·HEDGE \(.*\)$/, "OF·HEDGE"], [/^OF·H-TRAP \(.*\)$/, "OF·H-TRAP"],
+    [/^Pro tiếp diễn$/, "Pro"], [/^Sweep cấu trúc chính \(M\)$/, "Sweep M"], [/^Sweep internal \(sw\)$/, "Sweep sw"], [/ tại /, " @ "], [/ \(tín hiệu có chấm điểm\)$/, ""]];
+  const PRE = { "Option Flow": "OF", "SMC Tip": "Tip", "SMC hub": "Hub" };
+  const shortNm = (nm, pre) => { const m = pre && nm.match(/^(Option Flow|SMC Tip|SMC hub) · /), r = SHORT.reduce((a, [re, b]) => a.replace(re, b), nm); return m ? PRE[m[1]] + " · " + r : r; };
+  const stRow = (nm, s, pre) => { const e = edgeOf(s), full = nm.replace(/<[^>]+>/g, "");
+    return `<tr><td class="nm" title="${full}">${shortNm(nm, pre)}</td><td>${s.closed}</td><td><span class="win">${s.w}</span><i class="sep">/</i><span class="loss">${s.l}</span><i class="sep">/</i><span class="muted">${s.t}</span></td><td>${s.wr == null ? "—" : s.wr.toFixed(0) + "%"}</td><td>${s.half || "—"}</td>
     <td class="${s.R >= 0 ? "win" : "loss"}">${sg(s.R, (v) => v.toFixed(1))}R</td><td class="${(s.avg || 0) >= 0 ? "win" : "loss"}"><b>${s.avg == null ? "—" : sg(s.avg, (v) => v.toFixed(2)) + "R"}</b></td><td>${pfT(s.pf)}</td>
-    <td class="win">${s.aw == null ? "—" : "+" + s.aw.toFixed(2)}</td><td class="loss">${s.al == null ? "—" : s.al.toFixed(2)}</td><td>${s.dd.toFixed(1)}R</td><td style="color:${e[1]};white-space:nowrap" title="${e[2]}">${e[0]}</td><td>${s.n - s.closed}</td></tr>`; };
-  const grpRow = (t) => `<tr><td colspan="15" style="text-align:left;color:#e0a83a;font-weight:700;padding-top:6px">${t}</td></tr>`;
+    <td><span class="win">${s.aw == null ? "—" : "+" + s.aw.toFixed(2)}</span><i class="sep">/</i><span class="loss">${s.al == null ? "—" : s.al.toFixed(2)}</span></td><td>${s.dd.toFixed(1)}R</td><td style="color:${e[1]};white-space:nowrap" title="${e[0]}: ${e[2]}">${e[3]}</td><td>${s.n - s.closed}</td></tr>`; };
+  const grpRow = (t) => `<tr><td colspan="12" style="text-align:left;color:#e0a83a;font-weight:700;padding-top:6px">${t}</td></tr>`;
   function eqSvg(vals, title) {   // đường Equity (R) + tô đỏ vùng sụt giảm từ đỉnh (như TVL Quant)
     if (vals.length < 2) return `<div class="muted" style="font-size:11px;margin:4px 0">${title || "Equity"}: cần ≥ 2 lệnh đã đóng.</div>`;
     let R = 0, pk = 0, dd = 0; const eq = [0, ...vals.map((v) => (R += v))], peak = eq.map((v) => (pk = Math.max(pk, v))); eq.forEach((v, i) => (dd = Math.max(dd, peak[i] - v)));
@@ -528,7 +536,7 @@ function drawTH(ctx, plotW, h) {
     const by = (f, flt) => { const g = {}; res.filter((o) => !flt || flt(o.x)).forEach((o) => { const k = f(o.x); (g[k] = g[k] || []).push(o.r); }); return Object.entries(g).sort().map(([k, v]) => stRow(k, statsOf(v))); };
     const famRows = [["Option Flow", (x) => x.kind === "of"], ["SMC Tip (CL / KB)", (x) => x.kind === "tip"], ["Tường Option · OF·HEDGE · Hợp lưu", (x) => ["wall", "oh", "oht", "conf"].includes(x.kind)], ["SMC hub", (x) => ["pro", "m", "sw"].includes(x.kind)]]
       .map(([t, f]) => { const rows = by(famOf, f); return rows.length ? [grpRow(t), ...rows] : []; }).flat();
-    const grade = by((x) => "Hạng " + x.grade + " (tín hiệu có chấm điểm)", (x) => !!x.grade);
+    const grade = by((x) => "Hạng " + x.grade, (x) => !!x.grade);
     const cmp = Object.keys(TPM).map((m) => stRow(TPM[m], statsOf(ALL.map((x) => sim(x, m)).filter(Boolean))));
     document.querySelector("#t4bn").textContent = `${bars.length} nến · đóng sau ${O.tout} nến`;
     const eqB = res.filter((o) => o.r.res !== "O").sort((a, b) => (a.r.j ?? 1e9) - (b.r.j ?? 1e9)).map((o) => o.r.r);
@@ -543,7 +551,7 @@ function drawTH(ctx, plotW, h) {
       ${mayE.length ? `🟡 <b>Có thể có edge (cần thêm mẫu):</b> ${li(mayE)}<br>` : ""}
       ${noE.length ? `🔴 <b>Không có edge (nên bỏ):</b> ${li(noE)}<br>` : ""}
       <span class="muted">EDGE = Avg R dương và <b>khoảng tin cậy 95%</b> của Avg R vẫn > 0 (không phải do may mắn) + Profit factor ≥ 1.3 + ≥ 30 lệnh đã đóng. Đây là kiểm tra trong mẫu: mốc tường hôm nay áp cho quá khứ, chưa trừ phí/spread → xác nhận lại bằng Nhật ký live (trang ④) và đổi khung (M5/M15/1h) trước khi tăng khối lượng.</span></div>`;
-    document.querySelector("#t4bt").innerHTML = verdict + eqSvg(eqB, `Equity Backtest (${TPM[O.tpm]}, ${S.tf})`) + tbl(HEAD, famRows.concat(grade.length ? [grpRow("Theo hạng"), ...grade] : []).concat(res.length ? [grpRow("Tổng"), stRow("<b>TẤT CẢ tín hiệu</b>", statsOf(res.map((o) => o.r)))] : []))
+    document.querySelector("#t4bt").innerHTML = verdict + eqSvg(eqB, `Equity Backtest (${TPM[O.tpm]}, ${S.tf})`) + tbl(HEAD, famRows.concat(grade.length ? [grpRow("Theo hạng (tín hiệu có chấm điểm A/B/C)"), ...grade] : []).concat(res.length ? [grpRow("Tổng"), stRow("<b>TẤT CẢ</b>", statsOf(res.map((o) => o.r)))] : []))
       + `<div class="muted" style="margin-top:4px">Gồm MỌI tín hiệu: Option Flow · SMC Tip · Tường Option / OF·HEDGE / Hợp lưu · SMC hub, chạy lại trên các nến đang xem (đổi khung để thử khung khác). Avg R / lệnh = kỳ vọng mỗi lệnh. Rê chuột vào ô EDGE để xem lý do. Đổi số nến đóng lệnh: <select id="t4to" class="btn sm">${[24, 36, 72, 144].map((v) => `<option value="${v}" ${v === O.tout ? "selected" : ""}>${v} nến</option>`).join("")}</select></div>`;
     document.querySelector("#t5cn").textContent = `${ALL.length} tín hiệu · cùng SL, chỉ khác TP`;
     document.querySelector("#t5cmp").innerHTML = tbl(["Cách chốt"].concat(HEAD.slice(1)), cmp) + '<div class="muted" style="margin-top:4px">Đổi cách chốt lời dùng cho bảng trên ở menu trái → TP / SL. SL trước nếu cùng nến chạm SL và TP · Chốt ½ = số lệnh đã chốt 1 nửa ở mốc 1 rồi dời SL hoà vốn.</div>';
@@ -564,7 +572,7 @@ function drawTH(ctx, plotW, h) {
     const all = T.concat(F).sort((a, b) => a.t - b.t);
     document.querySelector("#t4fn").textContent = `${FWD.length} tín hiệu + ${T.length} lệnh KH đã đóng`;
     const g2 = {}; all.forEach((o) => (g2[o.nm] = g2[o.nm] || []).push({ res: o.r > 0 ? "W" : o.r < 0 ? "L" : "T", r: o.r }));
-    document.querySelector("#t4fw").innerHTML = eqSvg(all.map((o) => o.r), "Equity Nhật ký live (mọi loại)") + tbl(HEAD, Object.entries(g2).sort().map(([k, v]) => stRow(k, statsOf(v))).concat(all.length ? [stRow("<b>TẤT CẢ</b>", statsOf(all.map((o) => ({ res: o.r > 0 ? "W" : o.r < 0 ? "L" : "T", r: o.r }))))] : []))
+    document.querySelector("#t4fw").innerHTML = eqSvg(all.map((o) => o.r), "Equity Nhật ký live (mọi loại)") + tbl(HEAD, Object.entries(g2).sort().map(([k, v]) => stRow(k, statsOf(v), 1)).concat(all.length ? [stRow("<b>TẤT CẢ</b>", statsOf(all.map((o) => ({ res: o.r > 0 ? "W" : o.r < 0 ? "L" : "T", r: o.r }))))] : []))
       + FWD.slice().reverse().slice(0, 10).map((f) => `<div class="v3row"><span class="muted">${new Date(f.t * 1000).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span><b style="color:${f.dir < 0 ? "#ef5350" : "#26a69a"}">${f.dir < 0 ? "SELL" : "BUY"}</b><span>${f.label} · ${f.tf}${f.grade ? " · hạng " + f.grade : ""}</span>${f.res ? `<b class="${f.r > 0 ? "win" : "loss"}">${sg(f.r, (v) => v.toFixed(2))}R</b>` : '<span class="muted">đang chạy</span>'}</div>`).join("")
       + '<div class="muted" style="margin-top:4px">Tự ghi MỌI tín hiệu (Option Flow · SMC Tip · Tường / OF·HEDGE / Hợp lưu · SMC hub) ngay khi nến tín hiệu đóng (để dashboard mở), kết quả theo cách chốt lời đang chọn; cộng các lệnh KH1–3 đã đóng ở trang ③. Lưu trong trình duyệt.</div>';
   }
@@ -593,7 +601,7 @@ function drawTH(ctx, plotW, h) {
       const all = filled.slice().sort((a, b) => (a.ct || 9e9) - (b.ct || 9e9)).map(toR);
       document.querySelector("#t5tn").textContent = `${filled.length} lệnh khớp · ${TIPL.orders.length - filled.length} không khớp (hết hạn / lỡ) · bỏ ${TIPL.skip} lệnh TP1 < 1R`;
       h += eqSvg(all.filter((r) => r.res !== "O").map((r) => r.r), `Equity SMC Tip dài hạn (${TIPL.tf}, chốt TP1)`)
-        + tbl(HEAD, Object.entries(g).sort().map(([k, v]) => stRow("SMC Tip · " + k, statsOf(v))).concat(all.length ? [stRow("<b>TẤT CẢ SMC Tip</b>", statsOf(all))] : []));
+        + tbl(HEAD, Object.entries(g).sort().map(([k, v]) => stRow(k, statsOf(v))).concat(all.length ? [stRow("<b>TẤT CẢ</b>", statsOf(all))] : []));
     }
     el.innerHTML = h; el.dataset.v = "1"; if (TIPL) TIPL._drawn = TIPL.msg;
     el.querySelectorAll("[data-tl]").forEach((b) => { b.onclick = () => { el.dataset.v = ""; runTipLong(b.dataset.tl); }; });
