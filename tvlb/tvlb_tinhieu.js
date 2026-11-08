@@ -484,7 +484,7 @@ function drawTH(ctx, plotW, h) {
   const btn5 = document.createElement("button"); btn5.type = "button"; btn5.dataset.pg = "5"; btn5.className = "v3btn"; btn5.textContent = "⑤ Backtest"; bar.appendChild(btn5);
   const page5 = document.createElement("div"); page5.className = "page"; page5.dataset.pg = "5"; page5.hidden = true;
   page5.innerHTML = `<div class="row" data-row="top">
-      <section class="panel"><header><h2>Backtest mọi tín hiệu · tìm EDGE</h2><span class="muted small" id="t4bn"></span></header><div id="t4bt" style="font-size:12px"></div></section></div>
+      <section class="panel"><header><h2>Backtest mọi tín hiệu · tìm EDGE</h2><span class="muted small" id="t4bn"></span><label class="muted small" style="margin-left:auto;margin-right:6px" title="Lệnh chưa chạm SL/TP sau số nến này sẽ đóng ở giá lúc đó (Hết giờ)">Đóng sau <select id="t4to" class="btn sm">${[24, 36, 72, 144].map((v) => `<option value="${v}">${v} nến</option>`).join("")}</select></label></header><div id="t4bt" style="font-size:12px"></div></section></div>
     <div class="row" data-row="bot"><div class="duo">
       <section class="panel"><header><h2>So sánh cách chốt lời</h2><span class="muted small" id="t5cn"></span></header><div id="t5cmp" style="font-size:12px"></div></section>
       <section class="panel"><header><h2>SMC Tip dài hạn</h2><span class="muted small" id="t5tn"></span></header><div id="t5tip" style="font-size:12px"></div></section></div></div>`;
@@ -538,7 +538,7 @@ function drawTH(ctx, plotW, h) {
       .map(([t, f]) => { const rows = by(famOf, f); return rows.length ? [grpRow(t), ...rows] : []; }).flat();
     const grade = by((x) => "Hạng " + x.grade, (x) => !!x.grade);
     const cmp = Object.keys(TPM).map((m) => stRow(TPM[m], statsOf(ALL.map((x) => sim(x, m)).filter(Boolean))));
-    document.querySelector("#t4bn").textContent = `${bars.length} nến · đóng sau ${O.tout} nến`;
+    document.querySelector("#t4bn").textContent = `${bars.length} nến ${S.tf}`;
     const eqB = res.filter((o) => o.r.res !== "O").sort((a, b) => (a.r.j ?? 1e9) - (b.r.j ?? 1e9)).map((o) => o.r.r);
     const groups = {}; res.forEach((o) => (groups[famOf(o.x)] = groups[famOf(o.x)] || []).push(o.r));
     const ev = Object.entries(groups).map(([k, v]) => ({ k, s: statsOf(v) })).filter((o) => o.s.closed).sort((a, b) => (b.s.avg ?? -9) - (a.s.avg ?? -9));
@@ -552,11 +552,11 @@ function drawTH(ctx, plotW, h) {
       ${noE.length ? `🔴 <b>Không có edge (nên bỏ):</b> ${li(noE)}<br>` : ""}
       <span class="muted">EDGE = Avg R dương và <b>khoảng tin cậy 95%</b> của Avg R vẫn > 0 (không phải do may mắn) + Profit factor ≥ 1.3 + ≥ 30 lệnh đã đóng. Đây là kiểm tra trong mẫu: mốc tường hôm nay áp cho quá khứ, chưa trừ phí/spread → xác nhận lại bằng Nhật ký live (trang ④) và đổi khung (M5/M15/1h) trước khi tăng khối lượng.</span></div>`;
     document.querySelector("#t4bt").innerHTML = verdict + eqSvg(eqB, `Equity Backtest (${TPM[O.tpm]}, ${S.tf})`) + tbl(HEAD, famRows.concat(grade.length ? [grpRow("Theo hạng (tín hiệu có chấm điểm A/B/C)"), ...grade] : []).concat(res.length ? [grpRow("Tổng"), stRow("<b>TẤT CẢ</b>", statsOf(res.map((o) => o.r)))] : []))
-      + `<div class="muted" style="margin-top:4px">Gồm MỌI tín hiệu: Option Flow · SMC Tip · Tường Option / OF·HEDGE / Hợp lưu · SMC hub, chạy lại trên các nến đang xem (đổi khung để thử khung khác). Avg R / lệnh = kỳ vọng mỗi lệnh. Rê chuột vào ô EDGE để xem lý do. Đổi số nến đóng lệnh: <select id="t4to" class="btn sm">${[24, 36, 72, 144].map((v) => `<option value="${v}" ${v === O.tout ? "selected" : ""}>${v} nến</option>`).join("")}</select></div>`;
+      + `<div class="muted" style="margin-top:4px">Gồm MỌI tín hiệu: Option Flow · SMC Tip · Tường Option / OF·HEDGE / Hợp lưu · SMC hub, chạy lại trên các nến đang xem (đổi khung để thử khung khác). Avg R / lệnh = kỳ vọng mỗi lệnh. Rê chuột vào ô EDGE để xem lý do.</div>`;
     document.querySelector("#t5cn").textContent = `${ALL.length} tín hiệu · cùng SL, chỉ khác TP`;
     document.querySelector("#t5cmp").innerHTML = tbl(["Cách chốt"].concat(HEAD.slice(1)), cmp) + '<div class="muted" style="margin-top:4px">Đổi cách chốt lời dùng cho bảng trên ở menu trái → TP / SL. SL trước nếu cùng nến chạm SL và TP · Chốt ½ = số lệnh đã chốt 1 nửa ở mốc 1 rồi dời SL hoà vốn.</div>';
     renderTipLong();
-    const to = document.querySelector("#t4to"); if (to) to.onchange = () => { O.tout = +to.value; saveO(); render4(); };
+    const to = document.querySelector("#t4to"); if (to && !to.dataset.b) { to.dataset.b = 1; to.onchange = () => { O.tout = +to.value; saveO(); render4(); }; } if (to && document.activeElement !== to) to.value = O.tout;
     if (page.hidden) return;
     // phản ứng tại tường
     const g = {}; RX.forEach((r) => { (g[r.nm + "|" + r.x] = g[r.nm + "|" + r.x] || []).push(r); });
