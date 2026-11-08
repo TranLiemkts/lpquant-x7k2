@@ -557,13 +557,21 @@ function drawTH(ctx, plotW, h) {
       <circle cx="${X(eq.length - 1)}" cy="${Y(R)}" r="3" fill="${R >= 0 ? "#26a69a" : "#ef5350"}"/>
 </svg>`;
   }
+  // Equity của "Backtest SMC" (trang ②, hàm gốc vẽ canvas) → vẽ kiểu SVG như trang ⑤ (tô đỏ vùng sụt giảm, chấm cuối, DD)
+  try { window.drawEquity = function (done) {
+    const cv = document.querySelector("#btCv"); if (!cv) return;
+    let box = document.querySelector("#btEqSvg"); if (!box) { box = document.createElement("div"); box.id = "btEqSvg"; cv.parentNode.insertBefore(box, cv); }
+    cv.style.display = "none";
+    const d = (done || []).slice().sort((a, b) => (a.closeT ?? a.time) - (b.closeT ?? b.time));
+    box.innerHTML = eqSvg(d.map((o) => (o.status === "tp1" ? o.rr : -1)), `Equity Backtest SMC (${(S.bt && S.bt.tf) || ""}, chốt TP1)`);
+  }; } catch (e) { }
   function render4() {
     if (page.hidden && page5.hidden) return;
     const last = ALL.slice(-16).reverse();
     document.querySelector("#t4n").textContent = `${ALL.length} tín hiệu trên ${bars.length} nến ${S.tf}`;
     document.querySelector("#t4sig").innerHTML = last.length ? last.map((x) => { const r = sim(x);
       return `<div class="v3row"><span class="muted">${new Date(x.t * 1000).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span><b style="color:${kcol(x)}">${x.dir < 0 ? "SELL" : "BUY"}</b><span>${x.label}</span>${x.grade ? `<b>hạng ${x.grade} ${x.sc}</b>` : ""} @ ${f2(x.e)}${r ? ` → <b class="${r.res === "W" ? "win" : r.res === "L" ? "loss" : "muted"}">${{ W: "TP", L: "SL", T: "hết giờ", O: "đang chạy" }[r.res]} ${sg(r.r, (v) => v.toFixed(2))}R</b>` : ""}</div>`; }).join("")
-      + '<div class="muted" style="margin-top:4px">Rê chuột vào ký hiệu trên chart để xem lý do + bảng chấm điểm. Mốc dùng bộ tường HIỆN TẠI cho cả quá khứ (TVLB chưa lưu tường từng ngày).</div>' : '<span class="muted">Chưa có tín hiệu trên số nến đang xem.</span>';
+      + '<div class="muted" style="margin-top:4px">Rê chuột vào ký hiệu trên chart để xem lý do + bảng chấm điểm. Backtest dùng tường theo từng ngày (data\\oi_history) — xem trang ⑤.</div>' : '<span class="muted">Chưa có tín hiệu trên số nến đang xem.</span>';
     // backtest theo loại / hạng + so sánh chốt lời
     const res = ALL.map((x) => ({ x, r: sim(x) })).filter((o) => o.r);
     const by = (f, flt) => { const g = {}; res.filter((o) => !flt || flt(o.x)).forEach((o) => { const k = f(o.x); (g[k] = g[k] || []).push(o.r); }); return Object.entries(g).sort().map(([k, v]) => stRow(k, statsOf(v))); };
@@ -779,7 +787,7 @@ function drawTH(ctx, plotW, h) {
   setInterval(tick, 2000); setTimeout(tick, 3000);
   bar.addEventListener("click", () => setTimeout(() => { key = ""; tick(); }, 60));
   // ── số phiên bản (để biết đang chạy bản nào) ──
-  const WEB_VER = "web 11 · 08/11";
+  const WEB_VER = "web 12 · 08/11";
   window.TVLB_WEB_VER = WEB_VER;
   function showVer() { fetch(API("/api/version")).then((r) => r.json()).then((v) => { const t = `${WEB_VER} · máy chủ ${v.version || "?"}`;
       const e = document.querySelector("#t5ver"); if (e) e.textContent = t; const h = document.querySelector("#tvlbPlus .pm h3"); if (h) h.innerHTML = `TVLB+ <span style="font-size:10px;font-weight:400;opacity:.7">${t}</span>`; })
