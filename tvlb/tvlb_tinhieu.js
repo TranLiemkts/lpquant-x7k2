@@ -514,7 +514,7 @@ function drawTH(ctx, plotW, h) {
   const btn5 = document.createElement("button"); btn5.type = "button"; btn5.dataset.pg = "5"; btn5.className = "v3btn"; btn5.textContent = "⑤ Backtest"; bar.appendChild(btn5);
   const page5 = document.createElement("div"); page5.className = "page"; page5.dataset.pg = "5"; page5.hidden = true;
   page5.innerHTML = `<div class="row" data-row="top">
-      <section class="panel"><header><h2>Backtest mọi tín hiệu · tìm EDGE</h2><span class="muted small" id="t4bn"></span><span class="muted small" id="t5ver" style="margin-left:10px;opacity:.75" title="Phiên bản giao diện TVLB+ (file web) · phiên bản máy chủ (server.py). Sau khi cập nhật: tắt / mở lại máy chủ rồi Ctrl+F5."></span><label class="muted small" style="margin-left:auto;margin-right:6px" title="Lệnh chưa chạm SL/TP sau số nến này sẽ đóng ở giá lúc đó (Hết giờ)">Đóng sau <select id="t4to" class="btn sm">${[24, 36, 72, 144].map((v) => `<option value="${v}">${v} nến</option>`).join("")}</select></label></header><div id="t4bt" style="font-size:12px"></div></section></div>
+      <section class="panel"><header><h2>Backtest mọi tín hiệu · tìm EDGE</h2><span class="muted small" id="t4bn"></span><span class="muted small" id="t5ver" style="margin-left:10px;opacity:.75" title="Phiên bản giao diện TVLB+ (file web) · phiên bản máy chủ (server.py). Sau khi cập nhật: tắt / mở lại máy chủ rồi Ctrl+F5."></span><label class="muted small" style="margin-left:auto;margin-right:6px" title="Lệnh chưa chạm SL/TP sau số nến này sẽ đóng ở giá lúc đó (Hết giờ)">Đóng sau <select id="t4to" class="btn sm">${[24, 36, 72, 144, 288, 576].map((v) => `<option value="${v}">${v} nến</option>`).join("")}</select></label></header><div id="t4bt" style="font-size:12px"></div></section></div>
     <div class="row" data-row="bot"><div class="duo">
       <section class="panel"><header><h2>So sánh cách chốt lời</h2><span class="muted small" id="t5cn"></span></header><div id="t5cmp" style="font-size:12px"></div></section>
       <section class="panel"><header><h2>SMC dài hạn · SMC Tip + SMC hub</h2><span class="muted small" id="t5tn"></span></header><div id="t5tip" style="font-size:12px"></div></section></div></div>`;
@@ -637,7 +637,9 @@ function drawTH(ctx, plotW, h) {
     renderTipLong();
   }
   // SMC hub trên nến dài hạn: chạy lại đúng hàm SMC hub của board (smcCalc) trên toàn bộ nến, rồi mô phỏng SL gốc + TP cố định theo R
-  const HUBTP = { r1: "Cố định 1R", r15: "Cố định 1.5R", r2: "Cố định 2R", r3: "Cố định 3R", part: "Chốt 2 phần (½ ở 1R → SL hoà vốn, ½ ở 2R)" };
+  const HUBR = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+  const HUBTP = Object.assign(Object.fromEntries(HUBR.map((k) => ["r" + k, `Cố định ${k}R`])), { part: "Chốt 2 phần (½ ở 1R → SL hoà vốn, ½ ở 2R)" });
+  const hubName = (m) => HUBTP[m] || (/^r[\d.]+$/.test(m) ? `Cố định ${m.slice(1)}R` : m);
   function hubLong(c, tf) {
     const b0 = bars, th0 = TH; let sg = [];
     try { bars = c; smcCalc(); sg = (TH && TH.sig ? TH.sig : []).filter((x) => ["pro", "m", "sw"].includes(x.kind) && x.sl != null && Math.abs(x.e - x.sl) > 0); }
@@ -645,7 +647,7 @@ function drawTH(ctx, plotW, h) {
     return { n: c.length, tf, sig: sg.map((x) => ({ kind: x.kind, dir: x.dir, i: x.i, t: x.t, e: x.e, sl: x.sl, c })) };
   }
   function simR(x, m) {   // SL gốc của tín hiệu, TP = k·R; SL trước nếu cùng nến; hết giờ sau O.tout nến → đóng ở giá đóng nến
-    const c = x.c, d = x.dir, e = x.e, risk = Math.abs(e - x.sl), k = { r1: 1, r15: 1.5, r2: 2, r3: 3, part: 2 }[m];
+    const c = x.c, d = x.dir, e = x.e, risk = Math.abs(e - x.sl), k = m === "part" ? 2 : parseFloat(String(m).slice(1)) || 2;
     let sl = x.sl, half = false, acc = 0;
     for (let j = x.i + 1; j < Math.min(c.length, x.i + 1 + O.tout); j++) { const b = c[j];
       if (d > 0 ? b.low <= sl : b.high >= sl) { const r = acc + (half ? 0.5 : 1) * ((sl - e) * d) / risk; return { res: r > 0 ? "W" : r < 0 ? "L" : "T", r, half, j }; }
@@ -665,22 +667,25 @@ function drawTH(ctx, plotW, h) {
       h += eqSvg(all.filter((r) => r.res !== "O").map((r) => r.r), `Equity SMC Tip dài hạn (${TIPL.tf}, chốt TP1)`)
         + tbl(HEAD, Object.entries(g).sort().map(([k, v]) => stRow(k, statsOf(v))).concat(all.length ? [stRow("<b>TẤT CẢ</b>", statsOf(all))] : []));
     }
-    if (TIPL && TIPL.hub) { const H = TIPL.hub, m = O.hubtp || "r2", nmK = { pro: "Pro tiếp diễn", m: "Sweep cấu trúc chính (M)", sw: "Sweep internal (sw)" };
+    if (TIPL && TIPL.hub) { const H = TIPL.hub, m = /^r[\d.]+$|^part$/.test(O.hubtp || "") ? O.hubtp : "r2", nmK = { pro: "Pro tiếp diễn", m: "Sweep cấu trúc chính (M)", sw: "Sweep internal (sw)" };
       const res = H.sig.map((x) => ({ x, r: simR(x, m) })).filter((o) => o.r), g = {};
       res.forEach((o) => { const k = `${nmK[o.x.kind]} ${o.x.dir > 0 ? "BUY" : "SELL"}`; (g[k] = g[k] || []).push(o.r); (g[nmK[o.x.kind]] = g[nmK[o.x.kind]] || []); });
       const byK = {}; res.forEach((o) => (byK[nmK[o.x.kind]] = byK[nmK[o.x.kind]] || []).push(o.r));
       const eqv = res.filter((o) => o.r.res !== "O").sort((a, b) => a.r.j - b.r.j).map((o) => o.r.r);
       h += `<div style="margin:12px 0 4px;border-top:1px solid #2b3440;padding-top:8px"><b style="color:#e0a83a">SMC hub dài hạn</b> <span class="muted">· ${H.sig.length} tín hiệu trên ${H.n} nến ${H.tf} · SL gốc của tín hiệu · đóng sau ${O.tout} nến ·</span>
-        <label class="muted">TP <select id="t5hubtp" class="btn sm">${Object.entries(HUBTP).map(([k, t]) => `<option value="${k}" ${k === m ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>`
-        + eqSvg(eqv, `Equity SMC hub dài hạn (${H.tf}, ${HUBTP[m]})`)
+        <label class="muted">TP <select id="t5hubtp" class="btn sm">${Object.entries(HUBTP).concat(HUBTP[m] ? [] : [[m, hubName(m)]]).map(([k, t]) => `<option value="${k}" ${k === m ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+        <label class="muted" title="Nhập R:R bất kỳ (vd 7 hoặc 2.2) rồi Enter">· R:R tự nhập <input id="t5hubr" type="number" min="0.5" max="30" step="0.1" placeholder="vd 7" style="width:58px" class="btn sm"></label></div>`
+        + eqSvg(eqv, `Equity SMC hub dài hạn (${H.tf}, ${hubName(m)})`)
         + tbl(HEAD, [grpRow("Theo loại")].concat(Object.entries(byK).sort().map(([k, v]) => stRow(k, statsOf(v))), [grpRow("Theo loại · chiều")], Object.entries(g).filter(([k]) => / (BUY|SELL)$/.test(k)).sort().map(([k, v]) => stRow(k, statsOf(v))),
           res.length ? [grpRow("Tổng"), stRow("<b>TẤT CẢ</b>", statsOf(res.map((o) => o.r)))] : []))
         + `<div style="margin-top:8px"><b>So sánh cách chốt lời · SMC hub</b> <span class="muted">(cùng tín hiệu, cùng SL)</span></div>`
-        + tbl(["Cách chốt"].concat(HEAD.slice(1)), Object.entries(HUBTP).map(([k, t]) => stRow(t, statsOf(H.sig.map((x) => simR(x, k)).filter(Boolean)))))
+        + tbl(["Cách chốt"].concat(HEAD.slice(1)), Object.entries(HUBTP).concat(HUBTP[m] ? [] : [[m, hubName(m)]]).map(([k, t]) => stRow(k === m ? `<b>${t} ◀ đang chọn</b>` : t, statsOf(H.sig.map((x) => simR(x, k)).filter(Boolean)))))
         + '<div class="muted" style="margin-top:4px">SMC hub dài hạn không dùng mốc Option (chỉ cấu trúc giá) nên không bị lỗi "nhìn trước tường"; TP tính theo bội số R vì phần lớn 5 tháng chưa có OI lưu.</div>'; }
     el.innerHTML = h; el.dataset.v = "1"; if (TIPL) TIPL._drawn = TIPL.msg;
     el.querySelectorAll("[data-tl]").forEach((b) => { b.onclick = () => { el.dataset.v = ""; runTipLong(b.dataset.tl); }; });
-    const hs = el.querySelector("#t5hubtp"); if (hs) hs.onchange = () => { O.hubtp = hs.value; saveO(); el.dataset.v = ""; if (TIPL) TIPL._drawn = null; renderTipLong(); };
+    const reH = () => { saveO(); el.dataset.v = ""; if (TIPL) TIPL._drawn = null; renderTipLong(); };
+    const hs = el.querySelector("#t5hubtp"); if (hs) hs.onchange = () => { O.hubtp = hs.value; reH(); };
+    const hr = el.querySelector("#t5hubr"); if (hr) hr.onkeydown = (ev) => { if (ev.key !== "Enter") return; const v = Math.round(parseFloat(hr.value) * 10) / 10; if (v >= 0.5 && v <= 30) { O.hubtp = "r" + v; reH(); } };
   }
   // ───────────────────── SMC TIP (SMC CL/KB của anh Thắng): bật/tắt từng đối tượng + tách riêng tín hiệu Buy/Sell ─────────────────────
   const TIP = Object.assign({ st: true, sg: true, of: true, prem: true, ext: true, fib: true, kb2: true, liq: true, tl: true, hl: true, bos: true, swp: true, form: true, ord: true, fill: true }, st_.get("tip", {}));
@@ -765,7 +770,7 @@ function drawTH(ctx, plotW, h) {
       <div class="sub">Tường Option & vùng Hedge (−Γ)</div>${CK("O.k", "wall", "B / S — Từ chối tại tường Option")}${CK("O.k", "oh", "OF·H — Đi theo vùng Hedge (−Γ)")}${CK("O.k", "oht", "H-T — Bẫy tại vùng Hedge")}${CK("O.k", "conf", "HL — Hợp lưu Option + SMC")}
       <div class="sub">SMC hub (ký hiệu + hạng)</div>${CK("O.k", "pro", "Pro")}${CK("O.k", "m", "Sweep M")}${CK("O.k", "sw", "Sweep sw")}${SEL("minG", [["C", "Mọi hạng (A, B, C)"], ["B", "Chỉ hạng A + B"], ["A", "Chỉ hạng A"]], "Hạng tối thiểu hiển thị / thống kê")}`],
     ["tp", "📏 TP / SL", `${SEL("tpm", Object.entries(TPM), "🎯 Cách chốt lời (thống kê mọi tín hiệu)")}${CK("O", "wh", "Backtest dùng tường theo TỪNG NGÀY (OI lịch sử, không nhìn trước)")}${SEL("boxn", [[-1, "Hộp SL/TP: Tắt"], [0, "Lệnh gần nhất + hiện tại"], [1, "+ 1 lệnh gần nhất"], [3, "+ 3 lệnh"], [5, "+ 5 lệnh"], [10, "+ 10 lệnh"], [20, "+ 20 lệnh"], [999, "+ Tất cả lệnh"]], "📐 Hộp SL/TP trên chart")}
-      ${SEL("slmax", [[0, "SL tối đa: không giới hạn"], [6, "Bỏ lệnh SL > 6$"], [8, "Bỏ lệnh SL > 8$"], [10, "Bỏ lệnh SL > 10$"], [12, "Bỏ lệnh SL > 12$"], [15, "Bỏ lệnh SL > 15$"]], "🛡 SL tối đa")}${SEL("tout", [[24, "Đóng lệnh sau 24 nến"], [36, "Đóng sau 36 nến"], [72, "Đóng sau 72 nến"], [144, "Đóng sau 144 nến"]], "⏱ Hết giờ")}${CK("O", "box", "Hiện hộp SL/TP + mã lệnh KH (K1-xxxx)")}
+      ${SEL("slmax", [[0, "SL tối đa: không giới hạn"], [6, "Bỏ lệnh SL > 6$"], [8, "Bỏ lệnh SL > 8$"], [10, "Bỏ lệnh SL > 10$"], [12, "Bỏ lệnh SL > 12$"], [15, "Bỏ lệnh SL > 15$"]], "🛡 SL tối đa")}${SEL("tout", [[24, "Đóng sau 24 nến"], [36, "Đóng sau 36 nến"], [72, "Đóng sau 72 nến"], [144, "Đóng sau 144 nến"], [288, "Đóng sau 288 nến"], [576, "Đóng sau 576 nến"]], "⏱ Hết giờ")}${CK("O", "box", "Hiện hộp SL/TP + mã lệnh KH (K1-xxxx)")}
       <div class="sub">Cơ chế SL/TP gốc của TVLB</div><div class="note"><b>Option Flow:</b> vào giá đóng nến tín hiệu · SL = tường ± 3$ (Trap: râu nến ± 3$; HEDGE: cực trị 3 nến ± 3$) · TP1 = strike kế tiếp theo hướng lệnh · TP2 = strike sau đó (Trap: tường đối diện).<br><b>SMC CL/KB:</b> lệnh LIMIT tại 50% râu nến quét (KB2: vùng FVG/IMB) · SL = râu nến quét ± 3$ · TP1 = mốc cấu trúc gần nhất (bỏ lệnh nếu &lt; 1R, tối đa 3R) · hết hạn sau 6 nến H4.<br>Nhật ký / backtest gốc chỉ tính tới TP1; cùng nến chạm SL và TP thì tính SL.</div>`],
     ["al", "🔔 Cảnh báo", `${CK("O", "snd", "Âm thanh trên máy này", 1)}<div class="sub">Loại cảnh báo</div>${CK("O.al", "kh", "✅ KH1–3 XÁC NHẬN")}${CK("O.al", "khz", "⏳ Giá vào vùng KH")}${CK("O.al", "sig", "🎯 Tín hiệu mới hạng A–B")}${CK("O.al", "hedge", "🟥 Giá vào vùng Hedge")}${CK("O.al", "div", "📉 Phân kỳ CVD")}${CK("O.al", "news", "📰 Tin đỏ USD (trước 30 & 5 phút)")}
       <div class="sub">Âm thanh</div>${SEL("sty", [["beep", "🔔 Bíp đôi (mặc định)"], ["chime", "🎵 Chuông lên"], ["bell", "🛎 Chuông đơn"], ["siren", "🚨 Còi"], ["voice", "🗣 Giọng đọc tiếng Việt"], ["mute", "🔇 Tắt tiếng"]], "Kiểu")}${CK("O", "diff", "Âm riêng theo hướng (BUY ↑ · SELL ↓)")}<div class="note" style="margin-bottom:0">Âm lượng <b id="mVolV"></b></div><input type="range" min="0" max="100" step="5" data-rng="vol"><button class="pb" id="mTest">▶ Nghe thử</button>
@@ -820,7 +825,7 @@ function drawTH(ctx, plotW, h) {
   setInterval(tick, 2000); setTimeout(tick, 3000);
   bar.addEventListener("click", () => setTimeout(() => { key = ""; tick(); }, 60));
   // ── số phiên bản (để biết đang chạy bản nào) ──
-  const WEB_VER = "web 13 · 08/11";
+  const WEB_VER = "web 14 · 08/11";
   window.TVLB_WEB_VER = WEB_VER;
   function showVer() { fetch(API("/api/version")).then((r) => r.json()).then((v) => { const t = `${WEB_VER} · máy chủ ${v.version || "?"}`;
       const e = document.querySelector("#t5ver"); if (e) e.textContent = t; const h = document.querySelector("#tvlbPlus .pm h3"); if (h) h.innerHTML = `TVLB+ <span style="font-size:10px;font-weight:400;opacity:.7">${t}</span>`; })
