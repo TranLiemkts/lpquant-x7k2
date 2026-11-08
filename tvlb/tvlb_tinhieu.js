@@ -517,7 +517,7 @@ function drawTH(ctx, plotW, h) {
       <section class="panel"><header><h2>Backtest mọi tín hiệu · tìm EDGE</h2><span class="muted small" id="t4bn"></span><span class="muted small" id="t5ver" style="margin-left:10px;opacity:.75" title="Phiên bản giao diện TVLB+ (file web) · phiên bản máy chủ (server.py). Sau khi cập nhật: tắt / mở lại máy chủ rồi Ctrl+F5."></span><label class="muted small" style="margin-left:auto;margin-right:6px" title="Lệnh chưa chạm SL/TP sau số nến này sẽ đóng ở giá lúc đó (Hết giờ)">Đóng sau <select id="t4to" class="btn sm">${[24, 36, 72, 144].map((v) => `<option value="${v}">${v} nến</option>`).join("")}</select></label></header><div id="t4bt" style="font-size:12px"></div></section></div>
     <div class="row" data-row="bot"><div class="duo">
       <section class="panel"><header><h2>So sánh cách chốt lời</h2><span class="muted small" id="t5cn"></span></header><div id="t5cmp" style="font-size:12px"></div></section>
-      <section class="panel"><header><h2>SMC Tip dài hạn</h2><span class="muted small" id="t5tn"></span></header><div id="t5tip" style="font-size:12px"></div></section></div></div>`;
+      <section class="panel"><header><h2>SMC dài hạn · SMC Tip + SMC hub</h2><span class="muted small" id="t5tn"></span></header><div id="t5tip" style="font-size:12px"></div></section></div></div>`;
   aside.insertBefore(page5, aside.querySelector("#pineOut") || null);
   const HT = { "Hết giờ": "Hết<br>giờ", "Chốt ½": "Chốt<br>½", "Tổng R": "Tổng<br>R", "Avg R / lệnh": "Avg R<br>/ lệnh", "Profit factor": "Profit<br>factor", "Thắng · Thua · Hết giờ": "Thắng·Thua<br>·Hết giờ", "Avg thắng · Avg thua": "Avg thắng<br>· thua", "Win%": "Win<br>%", "Đang chạy": "Đang<br>chạy" };
   const tbl = (head, rows) => `<div class="tablewrap" style="max-height:none"><table class="htable bt3"><thead><tr>${head.map((h) => `<th title="${h}">${HT[h] || h}</th>`).join("")}</tr></thead><tbody>${rows.join("") || `<tr><td colspan="${head.length}" class="muted">Chưa có.</td></tr>`}</tbody></table></div>`;
@@ -630,14 +630,33 @@ function drawTH(ctx, plotW, h) {
       const c = seed(rc.map(mk2).filter((k) => SMC.fxOpen(k.time))), h4 = seed(SMC.aggregate(rh.map(mk2).filter((k) => SMC.fxOpen(k.time)), H4_SEC));
       const r = SMC.analyze(c, h4, H4_SEC, Object.assign({}, smcCfg(), { kb2: true, tfSec: TF_SEC[tf], tfName: tf === "15m" ? "M15" : "M5", sessionOk: null }));
       const O_ = r.orders.filter((o) => o.status !== "skip");
+      const hub = hubLong(c, tf);
       TIPL = { tf, orders: O_.map((o) => ({ name: `${o.name} ${o.side}`, status: o.status, rr: o.rr, t: c[o.created].time, fill: o.fillI != null, ct: o.closeI != null && c[o.closeI] ? c[o.closeI].time : null })),
-        skip: r.orders.length - O_.length, msg: `${c.length} nến ${tf} · ${new Date(c[0].time * 1000).toLocaleDateString("vi-VN")} → ${new Date(c[c.length - 1].time * 1000).toLocaleDateString("vi-VN")}` };
+        skip: r.orders.length - O_.length, hub, msg: `${c.length} nến ${tf} · ${new Date(c[0].time * 1000).toLocaleDateString("vi-VN")} → ${new Date(c[c.length - 1].time * 1000).toLocaleDateString("vi-VN")}` };
     } catch (e) { TIPL = { tf, msg: "❌ " + e.message + " (cần mở dashboard qua máy chủ TVLB)" }; }
     renderTipLong();
   }
+  // SMC hub trên nến dài hạn: chạy lại đúng hàm SMC hub của board (smcCalc) trên toàn bộ nến, rồi mô phỏng SL gốc + TP cố định theo R
+  const HUBTP = { r1: "Cố định 1R", r15: "Cố định 1.5R", r2: "Cố định 2R", r3: "Cố định 3R", part: "Chốt 2 phần (½ ở 1R → SL hoà vốn, ½ ở 2R)" };
+  function hubLong(c, tf) {
+    const b0 = bars, th0 = TH; let sg = [];
+    try { bars = c; smcCalc(); sg = (TH && TH.sig ? TH.sig : []).filter((x) => ["pro", "m", "sw"].includes(x.kind) && x.sl != null && Math.abs(x.e - x.sl) > 0); }
+    finally { bars = b0; TH = th0; }
+    return { n: c.length, tf, sig: sg.map((x) => ({ kind: x.kind, dir: x.dir, i: x.i, t: x.t, e: x.e, sl: x.sl, c })) };
+  }
+  function simR(x, m) {   // SL gốc của tín hiệu, TP = k·R; SL trước nếu cùng nến; hết giờ sau O.tout nến → đóng ở giá đóng nến
+    const c = x.c, d = x.dir, e = x.e, risk = Math.abs(e - x.sl), k = { r1: 1, r15: 1.5, r2: 2, r3: 3, part: 2 }[m];
+    let sl = x.sl, half = false, acc = 0;
+    for (let j = x.i + 1; j < Math.min(c.length, x.i + 1 + O.tout); j++) { const b = c[j];
+      if (d > 0 ? b.low <= sl : b.high >= sl) { const r = acc + (half ? 0.5 : 1) * ((sl - e) * d) / risk; return { res: r > 0 ? "W" : r < 0 ? "L" : "T", r, half, j }; }
+      if (m === "part" && !half && (d > 0 ? b.high >= e + risk : b.low <= e - risk)) { half = true; acc = 0.5; sl = e; }
+      if (d > 0 ? b.high >= e + k * risk : b.low <= e - k * risk) return { res: "W", r: acc + (half ? 0.5 : 1) * k, half, j }; }
+    const j = Math.min(c.length - 1, x.i + O.tout); if (j <= x.i || x.i + O.tout >= c.length) return { res: "O", r: 0, half };
+    return { res: "T", r: acc + (half ? 0.5 : 1) * ((c[j].close - e) * d) / risk, half, j };
+  }
   function renderTipLong() {
     const el = document.querySelector("#t5tip"); if (!el || (TIPL && TIPL._drawn === TIPL.msg && el.dataset.v === "1")) return;
-    let h = `<div class="v3sw" style="margin-bottom:6px"><button data-tl="15m">▶ Chạy M15</button><button data-tl="5m">▶ Chạy M5</button> <span class="muted">${TIPL ? TIPL.msg : "Backtest hệ CL/KB trên TOÀN BỘ nến lưu trên máy chủ (từ mốc h4_from, ~5 tháng), luật gốc: chốt tại TP1, SL trước nếu cùng nến."}</span></div>`;
+    let h = `<div class="v3sw" style="margin-bottom:6px"><button data-tl="15m">▶ Chạy M15</button><button data-tl="5m">▶ Chạy M5</button> <span class="muted">${TIPL ? TIPL.msg : "Backtest trên TOÀN BỘ nến lưu trên máy chủ (từ mốc h4_from, ~5 tháng): ① SMC Tip (CL/KB) — luật gốc chốt tại TP1 · ② SMC hub (Pro / Sweep M / Sweep sw) — SL gốc, TP theo bội số R (chọn được, có bảng so sánh)."}</span></div>`;
     if (TIPL && TIPL.orders) {
       const filled = TIPL.orders.filter((o) => o.fill), toR = (o) => (o.status === "tp1" ? { res: "W", r: o.rr } : o.status === "sl" ? { res: "L", r: -1 } : { res: "O", r: 0 });
       const g = {}; filled.forEach((o) => (g[o.name] = g[o.name] || []).push(toR(o)));
@@ -646,8 +665,22 @@ function drawTH(ctx, plotW, h) {
       h += eqSvg(all.filter((r) => r.res !== "O").map((r) => r.r), `Equity SMC Tip dài hạn (${TIPL.tf}, chốt TP1)`)
         + tbl(HEAD, Object.entries(g).sort().map(([k, v]) => stRow(k, statsOf(v))).concat(all.length ? [stRow("<b>TẤT CẢ</b>", statsOf(all))] : []));
     }
+    if (TIPL && TIPL.hub) { const H = TIPL.hub, m = O.hubtp || "r2", nmK = { pro: "Pro tiếp diễn", m: "Sweep cấu trúc chính (M)", sw: "Sweep internal (sw)" };
+      const res = H.sig.map((x) => ({ x, r: simR(x, m) })).filter((o) => o.r), g = {};
+      res.forEach((o) => { const k = `${nmK[o.x.kind]} ${o.x.dir > 0 ? "BUY" : "SELL"}`; (g[k] = g[k] || []).push(o.r); (g[nmK[o.x.kind]] = g[nmK[o.x.kind]] || []); });
+      const byK = {}; res.forEach((o) => (byK[nmK[o.x.kind]] = byK[nmK[o.x.kind]] || []).push(o.r));
+      const eqv = res.filter((o) => o.r.res !== "O").sort((a, b) => a.r.j - b.r.j).map((o) => o.r.r);
+      h += `<div style="margin:12px 0 4px;border-top:1px solid #2b3440;padding-top:8px"><b style="color:#e0a83a">SMC hub dài hạn</b> <span class="muted">· ${H.sig.length} tín hiệu trên ${H.n} nến ${H.tf} · SL gốc của tín hiệu · đóng sau ${O.tout} nến ·</span>
+        <label class="muted">TP <select id="t5hubtp" class="btn sm">${Object.entries(HUBTP).map(([k, t]) => `<option value="${k}" ${k === m ? "selected" : ""}>${t}</option>`).join("")}</select></label></div>`
+        + eqSvg(eqv, `Equity SMC hub dài hạn (${H.tf}, ${HUBTP[m]})`)
+        + tbl(HEAD, [grpRow("Theo loại")].concat(Object.entries(byK).sort().map(([k, v]) => stRow(k, statsOf(v))), [grpRow("Theo loại · chiều")], Object.entries(g).filter(([k]) => / (BUY|SELL)$/.test(k)).sort().map(([k, v]) => stRow(k, statsOf(v))),
+          res.length ? [grpRow("Tổng"), stRow("<b>TẤT CẢ</b>", statsOf(res.map((o) => o.r)))] : []))
+        + `<div style="margin-top:8px"><b>So sánh cách chốt lời · SMC hub</b> <span class="muted">(cùng tín hiệu, cùng SL)</span></div>`
+        + tbl(["Cách chốt"].concat(HEAD.slice(1)), Object.entries(HUBTP).map(([k, t]) => stRow(t, statsOf(H.sig.map((x) => simR(x, k)).filter(Boolean)))))
+        + '<div class="muted" style="margin-top:4px">SMC hub dài hạn không dùng mốc Option (chỉ cấu trúc giá) nên không bị lỗi "nhìn trước tường"; TP tính theo bội số R vì phần lớn 5 tháng chưa có OI lưu.</div>'; }
     el.innerHTML = h; el.dataset.v = "1"; if (TIPL) TIPL._drawn = TIPL.msg;
     el.querySelectorAll("[data-tl]").forEach((b) => { b.onclick = () => { el.dataset.v = ""; runTipLong(b.dataset.tl); }; });
+    const hs = el.querySelector("#t5hubtp"); if (hs) hs.onchange = () => { O.hubtp = hs.value; saveO(); el.dataset.v = ""; if (TIPL) TIPL._drawn = null; renderTipLong(); };
   }
   // ───────────────────── SMC TIP (SMC CL/KB của anh Thắng): bật/tắt từng đối tượng + tách riêng tín hiệu Buy/Sell ─────────────────────
   const TIP = Object.assign({ st: true, sg: true, of: true, prem: true, ext: true, fib: true, kb2: true, liq: true, tl: true, hl: true, bos: true, swp: true, form: true, ord: true, fill: true }, st_.get("tip", {}));
@@ -787,7 +820,7 @@ function drawTH(ctx, plotW, h) {
   setInterval(tick, 2000); setTimeout(tick, 3000);
   bar.addEventListener("click", () => setTimeout(() => { key = ""; tick(); }, 60));
   // ── số phiên bản (để biết đang chạy bản nào) ──
-  const WEB_VER = "web 12 · 08/11";
+  const WEB_VER = "web 13 · 08/11";
   window.TVLB_WEB_VER = WEB_VER;
   function showVer() { fetch(API("/api/version")).then((r) => r.json()).then((v) => { const t = `${WEB_VER} · máy chủ ${v.version || "?"}`;
       const e = document.querySelector("#t5ver"); if (e) e.textContent = t; const h = document.querySelector("#tvlbPlus .pm h3"); if (h) h.innerHTML = `TVLB+ <span style="font-size:10px;font-weight:400;opacity:.7">${t}</span>`; })
