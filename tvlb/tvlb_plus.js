@@ -192,8 +192,16 @@
     st2.textContent = `.right { position: relative; }
 #tvlbSplit { position: absolute; left: -8px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 6; border-radius: 3px; }
 #tvlbSplit:hover, #tvlbSplit.on { background: rgba(224,168,58,.45); }
-.duo[data-wide="0"] { grid-template-columns: minmax(0, 1fr) !important; } .duo[data-wide="0"] > :nth-child(2) { display: none !important; }
-.duo[data-wide="1"] { grid-template-columns: minmax(0, 1fr) !important; } .duo[data-wide="1"] > :nth-child(1) { display: none !important; }
+.duo[data-wide="0"] { grid-template-columns: minmax(0, 1fr) 30px !important; } .duo[data-wide="1"] { grid-template-columns: 30px minmax(0, 1fr) !important; }
+.duo[data-wide="0"] > :nth-child(2), .duo[data-wide="1"] > :nth-child(1) { padding: 8px 0 !important; overflow: hidden !important; cursor: pointer; min-width: 0; }
+.duo[data-wide="0"] > :nth-child(2) > :not(header), .duo[data-wide="1"] > :nth-child(1) > :not(header) { display: none !important; }
+.duo[data-wide="0"] > :nth-child(2) > header, .duo[data-wide="1"] > :nth-child(1) > header { writing-mode: vertical-rl; flex-direction: row; justify-content: flex-start; align-items: center; margin: 0 auto !important; white-space: nowrap; gap: 6px; }
+.duo[data-wide="0"] > :nth-child(2) > header > :not(h2), .duo[data-wide="1"] > :nth-child(1) > header > :not(h2) { display: none !important; }
+.duo[data-wide="0"] > :nth-child(2) > header h2, .duo[data-wide="1"] > :nth-child(1) > header h2 { font-size: 11px !important; margin: 0 !important; }
+.duo[data-wide="0"] > :nth-child(2):hover, .duo[data-wide="1"] > :nth-child(1):hover { border-color: #e0a83a; }
+.duo[data-wide="0"] > :nth-child(2):hover h2, .duo[data-wide="1"] > :nth-child(1):hover h2 { color: #fff; }
+.row.min .duo[data-wide] > .panel { max-height: 46px; }
+.row.min .panel > header { cursor: pointer; } .row.min .panel > header:hover h2 { color: #fff; }
 .wx { background: transparent; color: var(--muted, #7d8796); border: 1px solid var(--line, #2b3440); border-radius: 4px; padding: 0 6px; font-size: 12px; line-height: 20px; cursor: pointer; margin-left: 4px; }
 .wx:hover { color: #e0a83a; border-color: #e0a83a; }
 .panel > header > .wx { margin-left: auto; } .panel > header > .wx + .mx { margin-left: 4px; }
@@ -219,9 +227,15 @@
         const sync = () => { b.textContent = duo.dataset.wide === String(i) ? "⇆" : "⇔"; b.dataset.ptip = duo.dataset.wide === String(i) ? "Chia đôi lại với bảng bên cạnh" : "Mở rộng bảng này hết bề ngang (ẩn bảng bên cạnh)"; };
         b.onclick = (e) => { e.stopPropagation(); if (duo.dataset.wide === String(i)) { delete duo.dataset.wide; delete W[key]; } else { duo.dataset.wide = String(i); W[key] = String(i); }
           saveW(); duo.querySelectorAll(".wx").forEach((x) => x._sync && x._sync()); window.dispatchEvent(new Event("resize")); };
-        b._sync = sync; sync(); const mx2 = h.querySelector(".mx"); h.insertBefore(b, mx2 || null); });
+        b._sync = sync; sync(); const mx2 = h.querySelector(".mx"); h.insertBefore(b, mx2 || null);
+        pn.addEventListener("click", (e) => { const w = duo.dataset.wide; if (w == null || w === String(i)) return;   // bảng đang thu thành dải dọc → bấm để chia đôi lại
+          e.stopPropagation(); e.preventDefault(); delete duo.dataset.wide; delete W[key]; saveW(); duo.querySelectorAll(".wx").forEach((x) => x._sync && x._sync()); window.dispatchEvent(new Event("resize")); }, true);
+        pn.addEventListener("mouseenter", () => { const w = duo.dataset.wide; pn.title = w != null && w !== String(i) ? "Bấm để mở lại bảng này (chia đôi)" : ""; }); });
     });
-    bindDuos(); [800, 2000, 5000].forEach((t) => setTimeout(bindDuos, t));   // trang ③ ④ (tạo sau) cũng có nút ⇔
+    bindDuos(); [800, 2000, 5000].forEach((t) => setTimeout(bindDuos, t));
+    // hàng đang thu gọn (chỉ còn tiêu đề): bấm vào tiêu đề để chia đều lại 2 hàng
+    document.addEventListener("click", (e) => { const h = e.target.closest(".row.min .panel > header"); if (!h || e.target.closest("button, select, input, label, a")) return;
+      const pg = h.closest(".page"), mx = pg && pg.querySelector(".row.max .mx"); if (mx) mx.click(); });   // trang ③ ④ (tạo sau) cũng có nút ⇔
   })();
 
   // ───────────────────── chart mượt khi kéo / cuộn (như LP Quant) ─────────────────────

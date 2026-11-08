@@ -825,7 +825,7 @@ function drawTH(ctx, plotW, h) {
   setInterval(tick, 2000); setTimeout(tick, 3000);
   bar.addEventListener("click", () => setTimeout(() => { key = ""; tick(); }, 60));
   // ── số phiên bản (để biết đang chạy bản nào) ──
-  const WEB_VER = "web 14 · 08/11";
+  const WEB_VER = "web 15 · 08/11";
   window.TVLB_WEB_VER = WEB_VER;
   function showVer() { fetch(API("/api/version")).then((r) => r.json()).then((v) => { const t = `${WEB_VER} · máy chủ ${v.version || "?"}`;
       const e = document.querySelector("#t5ver"); if (e) e.textContent = t; const h = document.querySelector("#tvlbPlus .pm h3"); if (h) h.innerHTML = `TVLB+ <span style="font-size:10px;font-weight:400;opacity:.7">${t}</span>`; })
