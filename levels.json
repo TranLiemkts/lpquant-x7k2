@@ -1,24 +1,24 @@
 {
  "schema": "lpquant.levels.v1",
- "built": "12/11/2026 08:05",
- "build_ms": 1794445464894,
- "spot": 3995.8,
+ "built": "12/11/2026 13:31",
+ "build_ms": 1794465007832,
+ "spot": 3977.72,
  "basis": 12.0,
- "gld_mult": 10.8182,
- "gld": 369.36,
- "rf": 0.04115000247955322,
+ "gld_mult": 10.8928,
+ "gld": 365.17,
+ "rf": 0.04114999771118164,
  "default_set": "all",
  "sets": {
   "month": {
    "label": "Tháng",
    "contract": "OGZ26",
-   "date": "2026-11-10",
+   "date": "2026-11-11",
    "rank": "oi",
    "gex": {
-    "cme": -772.68,
-    "gld": -105.13,
-    "at_spot": -833.1,
-    "at_spot_all": -725.0
+    "cme": -839.96,
+    "gld": 0.0,
+    "at_spot": -821.9,
+    "at_spot_all": -744.5
    },
    "hedge": [],
    "levels": [
@@ -29,9 +29,9 @@
      "xau": 4188.0,
      "strike": 4200.0,
      "hard": 100,
-     "doi": -199,
-     "gex": 50.4265,
-     "oi": 5072,
+     "doi": -94,
+     "gex": 44.5486,
+     "oi": 4978,
      "side": "c"
     },
     {
@@ -41,9 +41,9 @@
      "xau": 4088.0,
      "strike": 4100.0,
      "hard": 73,
-     "doi": 35,
-     "gex": 42.5635,
-     "oi": 3716,
+     "doi": -92,
+     "gex": 42.0984,
+     "oi": 3624,
      "side": "c"
     },
     {
@@ -52,10 +52,10 @@
      "pool": "GC",
      "xau": 3888.0,
      "strike": 3900.0,
-     "hard": 91,
-     "doi": -225,
-     "gex": -175.7016,
-     "oi": 6141,
+     "hard": 96,
+     "doi": 321,
+     "gex": -197.9338,
+     "oi": 6462,
      "side": "p"
     },
     {
@@ -65,9 +65,9 @@
      "xau": 3688.0,
      "strike": 3700.0,
      "hard": 100,
-     "doi": 95,
-     "gex": -66.624,
-     "oi": 6725,
+     "doi": 6,
+     "gex": -68.0512,
+     "oi": 6731,
      "side": "p"
     },
     {
@@ -78,7 +78,7 @@
      "strike": 3900.0,
      "hard": null,
      "doi": null,
-     "gex": -175.7016,
+     "gex": -197.9338,
      "oi": null,
      "side": null
     },
@@ -86,8 +86,8 @@
      "key": "MP",
      "name": "Max Pain",
      "pool": "GC",
-     "xau": 4093.0,
-     "strike": 4105.0,
+     "xau": 4088.0,
+     "strike": 4100.0,
      "hard": null,
      "doi": null,
      "gex": null,
@@ -98,8 +98,8 @@
      "key": "FLIP",
      "name": "Gamma Flip",
      "pool": "GC+GLD",
-     "xau": 4087.1,
-     "strike": 4099.1,
+     "xau": 4094.85,
+     "strike": 4106.85,
      "hard": null,
      "doi": null,
      "gex": null,
@@ -109,15 +109,15 @@
    ]
   },
   "near": {
-   "label": "Gần (0.7 ngày)",
+   "label": "Gần (0.5 ngày)",
    "contract": "G2RX26 (đáo hạn 12/11)",
-   "date": "2026-11-10",
+   "date": "2026-11-11",
    "rank": "gex",
    "gex": {
-    "cme": -19.93,
-    "gld": -105.13,
-    "at_spot": -127.62,
-    "at_spot_all": -725.0
+    "cme": -25.39,
+    "gld": 0.0,
+    "at_spot": -25.88,
+    "at_spot_all": -744.5
    },
    "hedge": [],
    "levels": [
@@ -128,9 +128,9 @@
      "xau": 3988.0,
      "strike": 4000.0,
      "hard": 100,
-     "doi": 0,
-     "gex": 12.1841,
-     "oi": 238,
+     "doi": 1,
+     "gex": 14.7249,
+     "oi": 239,
      "side": "c"
     },
     {
@@ -139,10 +139,10 @@
      "pool": "GC",
      "xau": 4013.0,
      "strike": 4025.0,
-     "hard": 16,
-     "doi": 0,
-     "gex": -11.3365,
-     "oi": 45,
+     "hard": 10,
+     "doi": -2,
+     "gex": -9.1025,
+     "oi": 43,
      "side": "c"
     },
     {
@@ -151,10 +151,10 @@
      "pool": "GC",
      "xau": 3938.0,
      "strike": 3950.0,
-     "hard": 96,
-     "doi": 0,
-     "gex": -6.9674,
-     "oi": 87,
+     "hard": 78,
+     "doi": 10,
+     "gex": -10.1171,
+     "oi": 97,
      "side": "p"
     },
     {
@@ -164,9 +164,9 @@
      "xau": 3963.0,
      "strike": 3975.0,
      "hard": 100,
-     "doi": 9,
-     "gex": 4.5377,
-     "oi": 62,
+     "doi": 17,
+     "gex": 3.5737,
+     "oi": 79,
      "side": "p"
     },
     {
@@ -177,7 +177,106 @@
      "strike": 4000.0,
      "hard": null,
      "doi": null,
-     "gex": 12.1841,
+     "gex": 14.7249,
+     "oi": null,
+     "side": null
+    },
+    {
+     "key": "MP",
+     "name": "Max Pain",
+     "pool": "GC",
+     "xau": 4033.0,
+     "strike": 4045.0,
+     "hard": null,
+     "doi": null,
+     "gex": null,
+     "oi": null,
+     "side": null
+    },
+    {
+     "key": "FLIP",
+     "name": "Gamma Flip",
+     "pool": "GC+GLD",
+     "xau": 4094.85,
+     "strike": 4106.85,
+     "hard": null,
+     "doi": null,
+     "gex": null,
+     "oi": null,
+     "side": null
+    }
+   ]
+  },
+  "week": {
+   "label": "Tuần (Weekly)",
+   "contract": "G3MX26 (đáo hạn 16/11) + G3TX26 (đáo hạn 17/11) + G3WX26 (đáo hạn 18/11)",
+   "date": "2026-11-11",
+   "rank": "gex",
+   "gex": {
+    "cme": -36.22,
+    "gld": 0.0,
+    "at_spot": -34.59,
+    "at_spot_all": -744.5
+   },
+   "hedge": [],
+   "levels": [
+    {
+     "key": "CW",
+     "name": "Call Wall",
+     "pool": "GC",
+     "xau": 4013.0,
+     "strike": 4025.0,
+     "hard": 100,
+     "doi": 7,
+     "gex": 2.8455,
+     "oi": 131,
+     "side": "c"
+    },
+    {
+     "key": "T1",
+     "name": "Tường phụ 1",
+     "pool": "GC",
+     "xau": 4038.0,
+     "strike": 4050.0,
+     "hard": 92,
+     "doi": 10,
+     "gex": -0.5561,
+     "oi": 130,
+     "side": "c"
+    },
+    {
+     "key": "T2",
+     "name": "Tường phụ 2",
+     "pool": "GC",
+     "xau": 3888.0,
+     "strike": 3900.0,
+     "hard": 91,
+     "doi": 3,
+     "gex": -8.1705,
+     "oi": 208,
+     "side": "p"
+    },
+    {
+     "key": "PW",
+     "name": "Put Wall",
+     "pool": "GC",
+     "xau": 3938.0,
+     "strike": 3950.0,
+     "hard": 100,
+     "doi": 4,
+     "gex": -8.5396,
+     "oi": 172,
+     "side": "p"
+    },
+    {
+     "key": "MAG",
+     "name": "Magnet tăng tốc",
+     "pool": "GC",
+     "xau": 3988.0,
+     "strike": 4000.0,
+     "hard": null,
+     "doi": null,
+     "gex": -24.8733,
      "oi": null,
      "side": null
     },
@@ -197,107 +296,8 @@
      "key": "FLIP",
      "name": "Gamma Flip",
      "pool": "GC+GLD",
-     "xau": 4087.1,
-     "strike": 4099.1,
-     "hard": null,
-     "doi": null,
-     "gex": null,
-     "oi": null,
-     "side": null
-    }
-   ]
-  },
-  "week": {
-   "label": "Tuần (Weekly)",
-   "contract": "OG2X26 (đáo hạn 13/11) + G3MX26 (đáo hạn 16/11) + G3TX26 (đáo hạn 17/11) + G3WX26 (đáo hạn 18/11)",
-   "date": "2026-11-10",
-   "rank": "gex",
-   "gex": {
-    "cme": -140.53,
-    "gld": -105.13,
-    "at_spot": -232.71,
-    "at_spot_all": -725.0
-   },
-   "hedge": [],
-   "levels": [
-    {
-     "key": "CW",
-     "name": "Call Wall",
-     "pool": "GC",
-     "xau": 4038.0,
-     "strike": 4050.0,
-     "hard": 100,
-     "doi": 0,
-     "gex": -5.7807,
-     "oi": 384,
-     "side": "c"
-    },
-    {
-     "key": "T1",
-     "name": "Tường phụ 1",
-     "pool": "GC",
-     "xau": 4088.0,
-     "strike": 4100.0,
-     "hard": 52,
-     "doi": 14,
-     "gex": 5.336,
-     "oi": 437,
-     "side": "c"
-    },
-    {
-     "key": "T2",
-     "name": "Tường phụ 2",
-     "pool": "GC",
-     "xau": 3938.0,
-     "strike": 3950.0,
-     "hard": 81,
-     "doi": -32,
-     "gex": -19.8628,
-     "oi": 387,
-     "side": "p"
-    },
-    {
-     "key": "PW",
-     "name": "Put Wall",
-     "pool": "GC",
-     "xau": 3963.0,
-     "strike": 3975.0,
-     "hard": 100,
-     "doi": 26,
-     "gex": -10.3629,
-     "oi": 380,
-     "side": "p"
-    },
-    {
-     "key": "MAG",
-     "name": "Magnet tăng tốc",
-     "pool": "GC",
-     "xau": 3988.0,
-     "strike": 4000.0,
-     "hard": null,
-     "doi": null,
-     "gex": -61.7368,
-     "oi": null,
-     "side": null
-    },
-    {
-     "key": "MP",
-     "name": "Max Pain",
-     "pool": "GC",
-     "xau": 4038.0,
-     "strike": 4050.0,
-     "hard": null,
-     "doi": null,
-     "gex": null,
-     "oi": null,
-     "side": null
-    },
-    {
-     "key": "FLIP",
-     "name": "Gamma Flip",
-     "pool": "GC+GLD",
-     "xau": 4087.1,
-     "strike": 4099.1,
+     "xau": 4094.85,
+     "strike": 4106.85,
      "hard": null,
      "doi": null,
      "gex": null,
@@ -309,13 +309,13 @@
   "all": {
    "label": "Tổng hợp 40%/40%/20%",
    "contract": "G2RX26 (đáo hạn 12/11) + OG2X26 (đáo hạn 13/11) + G3MX26 (đáo hạn 16/11) + G3TX26 (đáo hạn 17/11) + G3WX26 (đáo hạn 18/11) + OGZ26",
-   "date": "2026-11-10",
+   "date": "2026-11-11",
    "rank": "gex",
    "gex": {
-    "cme": -656.15,
-    "gld": -105.13,
-    "at_spot": -725.0,
-    "at_spot_all": -725.0
+    "cme": -759.78,
+    "gld": 0.0,
+    "at_spot": -744.5,
+    "at_spot_all": -744.5
    },
    "hedge": [],
    "levels": [
@@ -326,9 +326,9 @@
      "xau": 3988.0,
      "strike": 4000.0,
      "hard": 100,
-     "doi": 36,
-     "gex": -134.0652,
-     "oi": 2055,
+     "doi": 184,
+     "gex": -145.4823,
+     "oi": 2239,
      "side": "c"
     },
     {
@@ -337,10 +337,10 @@
      "pool": "GC",
      "xau": 4088.0,
      "strike": 4100.0,
-     "hard": 97,
-     "doi": 49,
-     "gex": 31.3841,
-     "oi": 4190,
+     "hard": 75,
+     "doi": 18,
+     "gex": 31.3311,
+     "oi": 4208,
      "side": "c"
     },
     {
@@ -349,10 +349,10 @@
      "pool": "GC",
      "xau": 3938.0,
      "strike": 3950.0,
-     "hard": 91,
-     "doi": -73,
-     "gex": -117.8824,
-     "oi": 4716,
+     "hard": 89,
+     "doi": -77,
+     "gex": -129.8008,
+     "oi": 4639,
      "side": "p"
     },
     {
@@ -362,20 +362,20 @@
      "xau": 3888.0,
      "strike": 3900.0,
      "hard": 100,
-     "doi": -210,
-     "gex": -131.6329,
-     "oi": 6775,
+     "doi": 343,
+     "gex": -148.9134,
+     "oi": 7118,
      "side": "p"
     },
     {
      "key": "MAG",
      "name": "Magnet tăng tốc",
      "pool": "GC",
-     "xau": 3988.0,
-     "strike": 4000.0,
+     "xau": 3888.0,
+     "strike": 3900.0,
      "hard": null,
      "doi": null,
-     "gex": -134.0652,
+     "gex": -148.9134,
      "oi": null,
      "side": null
     },
@@ -395,8 +395,8 @@
      "key": "FLIP",
      "name": "Gamma Flip",
      "pool": "GC+GLD",
-     "xau": 4087.1,
-     "strike": 4099.1,
+     "xau": 4094.85,
+     "strike": 4106.85,
      "hard": null,
      "doi": null,
      "gex": null,
@@ -406,37 +406,12 @@
    ]
   }
  },
- "gld_levels": [
-  {
-   "key": "GCW",
-   "name": "Call Wall",
-   "pool": "GLD",
-   "xau": 4110.92,
-   "strike": 380.0,
-   "hard": 100,
-   "doi": 141,
-   "gex": 3.7488,
-   "oi": 1330,
-   "side": "c"
-  },
-  {
-   "key": "GPW",
-   "name": "Put Wall",
-   "pool": "GLD",
-   "xau": 3840.46,
-   "strike": 355.0,
-   "hard": 100,
-   "doi": 3,
-   "gex": -1.3441,
-   "oi": 1734,
-   "side": "p"
-  }
- ],
+ "gld_levels": [],
  "macro": {
   "DXY": {
-   "v": 102.866,
-   "chg": 0.636,
-   "pct": 0.62
+   "v": 102.999,
+   "chg": 0.089,
+   "pct": 0.09
   },
   "US10Y": {
    "v": 4.998,
