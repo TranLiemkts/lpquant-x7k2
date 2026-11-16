@@ -364,6 +364,27 @@ function tagBox(ctx, x, y, text, color, align, strong, meta) {
   if (meta && ov.tags) ov.tags.push({ x0, x1: x0 + w, y0: y - h / 2, y1: y + h / 2, ...meta });   // 7f: để chú giải rê chuột trỏ ĐÚNG nhãn
 }
 
+// 7h: cách vẽ tường. Menu TVLB+ (tvlb_tinhieu.js, mục Hiển thị, ô "Cách vẽ tường") đặt window.TVLB_WALLSTYLE = "old" (Kiểu 2) hoặc "tvlb" (Kiểu 1, như cũ);
+// menu tự lưu lựa chọn cùng các ô chọn khác. Không có hoặc giá trị lạ thì dùng Kiểu 1.
+function wallStyle() { return window.TVLB_WALLSTYLE === "old" ? "old" : "tvlb"; }
+// Xếp nhãn kiểu cũ: duyệt theo độ ưu tiên (tường lớn nhất, Flip, Magnet trước), mỗi nhãn bắt đầu ở x = 6;
+// nếu chạm nhãn đã đặt (lệch dọc dưới 16 px và chồng ngang) thì dời sang phải ngay sau nhãn đó; tối đa 12 lần dời.
+// Hết chỗ (quá maxX) thì lùi về maxX − bề rộng. 16 px và khoảng đệm 6 px là do Claude chọn, chưa đo trên màn hình thật.
+function placeOldTags(items, widthOf, maxX) {
+  const placed = [], order = [...items].sort((a, b) => a.pri - b.pri || a.y - b.y);
+  for (const it of order) {
+    const w = widthOf(it); let x = 6;
+    for (let g = 0; g < 12; g++) {
+      const hit = placed.find((p) => Math.abs(p.y - it.y) < 16 && x < p.x + p.w + 4 && p.x < x + w + 4);
+      if (!hit) break;
+      x = hit.x + hit.w + 6;
+    }
+    if (x + w > maxX) x = Math.max(6, maxX - w);
+    placed.push({ y: it.y, x, w }); it.x = x;
+  }
+  return order;
+}
+
 function hline(ctx, y, x0, x1, color, width, dash, alpha) {
   ctx.save(); ctx.globalAlpha = alpha ?? 1; ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []);
   ctx.beginPath(); ctx.moveTo(x0, Math.round(y) + 0.5); ctx.lineTo(x1, Math.round(y) + 0.5); ctx.stroke(); ctx.restore();
@@ -381,8 +402,10 @@ function drawOverlay() {
   const Y = (p) => { const y = candleS.priceToCoordinate(p); return y == null || y < 2 || y > plotH - 2 ? null : y; };
   const p0 = lastPrice();
 
+  // 7h: kiểu hiển thị tường (menu TVLB+): "tvlb" (mặc định, như cũ) hoặc "old" (kiểu chart cũ: vạch nét liền, mọi nhãn một cột bên trái, nhãn gần nhau dịch ngang)
+  const OLD = wallStyle() === "old", oldItems = [];
   // Mốc theo nguồn: GC nhãn trái, GLD nhãn phải (giống RyanFX)
-  const layers = [["GC", C.gc, $("#lyKey").checked, "left"], ["GLD", C.gld, $("#lyGLD").checked, "right"]];
+  const layers =[["GC", C.gc, $("#lyKey").checked, "left"], ["GLD", C.gld, $("#lyGLD").checked, "right"]];
   for (const [src, color, on, side] of layers) {
     const o = optV(src);
     if (!o || !on) continue;
@@ -394,12 +417,16 @@ function drawOverlay() {
       const isCW = s.strike === o.call_wall, isPW = s.strike === o.put_wall;
       if (share < 0.12 && !isCW && !isPW) continue;
       if (window.TVLB_MINOR === false && !labelSet.has(s.strike) && !isCW && !isPW) continue;   // TVLB+: ẩn vạch strike phụ không có nhãn
-      const lc = isCW ? C.down : isPW ? C.up : color;
-      hline(ctx, y, 0, plotW, lc, isCW || isPW ? 1.6 : 1, isCW || isPW ? [] : [4, 4], isCW || isPW ? 0.95 : 0.25 + 0.6 * share);
-      if (labelSet.has(s.strike) || isCW || isPW) {
+      const lc = isCW ? C.down : isPW ? C.up : color, labelled = labelSet.has(s.strike) || isCW || isPW;
+      if (OLD) {
+        if (!labelled) continue;   // kiểu cũ: chỉ vẽ tường có nhãn, không vẽ vạch phụ
+        hline(ctx, y, 0, plotW, lc, isCW || isPW ? 1.8 : 1.2, [], isCW || isPW ? 0.95 : 0.45 + 0.4 * share);
+      } else hline(ctx, y, 0, plotW, lc, isCW || isPW ? 1.6 : 1, isCW || isPW ? [] : [4, 4], isCW || isPW ? 0.95 : 0.25 + 0.6 * share);
+      if (labelled) {
         const d = s.d_oi != null ? ` ${s.d_oi >= 0 ? "+" : ""}${fmtK(s.d_oi)}` : "";
         const txt = `${src} ${s.strike} · ${Math.round(share * 100)}%${isCW ? " CW" : isPW ? " PW" : ""}${d}`;
-        tagBox(ctx, side === "left" ? 6 : plotW - 6, y, txt, lc, side, isCW || isPW, { k: "strike", src, strike: s.strike });
+        if (OLD) oldItems.push({ y, txt, color: lc, strong: isCW || isPW, pri: isCW || isPW ? 0 : 3 + (1 - share), meta: { k: "strike", src, strike: s.strike } });
+        else tagBox(ctx, side === "left" ? 6 : plotW - 6, y, txt, lc, side, isCW || isPW, { k: "strike", src, strike: s.strike });
       }
     }
   }
@@ -409,11 +436,28 @@ function drawOverlay() {
   if (P && $("#lyKey").checked) {
     const c = P.chart;
     const yF = c.gamma_flip != null ? Y(c.gamma_flip) : null;
-    if (yF != null) { hline(ctx, yF, 0, plotW, C.flip, 1.2, [6, 4], 0.9); tagBox(ctx, plotW * 0.5, yF, `Γ FLIP ${fmt(c.gamma_flip)}`, C.flip, "left", true, { k: "flip" }); }
+    if (yF != null) {
+      const t = `Γ FLIP ${fmt(c.gamma_flip)}`;
+      if (OLD) { hline(ctx, yF, 0, plotW, C.flip, 1.4, [], 0.9); oldItems.push({ y: yF, txt: t, color: C.flip, strong: true, pri: 1, meta: { k: "flip" } }); }
+      else { hline(ctx, yF, 0, plotW, C.flip, 1.2, [6, 4], 0.9); tagBox(ctx, plotW * 0.5, yF, t, C.flip, "left", true, { k: "flip" }); }
+    }
     const yM = c.magnet != null ? Y(c.magnet) : null;
-    if (yM != null) tagBox(ctx, plotW * 0.5, yM, `◎ MAGNET ${fmt(c.magnet)}`, C.mag, "left", true, { k: "magnet" });
+    if (yM != null) {
+      const t = `◎ MAGNET ${fmt(c.magnet)}`;
+      if (OLD) { hline(ctx, yM, 0, plotW, C.mag, 1.2, [], 0.8); oldItems.push({ y: yM, txt: t, color: C.mag, strong: true, pri: 2, meta: { k: "magnet" } }); }   // kiểu cũ có thêm vạch Magnet (kiểu TVLB chỉ có nhãn)
+      else tagBox(ctx, plotW * 0.5, yM, t, C.mag, "left", true, { k: "magnet" });
+    }
     const yP = c.max_pain != null ? Y(c.max_pain) : null;
-    if (yP != null) { hline(ctx, yP, 0, plotW, "#9aa3ad", 1, [2, 3], 0.6); tagBox(ctx, plotW * 0.5 + 150, yP, `MaxPain ${fmt(c.max_pain)}`, "#9aa3ad", "left", false, { k: "mp" }); }
+    if (yP != null) {
+      const t = `MaxPain ${fmt(c.max_pain)}`;
+      if (OLD) { hline(ctx, yP, 0, plotW, "#9aa3ad", 1, [], 0.6); oldItems.push({ y: yP, txt: t, color: "#9aa3ad", strong: false, pri: 5, meta: { k: "mp" } }); }
+      else { hline(ctx, yP, 0, plotW, "#9aa3ad", 1, [2, 3], 0.6); tagBox(ctx, plotW * 0.5 + 150, yP, t, "#9aa3ad", "left", false, { k: "mp" }); }
+    }
+  }
+  // 7h: kiểu cũ — xếp mọi nhãn vào cột bên trái; nhãn nào chạm nhãn đã đặt thì dịch sang phải (nhãn quan trọng đặt trước, ở sát mép trái)
+  if (OLD && oldItems.length) {
+    const wOf = (it) => { ctx.font = `${it.strong ? 600 : 500} 10.5px "IBM Plex Mono", monospace`; return ctx.measureText(it.txt).width + 10; };
+    for (const it of placeOldTags(oldItems, wOf, plotW * 0.7)) tagBox(ctx, it.x, it.y, it.txt, it.color, "left", it.strong, it.meta);
   }
 
   // Volume profile phiên

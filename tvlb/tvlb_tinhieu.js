@@ -15,9 +15,9 @@
   const ZONE = 4, SLU = 3;
   const O = Object.assign({ thSt: true, thSg: true, sig: true, kh: true, box: true, snd: true, tg: true, tout: 36,
     k: { wall: true, oh: true, oht: true, conf: true, pro: true, m: true, sw: true }, minG: "C", kh1: true, kh2: true, kh3: true,
-    tpm: "auto", boxn: 3, slmax: 0, al: { kh: true, khz: true, sig: true, hedge: true, div: true, news: true }, sty: "beep", vol: 60, diff: true, minor: true, topn: 10, wh: true }, st_.get("o3", {}));
+    tpm: "auto", boxn: 3, slmax: 0, al: { kh: true, khz: true, sig: true, hedge: true, div: true, news: true }, sty: "beep", vol: 60, diff: true, minor: true, topn: 10, wst: 1, wh: true }, st_.get("o3", {}));
   ["k", "al"].forEach((k) => { O[k] = Object.assign({}, { k: { wall: true, oh: true, oht: true, conf: true, pro: true, m: true, sw: true }, al: { kh: true, khz: true, sig: true, hedge: true, div: true, news: true } }[k], O[k] || {}); });
-  window.TVLB_MINOR = O.minor !== false; window.TVLB_TOPN = O.topn || 10;
+  window.TVLB_MINOR = O.minor !== false; window.TVLB_TOPN = O.topn || 10; window.TVLB_WALLSTYLE = O.wst === 2 ? "old" : "tvlb";   // 7h: cách vẽ tường (1 = kiểu hiện tại, 2 = nhãn một cột); "old"/"tvlb" chỉ là tên nội bộ cho app.js
   const saveO = () => st_.set("o3", O);
   // ───────────────────── SMC TRADINGHUB (port nguyên bản từ TVL Quant) ─────────────────────
   const SMCO = { st: true, sg: true, bc: true, hl: true, mzz: true, izz: false, idm: true, lidm: true, swm: true, swi: true, dot: true, idot: false, tri: true, otri: true, sbox: true, of: false, pro: true, m: true, sw: true };
@@ -775,7 +775,7 @@ function drawTH(ctx, plotW, h) {
     ["al", "🔔 Cảnh báo", `${CK("O", "snd", "Âm thanh trên máy này", 1)}<div class="sub">Loại cảnh báo</div>${CK("O.al", "kh", "✅ KH1–3 XÁC NHẬN")}${CK("O.al", "khz", "⏳ Giá vào vùng KH")}${CK("O.al", "sig", "🎯 Tín hiệu mới hạng A–B")}${CK("O.al", "hedge", "🟥 Giá vào vùng Hedge")}${CK("O.al", "div", "📉 Phân kỳ CVD")}${CK("O.al", "news", "📰 Tin đỏ USD (trước 30 & 5 phút)")}
       <div class="sub">Âm thanh</div>${SEL("sty", [["beep", "🔔 Bíp đôi (mặc định)"], ["chime", "🎵 Chuông lên"], ["bell", "🛎 Chuông đơn"], ["siren", "🚨 Còi"], ["voice", "🗣 Giọng đọc tiếng Việt"], ["mute", "🔇 Tắt tiếng"]], "Kiểu")}${CK("O", "diff", "Âm riêng theo hướng (BUY ↑ · SELL ↓)")}<div class="note" style="margin-bottom:0">Âm lượng <b id="mVolV"></b></div><input type="range" min="0" max="100" step="5" data-rng="vol"><button class="pb" id="mTest">▶ Nghe thử</button>
       <div class="sub">Telegram — điện thoại khoá máy vẫn báo</div>${CK("O", "tg", "Gửi cảnh báo về Telegram")}<button class="pb" id="mTg">📨 Gửi tin thử</button><button class="pb" id="mNt">🔔 Cho phép thông báo màn hình</button><div class="note">Lệnh SMC Tip (CL/KB) và Option Flow được máy chủ báo Telegram riêng (config.json → telegram).</div>`],
-    ["view", "🖥 Hiển thị", `<div id="mView"></div>${CK("O", "minor", "Vạch strike phụ (nét đứt không tên)")}${SEL("topn", [[10, "10 tường có nhãn mỗi nguồn (mặc định)"], [6, "6 tường"], [4, "4 tường"], [2, "2 tường (chỉ tường lớn nhất)"]], "Số tường có nhãn mỗi nguồn (GC / GLD) — Call/Put Wall luôn hiện")}`],
+    ["view", "🖥 Hiển thị", `<div id="mView"></div>${SEL("wst", [[1, "Kiểu 1 · nhãn hai bên (mặc định)"], [2, "Kiểu 2 · nhãn một cột"]], "Cách vẽ tường")}<div class="note">Kiểu 2: vạch nét liền, mọi nhãn xếp một cột bên trái, nhãn gần nhau tự dịch ngang; chỉ vẽ tường có nhãn (ô "Vạch strike phụ" bên dưới không áp dụng).</div>${CK("O", "minor", "Vạch strike phụ (nét đứt không tên)")}${SEL("topn", [[10, "10 tường có nhãn mỗi nguồn (mặc định)"], [6, "6 tường"], [5, "5 tường"], [4, "4 tường"], [3, "3 tường"], [2, "2 tường (chỉ tường lớn nhất)"]], "Số tường có nhãn mỗi nguồn (GC / GLD) — Call/Put Wall luôn hiện")}`],
   ];
   function objOf(o) { return o === "O" ? O : o === "O.k" ? O.k : o === "O.al" ? O.al : o === "SMCO" ? SMCO : TIP; }
   function menuSync() {
@@ -800,7 +800,8 @@ function drawTH(ctx, plotW, h) {
       if (c.dataset.kk === "minor") { window.TVLB_MINOR = c.checked; try { drawOverlay(); } catch (e) { } }
       if (["O.k", "O"].includes(c.dataset.o) && ["wall", "oh", "oht", "conf", "pro", "m", "sw"].includes(c.dataset.kk)) key = "";
       tick(); draw(); }; });
-    pm.querySelectorAll("[data-sel]").forEach((s_) => { s_.onchange = () => { const v = s_.value; O[s_.dataset.sel] = isNaN(+v) ? v : +v; saveO(); if (s_.dataset.sel === "topn") { window.TVLB_TOPN = O.topn; try { drawOverlay(); } catch (e) { } } key = ""; tick(); }; });
+    pm.querySelectorAll("[data-sel]").forEach((s_) => { s_.onchange = () => { const v = s_.value; O[s_.dataset.sel] = isNaN(+v) ? v : +v; saveO(); if (s_.dataset.sel === "topn") { window.TVLB_TOPN = O.topn; try { drawOverlay(); } catch (e) { } }
+      if (s_.dataset.sel === "wst") { window.TVLB_WALLSTYLE = O.wst === 2 ? "old" : "tvlb"; try { drawOverlay(); } catch (e) { } } key = ""; tick(); }; });
     const rg = pm.querySelector("[data-rng=vol]"); rg.oninput = () => { O.vol = +rg.value; pm.querySelector("#mVolV").textContent = O.vol + "%"; saveO(); };
     pm.querySelector("#mTest").onclick = () => beep(false, null, "TVLB cảnh báo thử");
     pm.querySelector("#mNt").onclick = () => { try { Notification.requestPermission(); } catch (e) { } beep(false); };
