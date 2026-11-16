@@ -808,7 +808,7 @@ function renderProfile() {
   const base = opt(S.profSrc), ei = base?.expiry_info || [], tot = ei.reduce((a, x) => a + x.oi, 0) || 1;
   const shortOI = ei.filter((x) => x.dte <= 7).reduce((a, x) => a + x.oi, 0);
   const lv = S.state?.live, liveTxt = lv?.time ? ` · tính lại ${new Date(lv.time).toLocaleTimeString("vi-VN")} theo giá ${fmt(lv.price)}` : "";
-  $("#profMeta").textContent = `${TENOR_TXT[S.tenor] || ""}: ${o.n_expiries ?? o.expiries.length} kỳ (${o.expiries.slice(0, 3).join(", ")}${o.expiries.length > 3 ? "…" : ""}) · OI ≤7 ngày ${Math.round((shortOI / tot) * 100)}% · IV ATM ${ivTxt || "—"}${skTxt} · nguồn ${o.source} (giá ${fmt(o.underlying)}) · ${o.model || ""}${rTxt ? " " + rTxt : ""}${expo}${liveTxt} · OI ngày ${o.fetched ? new Date(o.fetched).toLocaleString("vi-VN") : ""}`;
+  $("#profMeta").textContent = `${TENOR_TXT[S.tenor] || ""}: ${o.n_expiries ?? o.expiries.length} kỳ (${o.expiries.slice(0, 3).join(", ")}${o.expiries.length > 3 ? "…" : ""}) · OI ≤7 ngày ${Math.round((shortOI / tot) * 100)}% · IV ATM ${ivTxt || "—"}${skTxt} · nguồn ${o.source} (giá ${fmt(o.underlying)}) · ${o.model || ""}${rTxt ? " " + rTxt : ""}${expo}${liveTxt} · ${oiLabelVN(base?.cme) ? `${oiLabelVN(base.cme)} · tải ${(base.fetched || o.fetched) ? new Date(base.fetched || o.fetched).toLocaleString("vi-VN") : ""}` : `OI ngày ${o.fetched ? new Date(o.fetched).toLocaleString("vi-VN") : ""}`}`;
   $("#profMeta").title = "Kỳ hạn: chọn ở ô bên trái (chỉ đổi phần xem; tín hiệu và Agent dùng Mọi kỳ hạn). IV ATM: IV đã làm mượt (smile bậc 2 theo OI, * = nội suy từ kỳ khác). Skew: IV strike 95% − IV strike 105%. Mốc được tính lại mỗi 60 giây hoặc khi giá đi > 2 USD; OI là số cuối ngày của sàn.\nExposure theo quy ước dấu GEX (dealer long call / short put). Vanna Exp: USD delta dealer đổi khi IV +1 điểm. Charm Exp: USD delta dealer đổi sau 1 ngày nếu giá và IV đứng yên. Θ OI: tổng giá trị thời gian mất mỗi ngày của toàn bộ OI.";
   if (!S.profScrolled && $("#atmRow")) { const w = $(".sp .tablewrap"), r = $("#atmRow"); w.scrollTop = r.offsetTop - w.clientHeight / 2; S.profScrolled = true; }
 }
@@ -1052,11 +1052,18 @@ function staticRecompute(force = false) {
   S.state.live = { time: new Date().toISOString(), price: +p.toFixed(2) };
   staticLive = { t: Date.now(), p };
 }
+// 7d A6: nhãn "OI của phiên trước (…) · settle phiên …" do server gửi ở options.GC.cme.oi_label.
+// CME ghi ngày kiểu MM/DD/YYYY (ví dụ 11/13/2026 = 13/11/2026) nên đổi sang DD/MM/YYYY để khỏi đọc nhầm. Không có nhãn → "".
+function oiLabelVN(cme) {
+  return cme && cme.oi_label ? String(cme.oi_label).replace(/(\d{2})\/(\d{2})\/(\d{4})/g, "$2/$1/$3") : "";
+}
+const OI_LABEL_TIP = "OI (open interest) trên trang CME ngày D là số của phiên giao dịch TRƯỚC (D-1); giá settle là của ngày D. Ngày của OI được suy ra từ ngày giao dịch liền trước trong danh sách CME (ghi nhận từ một quan sát 29/10/2026, chưa phải chuẩn).";
 function renderBuild() {
   const el = $("#buildInfo"); if (!el || !S.state) return;
-  const b = S.state.build || S.state.options_updated, cme = S.state.options?.GC?.cme;
+  const b = S.state.build || S.state.options_updated, cme = S.state.options?.GC?.cme, oiLbl = oiLabelVN(cme);
   const age = b ? (Date.now() - new Date(b)) / 60000 : null;
-  el.textContent = `${STATIC ? "Build" : "Engine"} ${b ? new Date(b).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "—"}${cme?.trade_date ? ` · CME phiên ${cme.trade_date}` : ""}${STATIC && age > 90 ? " · máy tính chưa gửi bản mới" : ""}`;
+  el.textContent = `${STATIC ? "Build" : "Engine"} ${b ? new Date(b).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "—"}${oiLbl ? ` · ${oiLbl}` : cme?.trade_date ? ` · CME phiên ${cme.trade_date}` : ""}${STATIC && age > 90 ? " · máy tính chưa gửi bản mới" : ""}`;
+  if (oiLbl) el.title = OI_LABEL_TIP;
   el.className = "build" + (STATIC && age > 24 * 60 ? " old" : "");
 }
 async function copyTV(e) {
