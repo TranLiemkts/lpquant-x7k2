@@ -297,7 +297,7 @@
   function render() {
     if (page.hidden || !spot) return;
     const fl = flipX(), pos = fl == null || spot >= fl;
-    const rg = document.querySelector("#v3regime"); rg.textContent = fl == null ? "" : pos ? `GAMMA DƯƠNG (Spot trên Flip ${f2(fl)})` : `GAMMA ÂM (Spot dưới Flip ${f2(fl)})`; rg.style.color = pos ? "#26a69a" : "#ef5350";
+    const rg = document.querySelector("#v3regime"), rgp = (typeof regimePct === "function" && fl != null) ? regimePct(spot, fl) : null; rg.textContent = fl == null ? "" : `${pos ? `GAMMA DƯƠNG (Spot trên Flip ${f2(fl)})` : `GAMMA ÂM (Spot dưới Flip ${f2(fl)})`}${rgp ? (rgp.far ? ` · không rõ (cách ${rgp.pctTxt})` : ` · ${rgp.pctTxt}`) : ""}`; rg.style.color = rgp && rgp.far ? "#ffb300" : pos ? "#26a69a" : "#ef5350";   // 7f: thêm % tới Flip, chỉ hiển thị
     // kế hoạch
     const bc = AG.bias === "SELL" ? "#ef5350" : AG.bias === "BUY" ? "#26a69a" : "#ffb300", nO = openOrders().length;
     const sw = `<div class="v3sw" style="margin-bottom:6px"><button class="${PLANVIEW === "plan" ? "on" : ""}" data-pv="plan">🧭 Kế hoạch mới</button><button class="${PLANVIEW === "ord" ? "on" : ""}" data-pv="ord">📋 Lệnh đang chạy (${nO})</button></div>`;
@@ -339,7 +339,10 @@
     ctx.push(["DXY", dx ? `${f2(dx.last)} (${sg(dx.chg_n_pct, (x) => x.toFixed(3))}%/5p) · ${dx.chg_n_pct > 0.02 ? R("DXY đang TĂNG → ủng hộ SELL vàng") : dx.chg_n_pct < -0.02 ? G("DXY đang GIẢM → ủng hộ BUY vàng") : "DXY đi ngang"}` : "—"]);
     let ses = false; try { ses = inUsSession(Date.now() / 1000); } catch (e) { }
     ctx.push(["Phiên", ses ? G("Phiên Mỹ 19–23h") + " — thanh khoản cao, tín hiệu tường đáng tin hơn" : "Ngoài phiên Mỹ (19–23h)"]);
-    ctx.push(["Chế độ", pos ? "Gamma dương → đánh hồi tại tường" : "Gamma âm → dễ phá tường, hạn chế bắt đỉnh/đáy"]);
+    { const rgp = (typeof regimePct === "function" && fl != null) ? regimePct(spot, fl) : null;
+      ctx.push(["Chế độ", (pos ? "Gamma dương → đánh hồi tại tường" : "Gamma âm → dễ phá tường, hạn chế bắt đỉnh/đáy") + (rgp ? ` <span class='muted'>(${rgp.far ? `không rõ: Flip cách ${rgp.pctTxt} — bước 6 không kết luận được chế độ khi Flip xa` : `cách Flip ${rgp.pctTxt}`}; mốc chưa kiểm định)</span>` : "")]); }
+    { const stl = (typeof cmeStale === "function") ? cmeStale(S.state?.options?.GC?.cme) : null; if (stl) ctx.push(["Dữ liệu CME", `<span style='color:#ffb300'>⚠ ${stl.txt}</span>`]); }
+    { const tw = (typeof tenorWTxt === "function") ? tenorWTxt(S.state?.options?.GC) : null; if (tw && tw !== "—") ctx.push(["Hệ số kỳ hạn", `${tw} <span class='muted'>(40/40/20, cách A; chưa kiểm định)</span>`]); }
     ctx.push(["Nến vừa đóng", last ? `râu ↑${f2(last.up)} ↓${f2(last.lo)} · thân ${f2(last.body)} · Delta ${sg(last.d, f0)}` : "—"]);
     const og = S.state?.options || {}; ctx.push(["Net GEX", ["GC", "GLD"].filter((k) => og[k]).map((k) => `${k} ${sg((og[k].net_gex || 0) / 1e6, (x) => x.toFixed(1))}M$`).join(" · ") + " <span class='muted'>(40/40/20)</span>"]);
     if (S.smc && S.smc.struct) ctx.push(["SMC", `${S.smc.struct}${S.smc.plan && S.smc.plan[0] ? ` · ${S.smc.plan[0]}` : ""}`]);

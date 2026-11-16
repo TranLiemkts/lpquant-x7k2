@@ -29,6 +29,7 @@
 #tvlbTip { position: fixed; z-index: 70; max-width: 560px; max-height: 88vh; overflow: hidden; padding: 9px 11px; border-radius: 6px; background: #0d1117; color: #dfe5ec; border: 1px solid #e0a83a;
   font: 12px/1.5 var(--f-body, sans-serif); pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.55); display: none; }
 #tvlbTip b { color: #f3d38c; }
+#tvlbTip.wide { max-width: min(1120px, 96vw); }
 #tvlbCd { position: absolute; right: 64px; bottom: 30px; z-index: 5; padding: 2px 7px; border-radius: 4px; background: #e0a83a; color: #111;
   font: 700 11px var(--f-mono, monospace); pointer-events: auto; cursor: help; }
 #tvlbCd[hidden] { display: none; }`;
@@ -82,7 +83,7 @@
     "#chipWs": "Trạng thái luồng giá realtime từ Binance (XAUUSDT Futures). Đỏ = mất kết nối, đang tự nối lại.",
     "#chipEngine": "Tuổi dữ liệu Options của engine (lần lấy CME/GLD gần nhất).",
     "#chipSess": "Phiên Mỹ 19:00–23:00 giờ VN — tín hiệu Options Flow chỉ tính trong phiên này (nếu bật).",
-    "#chartInfo": "Nguồn tường chính · số strike · tổng Net GEX · chế độ Gamma (+Γ dealer kìm giá / −Γ dealer đẩy giá).",
+    "#chartInfo": "Nguồn tường chính · số strike · tổng Net GEX · chế độ Gamma (+Γ dealer kìm giá / −Γ dealer đẩy giá) kèm % khoảng cách giá so với Flip; “không rõ” = Flip cách giá quá 2,5% hoặc không có Flip. <b>Mốc chưa kiểm định</b>: bước 6 (08/2022–10/2025) chưa có bằng chứng tường OI và Magnet giữ/hút giá hơn số tròn; dùng như mốc tham khảo.",
     "#sigCount": "Số tín hiệu Options Flow và lệnh SMC đã khớp hôm nay.",
     "#cvdVal": "<b>CVD phiên</b>: cộng dồn Delta (mua chủ động − bán chủ động) từ đầu phiên. Đi lên = phe mua chủ động áp đảo.",
     "#cvdDiv": "<b>Phân kỳ CVD</b>: giá tạo đỉnh/đáy mới nhưng CVD không xác nhận → lực yếu, dễ đảo chiều.",
@@ -90,7 +91,7 @@
     "#tenorSel": "Kỳ hạn dùng cho bảng và vạch vẽ: Mọi kỳ hạn (40/40/20) · Ngắn ≤ 7 ngày · Tháng. Tín hiệu và Agent luôn dùng Mọi kỳ hạn. Mỗi lựa chọn tự chuẩn hoá lại hệ số 40/40/20 theo các rổ kỳ hạn có mặt trong lựa chọn đó.",
     "#profTabs": "Chọn bể quyền chọn: GC (CME, chuẩn) hoặc GLD (ETF).",
     ".llm h2": "<b>AI phân tích</b>: nhận định + 3 kịch bản có xác suất, dựa trên mốc Options, CVD, DXY, lịch tin. Chỉ chạy khi bấm nút (hoặc lịch nếu bật).",
-    "#kpis": "Chỉ số nhanh: IV (rủi ro), hệ số XAU/GLD, Net GEX tổng và chế độ Gamma.",
+    "#kpis": "Chỉ số nhanh: IV (rủi ro), hệ số XAU/GLD, Net GEX tổng, chế độ Gamma (kèm % cách Flip) và hệ số kỳ hạn đang dùng.",
     ".agent h2": "<b>TVLB Agent</b>: tổng hợp chế độ Gamma, hành vi dealer, lệnh lớn, Hedge LP, mục tiêu và cấu trúc SMC → quyết định WAIT / BUY / SELL.",
     "#decision": "Quyết định của Agent + các thành phần: REGIME (chế độ Gamma), DEALER (dealer sẽ mua/bán thế nào), LỆNH LỚN, HEDGE LP, TARGET (Magnet/pin), CONVICTION (−1…+1).",
     "#fusion": "<b>FUSION</b>: gộp tape (dòng lệnh), DXY và kéo về target thành 1 điểm thiên hướng (−1 bán … +1 mua).",
@@ -116,7 +117,7 @@
   };
   const tip = document.createElement("div"); tip.id = "tvlbTip"; document.body.appendChild(tip);
   let mx = 0, my = 0;
-  function showTip(html) { if (!P.tips || !html) return hideTip(); tip.innerHTML = html; tip.style.display = "block"; place(); }
+  function showTip(html) { if (!P.tips || !html) return hideTip(); tip.innerHTML = html; tip.classList.toggle("wide", String(html).indexOf('data-2c="1"') >= 0); /* 7f: chú giải 2 cột cần khung rộng */ tip.style.display = "block"; place(); }
   function hideTip() { tip.style.display = "none"; }
   function place() { const r = tip.getBoundingClientRect(); let x = mx + 14, y = my + 16;
     if (x + r.width > innerWidth - 6) x = mx - r.width - 14; if (y + r.height > innerHeight - 6) y = my - r.height - 14; tip.style.left = Math.max(4, x) + "px"; tip.style.top = Math.max(4, y) + "px"; }

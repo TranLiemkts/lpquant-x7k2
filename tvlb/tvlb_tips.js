@@ -15,11 +15,28 @@
   // 7e: CME ghi ngày kiểu Mỹ MM/DD/YYYY (11/13/2026 = 13/11/2026). Đổi sang DD/MM/YYYY khi hiển thị; chuỗi khác dạng đó giữ nguyên.
   const dmy = (s) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s ?? "").trim()); return m ? `${m[2]}/${m[1]}/${m[3]}` : String(s ?? ""); };
   const ZONE = 4, SLU = 3;
+  // 7f: NHÃN "CHƯA KIỂM ĐỊNH". Căn cứ: bước 6 (backtest 08/2022-10/2025, chốt 16/11/2026): H1/H2 tường OI số 1 không kiểm được (quá ít lần chạm),
+  // H1′ tường OI gần giá giữ ngang số tròn đối chứng, H3 Magnet không hút hơn số tròn (khoảng tin cậy chứa 0), H4 chế độ Gamma không kết luận (Negative quá ít).
+  const UNV = {
+    wall: "Tường OI (Call/Put Wall, tường phụ): bước 6 (08/2022–10/2025) KHÔNG kiểm được tường số 1 vì quá ít lần bị chạm; tường OI gần giá giữ giá ngang số tròn đối chứng.",
+    gld: "Tường GLD: bước 6 chỉ kiểm dữ liệu GC (OG); tường GLD chưa được kiểm.",
+    mag: "Magnet: bước 6 không thấy Magnet hút giá hơn số tròn đối chứng (khoảng tin cậy của chênh lệch chứa 0).",
+    flip: "Gamma Flip / chế độ Gamma: bước 6 không kết luận được (ngày Negative quá ít để đo).",
+    mp: "Max Pain: bước 6 không có giả thuyết nào về Max Pain, nên chưa được kiểm.",
+  };
+  const unv = (k) => sec("⚠ CHƯA KIỂM ĐỊNH", `${UNV[k]}<br><span style="color:#9aa4b2">Dùng như mốc tham khảo, không phải bằng chứng có tác dụng. “Chưa có bằng chứng” KHÔNG có nghĩa “chứng minh không có tác dụng”.</span>`, "#ffb300");
+  const BN = { d: "DATE", w: "WEEK", m: "MONTH" }, cm = (x) => Number(x).toFixed(2).replace(".", ",");
+  // cách hệ số kỳ hạn đang dùng (từ analytics.tenor_w_info); cách A = nhân hệ số rổ cho TỪNG kỳ hạn
+  const twTxt = (o) => { const t = o && o.tenor_w; if (!t) return "";
+    if (!t.on) return "Hệ số kỳ hạn: đang không áp (tắt, hoặc chỉ có 1 rổ) → w = 1 cho mọi kỳ hạn.";
+    return `Hệ số đang dùng — <b>cách A</b> (nhân cho TỪNG kỳ hạn của rổ): ${Object.entries(t.buckets).map(([b, v]) => `${BN[b]} ${v.n_exp} kỳ × ${cm(v.f)}`).join(" · ")}. Rổ có nhiều kỳ hạn nhận phần GEX lớn hơn tỷ lệ 40/40/20 (cách B — chia hệ số cho số kỳ — chưa cài; chọn A hay B chờ anh Nam, mục B1).`; };
+  const rgOf = (o) => { try { return typeof regimePct === "function" && o ? regimePct(o.underlying, o.gamma_flip) : null; } catch (e) { return null; } };
+  const stOf = (o) => { try { return typeof cmeStale === "function" && o ? cmeStale(o.cme) : null; } catch (e) { return null; } };
   const phi = (x) => Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI);
   const ncdf = (x) => { const t = 1 / (1 + 0.2316419 * Math.abs(x)), d = 0.3989423 * Math.exp(-x * x / 2), p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return x > 0 ? 1 - p : p; };
   const px = () => { try { return lastPrice(); } catch (e) { return null; } };
   const flip = () => { try { return primV()?.chart?.gamma_flip ?? null; } catch (e) { return null; } };
-  const srcInfo = (o) => o.source === "GLD" ? `yfinance (OPRA) · ${o.n_expiries ?? (o.expiries || []).length} kỳ: ${(o.expiries || []).slice(0, 4).join(", ")}` : `CME Settlements: settle phiên ${dmy(o.cme?.trade_date) || "—"} · OI của phiên trước${o.cme?.prev_date ? ` (${dmy(o.cme.prev_date)})` : ""} · ${o.n_expiries ?? (o.expiries || []).length} kỳ: ${(o.expiries || []).slice(0, 4).join(", ")}`;
+  const srcInfo = (o) => o.source === "GLD" ? `yfinance (OPRA) · ${o.n_expiries ?? (o.expiries || []).length} kỳ: ${(o.expiries || []).slice(0, 4).join(", ")}` : `CME Settlements: settle phiên ${dmy(o.cme?.trade_date) || "—"} · OI của phiên trước${o.cme?.prev_date ? ` (${dmy(o.cme.prev_date)})` : ""} · ${o.n_expiries ?? (o.expiries || []).length} kỳ: ${(o.expiries || []).slice(0, 4).join(", ")}${stOf(o) ? ` · <b style="color:#ffb300">⚠ ${stOf(o).txt}</b>` : ""}`;
   const conv = (o, s) => o.source === "GLD"
     ? `• <b>Đổi ra giá XAU:</b> Hệ số XAU/GLD = giá chart ÷ giá GLD = ${code(f4(o.ratio))} → Giá XAU = Strike GLD × hệ số = ${s.strike} × ${f4(o.ratio)} = ${code(f2(s.chart))}`
     : `• <b>Đổi ra giá XAU:</b> Giá XAU = Strike GC × (giá chart ÷ giá GC Future) = ${s.strike} × ${f4(o.ratio)} = ${code(f2(s.chart))} <span style="color:#9aa4b2">(tương đương trừ basis ${f2(s.strike - s.chart)}$)</span>`;
@@ -29,7 +46,8 @@
     const sq = iv * Math.sqrt(T), d1 = (Math.log(F / K) + (b + iv * iv / 2) * T) / sq, g = Math.exp((b - r) * T) * phi(d1) / (F * sq);
     return `• d1 = [ln(F/K) + (b + σ²/2)·T] ÷ (σ√T) = [ln(${f2(F)}/${K}) + (${b.toFixed(4)} + ${iv.toFixed(3)}²/2)×${T.toFixed(4)}] ÷ (${iv.toFixed(3)}×√${T.toFixed(4)}) = ${code(d1.toFixed(4))}<br>
       • Γ = e^((b−r)T)·φ(d1) ÷ (F·σ·√T) = ${code(g.toExponential(4))} <span style="color:#9aa4b2">(bảng: ${s.gamma != null ? Number(s.gamma).toExponential(3) : "—"}; kỳ gần nhất ${s.dte} ngày, IV ${(iv * 100).toFixed(1)}%)</span><br>
-      • GEX 1 kỳ = Γ × OI × ${o.multiplier || 100} × F² × 1% × w — cộng mọi kỳ. w = hệ số rổ: khi đủ 3 rổ DATE ×1.2 · WEEK ×1.2 · MONTH ×0.6 (40/40/20); thiếu rổ thì chuẩn hoá lại (w = trọng số rổ ÷ tổng trọng số các rổ có mặt × số rổ có mặt). <b>w = 0 cho strike giá sàn</b> (settle chân OTM ≤ 0,1 — IV không thật, 7d A5; chỉ áp cho GC có settle).`;
+      • GEX 1 kỳ = Γ × OI × ${o.multiplier || 100} × F² × 1% × w — cộng mọi kỳ. w = hệ số rổ: khi đủ 3 rổ DATE ×1.2 · WEEK ×1.2 · MONTH ×0.6 (40/40/20); thiếu rổ thì chuẩn hoá lại (w = trọng số rổ ÷ tổng trọng số các rổ có mặt × số rổ có mặt). <b>w = 0 cho strike giá sàn</b> (settle chân OTM ≤ 0,1 — IV không thật, 7d A5; chỉ áp cho GC có settle).<br>
+      • ${twTxt(o)}${s.nrow ? (s.w0 ? ` <b style="color:#ffb300">Strike này: ${s.w0}/${s.nrow} kỳ hạn bị w = 0 (giá sàn).</b>` : " Strike này: không kỳ hạn nào bị w = 0.") : ""}`;
   }
   function score(l) { try { return window.tvlbScore ? window.tvlbScore(l) : null; } catch (e) { return null; } }
 
@@ -65,6 +83,7 @@
         : "Nơi tập trung Put OI lớn: khi giá rơi sát tường, dealer phải <b>MUA hợp đồng tương lai</b> để cân bằng Delta → lực đỡ đẩy giá bật lên. Thủng Put Wall khi Gamma âm → dealer bán đuổi, giá rơi nhanh.")
       + (w ? sec("3. Uy tín tường", `<b>${star(w.st)} ${w.txt} (${w.s}/100)</b><br><span style="color:#9aa4b2">${w.plus.join(" · ")}</span>${w.minus.length ? ` · <span style="color:#ff8a80">${w.minus.join(" · ")}</span>` : ""}<br><span style="color:#9aa4b2">★★★★ trở lên = mạnh · ★★★ = đánh nhỏ · ★★ trở xuống = bỏ qua.</span>`) : "")
       + sec("4. Tình huống & hành động", act)
+      + unv(isGld ? "gld" : "wall")
       + `<div style="color:#9aa4b2;margin-top:6px">Kiểm tra: ${isGld ? `OptionCharts / Barchart GLD, strike ${s.strike}` : `QuikStrike / CME Settlements, strike ${s.strike}`} → Call OI ${f0(s.call_oi)} · Put OI ${f0(s.put_oi)}. Nguồn: ${srcInfo(o)}.${isGld ? "" : " Số OI của GC là của phiên trước ngày settle (ghi nhận từ một quan sát 29/10/2026, chưa phải chuẩn): so đúng phiên."}</div>`;
   }
   function plansShort() {
@@ -72,31 +91,56 @@
       return P.map((p) => `<div><b style="color:${p.d < 0 ? "#ef5350" : "#26a69a"}">${p.id} ${p.prob}%</b> ${p.role} · vùng ${f2(p.z.lo)}–${f2(p.z.hi)} · ${p.st}</div>`).join(""); } catch (e) { return ""; }
   }
   function tipFlip(o) {
-    const p = px(), v = o.chart.gamma_flip, pos = p != null && p >= v;
+    const p = px(), v = o.chart.gamma_flip, pos = p != null && p >= v, rg = rgOf(o);
     return H(`${o.source} – Gamma Flip: ${f2(v)} | ${sg(v - p)}$`, "#b388ff")
       + `<b>1. Thông số & công thức</b><br>• Gamma Flip = mức giá giả định làm <b>tổng Net GEX đổi dấu</b>. Engine quét lưới 241 mức giá trong ±12% quanh giá ${o.source} ${f2(o.underlying)}, mỗi mức tính lại GEX toàn chuỗi (mọi kỳ, trọng số 40/40/20, bỏ strike giá sàn), rồi nội suy tuyến tính chỗ đổi dấu gần giá nhất: Flip = x0 − y0 × (x1 − x0) ÷ (y1 − y0).<br>
       • Flip (giá ${o.source}) = ${code(f2(o.gamma_flip))} → giá chart ${code(f2(v))} · Net GEX tại giá hiện tại ${code(M$(o.net_gex))}<br>
-      • Khoảng cách = Flip − giá live = ${f2(v)} − ${f2(p)} = ${code(sg(v - p) + "$")} → hiện đang <b style="color:${pos ? "#26a69a" : "#ef5350"}">${pos ? "TRÊN Flip (Gamma dương)" : "DƯỚI Flip (Gamma âm)"}</b>`
+      • Khoảng cách = Flip − giá live = ${f2(v)} − ${f2(p)} = ${code(sg(v - p) + "$")} → hiện đang <b style="color:${pos ? "#26a69a" : "#ef5350"}">${pos ? "TRÊN Flip (Gamma dương)" : "DƯỚI Flip (Gamma âm)"}</b>${rg && rg.pct != null ? `<br>• Cách Flip <b>${rg.pctTxt}</b>${rg.far ? ` → nhãn hiển thị là <b style="color:#ffb300">không rõ</b> (Flip cách quá ${rg.farTxt}%: dấu Gamma kém tin cậy; Agent và kế hoạch vẫn dùng dấu trên/dưới Flip)` : ""}` : ""}<br>• ${twTxt(o)}`
       + sec("2. Ý nghĩa", "Trên Flip: dealer <b>long gamma</b> → bán khi giá lên, mua khi giá xuống → giá bị kìm, đi ngang, hay hồi về tường.<br>Dưới Flip: dealer <b>short gamma</b> → mua đuổi khi lên, bán đuổi khi xuống → biến động mạnh, dễ phá tường, không bắt đáy/đỉnh.")
-      + sec("3. Hành động — 3 kế hoạch hiện tại", plansShort());
+      + sec("3. Hành động — 3 kế hoạch hiện tại", plansShort())
+      + unv("flip");
   }
   function tipMag(o) {
     const p = px(), v = o.chart.magnet, s = o.strikes.find((x) => x.strike === o.magnet) || {}, g = s.net_gex;
     return H(`${o.source} – Magnet: ${f2(v)} | ${sg(v - p)}$`, "#ffd54f")
       + `• Magnet = strike có <b>tổng lực Gamma lớn nhất</b> (Call GEX − Put GEX, tức |Call GEX| + |Put GEX|; GEX đã nhân 40/40/20 và bỏ strike giá sàn) quanh giá (±8%): strike ${o.magnet}, Call GEX ${code(M$(s.call_gex))} · Put GEX ${code(M$(s.put_gex))} · Net ${code(M$(g))}<br>
-      ${conv(o, Object.assign({ strike: o.magnet, chart: v }, s))}<br>• Khoảng cách = ${code(sg(v - p) + "$")}`
+      ${conv(o, Object.assign({ strike: o.magnet, chart: v }, s))}<br>• Khoảng cách = ${code(sg(v - p) + "$")}<br>• ${twTxt(o)}`
       + sec("Ý nghĩa", g >= 0 ? "<b>Magnet HÚT (Net GEX dương):</b> dealer bán khi giá lên / mua khi giá xuống quanh strike này → giá bị <b>hút về / ghim quanh</b> mốc, nhất là gần giờ đáo hạn. Dùng làm <b>mục tiêu chốt lời</b>, đánh hồi về Magnet."
-        : "<b>Magnet ĐẨY (Net GEX âm):</b> dealer mua đuổi khi giá lên / bán đuổi khi giá xuống → khi giá phá qua mốc này dễ <b>chạy xa</b>; đi theo hướng phá, không bắt ngược.");
+        : "<b>Magnet ĐẨY (Net GEX âm):</b> dealer mua đuổi khi giá lên / bán đuổi khi giá xuống → khi giá phá qua mốc này dễ <b>chạy xa</b>; đi theo hướng phá, không bắt ngược.")
+      + unv("mag");
   }
   function tipMp(o) {
     const p = px(), v = o.chart.max_pain;
     return H(`${o.source} – Max Pain: ${f2(v)} | ${sg(v - p)}$`, "#b0bec5")
       + `• Max Pain = strike K* làm <b>tổng giá trị nội tại</b> người mua quyền chọn nhận được <b>nhỏ nhất</b>: min Σ [Call OI × max(K* − K, 0) + Put OI × max(K − K*, 0)] × ${o.multiplier || 100}, tính trên OI thật trong ±8% quanh giá (không nhân 40/40/20, không loại strike giá sàn).<br>• K* = ${o.max_pain} → giá chart ${code(f2(v))} · cách ${code(sg(v - p) + "$")}`
-      + sec("Ý nghĩa", "Tham khảo: giá hay dao động về gần Max Pain vào ngày đáo hạn khi không có tin lớn. Không dùng riêng lẻ để vào lệnh.");
+      + sec("Ý nghĩa", "Tham khảo: giá hay dao động về gần Max Pain vào ngày đáo hạn khi không có tin lớn. Không dùng riêng lẻ để vào lệnh.")
+      + unv("mp");
+  }
+  function tipHedgeZone(z, win) {
+    const acc = z && z.kind === "accel", pk = z ? Math.abs(z.peak || 0).toLocaleString("en-US") : "?";
+    return H(`Vùng HEDGE ${acc ? "−Γ" : "+Γ"} · ${pk} HĐ / ${win || "?"}$`, acc ? "#ef5350" : "#26a69a")
+      + `• Ước lượng số hợp đồng GC dealer phải mua/bán lại (delta-hedge) nếu giá đi ${win || "?"}$ qua vùng này; số lớn = lực hedge mạnh.<br>• <b>${acc ? "−Γ (gia tốc)" : "+Γ (hãm)"}</b>: ${acc ? "dealer hedge cùng chiều giá → đẩy giá chạy nhanh hơn" : "dealer hedge ngược chiều giá → kìm giá lại"}.`
+      + sec("Lưu ý", "Đây là ước lượng từ mô hình Gamma, không phải dòng lệnh thật. Chưa kiểm định (bước 6 không kiểm vùng này).");
+  }
+  function tipGexCurve(o) {
+    return H(`Net GEX ${o ? o.source : ""} /1%`, "#90caf9")
+      + "• Đường/cột này vẽ Net GEX (USD dealer phải hedge khi giá đi 1%) theo từng mức giá. Dương = dealer kìm giá; âm = dealer đẩy giá. Điểm đường cắt 0 chính là Gamma Flip."
+      + sec("Lưu ý", "Có hệ số kỳ hạn 40/40/20 (xem dòng “Hệ số kỳ hạn” ở thanh KPI). Chưa kiểm định.");
   }
   function chartTip(e) {
     const wrap = document.querySelector("#chartWrap"); if (!wrap || typeof candleS === "undefined") return null;
     const r = wrap.getBoundingClientRect(), y = e.clientY - r.top, hits = [];
+    // 7f: chuột đang nằm TRONG hình chữ nhật của một nhãn vẽ trên canvas → chú giải ĐÚNG nhãn đó (ưu tiên hơn vạch gần chuột)
+    { const x = e.clientX - r.left, tags = window.TVLB_TAGS || [], P0 = primV();
+      for (let i = tags.length - 1; i >= 0; i--) { const g = tags[i];
+        if (x < g.x0 || x > g.x1 || y < g.y0 || y > g.y1) continue;
+        if (g.k === "strike") { const o = optV(g.src); const s0 = o && o.strikes && o.strikes.find((q) => q.strike === g.strike); if (s0) return tipStrike(o, s0); }
+        else if (g.k === "flip" && P0) return tipFlip(P0);
+        else if (g.k === "magnet" && P0) return tipMag(P0);
+        else if (g.k === "mp" && P0) return tipMp(P0);
+        else if (g.k === "hedge") return tipHedgeZone(g.z, g.win);
+        else if (g.k === "gexcurve") return tipGexCurve(P0);
+      } }
     const yy = (v) => (v == null ? null : candleS.priceToCoordinate(v));
     [["GC", "#lyKey"], ["GLD", "#lyGLD"]].forEach(([src, chk]) => {
       const box = document.querySelector(chk); if (box && !box.checked) return;
@@ -106,12 +150,16 @@
         const c = yy(s.chart); if (c != null && Math.abs(c - y) <= 5) hits.push({ d: Math.abs(c - y), k: 0, f: () => tipStrike(o, s) }); });
     });
     const P = primV(); if (P && (!document.querySelector("#lyKey") || document.querySelector("#lyKey").checked)) {
-      const c = P.chart; [["gamma_flip", tipFlip], ["magnet", tipMag], ["max_pain", tipMp]].forEach(([k, fn]) => { const v = yy(c[k]); if (v != null && Math.abs(v - y) <= 5) hits.push({ d: Math.abs(v - y), k: 1, f: () => fn(P) }); });
+      const c = P.chart; [["magnet", tipMag], ["gamma_flip", tipFlip], ["max_pain", tipMp]].forEach(([k, fn]) => { const v = yy(c[k]); if (v != null && Math.abs(v - y) <= 5) hits.push({ d: Math.abs(v - y), k: 1, f: () => fn(P) }); });
     }
     if (!hits.length) return null;
     hits.sort((a, b) => a.k - b.k || a.d - b.d);
-    const main = hits[0], extra = hits.filter((h) => h.k === 1 && h !== main).slice(0, 1);   // mốc trùng nhau (vd Call Wall = Magnet): hiện cả 2
-    return main.f() + extra.map((h) => `<div style="margin-top:8px;padding-top:6px;border-top:2px solid #e0a83a">${h.f()}</div>`).join("");
+    // 7f (số 103): mốc trùng nhau (vd Call Wall = Magnet = Max Pain) → hiện TẤT CẢ (bản cũ chỉ lấy 1 mốc gần chuột nhất, có thể là Flip thay vì Magnet),
+    // và xếp thành 2 CỘT: chú giải tường rất dài, phần nối thêm bên dưới bị khung (max-height + overflow hidden) cắt mất.
+    const main = hits[0], extra = hits.filter((h) => h.k === 1 && h !== main);
+    if (!extra.length) return main.f();
+    return `<div data-2c="1" style="display:flex;gap:12px;align-items:flex-start"><div style="flex:1 1 520px;min-width:0">${main.f()}</div>`
+      + `<div style="flex:1 1 400px;min-width:0;border-left:2px solid #e0a83a;padding-left:10px">${extra.map((h) => h.f()).join('<div style="height:10px"></div>')}</div></div>`;
   }
   // ───────────────────── bảng Strike Profile ─────────────────────
   const COLS = [
@@ -129,11 +177,11 @@
     ["DTE", "Số ngày tới đáo hạn của kỳ gần nhất dùng để tính Greeks (tính đúng giờ: GC 12:30 Chicago, GLD 16:00 New York)."],
     ["Δ", "Delta Call = e^(−rT)·N(d1) (Black-76) — giá quyền chọn đổi bao nhiêu khi giá cơ sở +1$. Gần 0.5 = sát giá."],
     ["Γ", "Gamma = e^(−rT)·φ(d1) ÷ (F·σ·√T) — Delta đổi bao nhiêu khi giá đi 1$. Lớn nhất tại strike sát giá, kỳ sắp đáo hạn."],
-    ["Vega", "Vega = F·φ(d1)·√T ÷ 100 — $ thay đổi giá quyền chọn khi IV +1 điểm %."],
-    ["Vanna", "Vanna = −φ(d1)·d2 ÷ σ ÷ 100 — Delta đổi bao nhiêu khi IV +1 điểm %. IV giảm sau tin → dealer mua/bán lại theo dấu Vanna."],
+    ["Vega", "Vega = e^(−rT)·F·φ(d1)·√T ÷ 100 — $ thay đổi giá quyền chọn khi IV +1 điểm % (Black-76, GC). GLD (Black-Scholes có carry b = r − q): e^(−rT) thành e^((b−r)T) = e^(−qT)."],
+    ["Vanna", "Vanna = −e^(−rT)·φ(d1)·d2 ÷ σ ÷ 100 — Delta đổi bao nhiêu khi IV +1 điểm % (Black-76, GC; GLD: e^(−qT)). IV giảm sau tin → dealer mua/bán lại theo dấu Vanna."],
     ["Θ/ngày", "Theta Call ($/ngày) — giá quyền chọn mất bao nhiêu sau 1 ngày (cho 1 oz / 1 cổ). Âm = người mua mất, người bán hưởng."],
     ["ρ", "Rho ($/1% lãi suất). Black-76: ρ = −T × giá quyền chọn ÷ 100 — rất nhỏ với kỳ ngắn. r lấy từ ^IRX."],
-    ["Charm", "Charm = φ(d1)·d2 ÷ (2T) ÷ 365 — Delta tự đổi bao nhiêu sau 1 ngày. Lớn khi sắp đáo hạn → hedge cuối phiên mạnh."],
+    ["Charm", "Charm (Call, Black-76) = e^(−rT)·[φ(d1)·d2 ÷ (2T) + r·N(d1)] ÷ 365 — Delta tự đổi bao nhiêu sau 1 ngày (giá, IV đứng yên). Số hạng r·N(d1) nhỏ khi r thấp. Put: thay N(d1) bằng N(d1) − 1. GLD có thêm số hạng carry b. Lớn khi sắp đáo hạn → hedge cuối phiên mạnh."],
   ];
   function rowTip(tr) {
     const o = optV(S.profSrc); if (!o) return null; const k = parseFloat((tr.children[1] || {}).textContent); const s = o.strikes.find((x) => x.strike === k); if (!s) return null;
@@ -190,10 +238,11 @@
   }
   function kpiTip(el) {
     const k = el.closest("#kpis"); if (!k) return null; const t = (el.closest("span,div") || el).textContent;
+    if (/Hệ số kỳ hạn/.test(t)) return H("Hệ số kỳ hạn 40/40/20") + "Mỗi kỳ hạn được nhân trọng số theo rổ: DATE (≤1,5 ngày) ×1,2 · WEEK (≤10 ngày) ×1,2 · MONTH ×0,6 khi đủ 3 rổ (chuẩn hóa lại nếu thiếu rổ). “A” = nhân cho TỪNG kỳ hạn (cách TVLB đang dùng). Ví dụ “DATE·2kỳ·1,20” = rổ DATE có 2 kỳ, mỗi kỳ ×1,20. Chưa kiểm định." ;
     if (/Vol|Risk|IV/.test(t)) return H("Vol / Risk") + "IV ATM kỳ gần — đo mức biến động kỳ vọng. IV cao = biên dao động rộng, SL nên rộng hơn / khối lượng nhỏ hơn.";
     if (/XAU\s*\/\s*GLD|×/.test(t)) return H("Hệ số XAU / GLD") + "Giá chart ÷ giá GLD — dùng quy đổi strike GLD ra giá vàng (thường ≈ 10,9, không phải ×10).";
     if (/Net GEX/.test(t)) return H("Net GEX") + "Tổng GEX toàn chuỗi tại giá hiện tại (40/40/20). Dương = dealer kìm giá; âm = dealer đẩy giá.";
-    if (/Regime/.test(t)) return H("Regime") + "Long γ = giá trên Flip (đi ngang, đánh hồi) · Short γ = dưới Flip (biến động mạnh, đánh theo xu hướng).";
+    if (/Regime/.test(t)) return H("Regime") + "Long γ = giá trên Flip (đi ngang, đánh hồi) · Short γ = dưới Flip (biến động mạnh, đánh theo xu hướng). Số % = giá cách Flip bao nhiêu. “không rõ” = Flip cách quá 2,5% hoặc không có Flip (bước 6: chế độ này không kết luận được). Chỉ đổi nhãn hiển thị; tín hiệu vẫn dùng trên/dưới Flip.";
     return null;
   }
   window.tvlbTipX = function (e) {
@@ -205,7 +254,7 @@
     const h = hedgeTip(t); if (h) return h;
     const j = journalTip(t); if (j) return j;
     const k = kpiTip(t); if (k) return k;
-    if (t.closest("#chartWrap") && !t.closest("#tvlbCd, .chartinfo, .sigcount")) return chartTip(e);
+    if (t.closest("#chartWrap") && !t.closest("#tvlbCd, #chartInfo, #sigCount, .chartinfo, .sigcount")) return chartTip(e);
     return null;
   };
 })();

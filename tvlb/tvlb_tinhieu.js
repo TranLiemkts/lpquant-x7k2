@@ -496,7 +496,7 @@ function drawTH(ctx, plotW, h) {
     const b = bars[x.i], risk = Math.abs(x.e - x.sl), nx = optNext(x.e, x.dir, risk, 0, x.i), r = sim(x);
     return `<div style="font-weight:700;font-size:13px;color:${kcol(x)};margin-bottom:4px">${KNAME[x.kind] || x.kind} · ${x.dir < 0 ? "SELL" : "BUY"} · hạng ${x.grade} (${x.sc}/100)</div>
       ${new Date(x.t * 1000).toLocaleString("vi-VN")} · khung ${S.tf} · ${x.label || ""}<br>Vào ${f2(x.e)} (giá đóng nến) · SL ${f2(x.sl)} (${f2(risk)}$) · TP ${nx ? `${f2(nx.x)} (${nx.n}, R:R ${(Math.abs(nx.x - x.e) / risk).toFixed(1)})` : "2R"}
-      <div style="margin-top:5px;border-top:1px solid #2b3440;padding-top:4px"><b>Vì sao có tín hiệu</b><br>${(x.why || []).join("<br>")}</div>
+      <div style="margin-top:5px;border-top:1px solid #2b3440;padding-top:4px"><b>Vì sao có tín hiệu</b><br>${(x.why || []).join("<br>")}${/tường|Gamma|Flip|Magnet/i.test((x.why || []).join(" ") + (x.label || "")) ? "<br><span style=\"color:#ffb300\">⚠ Mốc tường/Magnet/Flip dùng trong tín hiệu CHƯA KIỂM ĐỊNH (bước 6: không hơn số tròn).</span>" : ""}</div>
       <div style="margin-top:5px;border-top:1px solid #2b3440;padding-top:4px"><b>Chấm điểm (${x.sc}/100 → hạng ${x.grade})</b><br>${(x.P || []).map((p) => `<span style="color:${p[0] >= 0 ? "#69f0ae" : "#ff8a80"}">${p[0] >= 0 ? "+" : ""}${p[0]}</span> ${p[1]}`).join("<br>")}</div>
       ${r ? `<div style="margin-top:5px;color:#9aa4b2">Kết quả mô phỏng (TP: ${TPM[O.tpm]}, đóng sau ${O.tout} nến): <b style="color:${r.res === "W" ? "#69f0ae" : r.res === "L" ? "#ff8a80" : "#ffd54f"}">${{ W: "chạm TP", L: "chạm SL", T: "hết giờ", O: "đang chạy" }[r.res]} ${sg(r.r, (v) => v.toFixed(2))}R</b></div>` : ""}`;
   }

@@ -336,7 +336,7 @@ async function startFeed() {
 }
 
 // ─────────────────────────── lớp phủ: mốc GC / GLD + đường cong GEX ───────────────────────────
-const ov = { cv: null, ctx: null, dpr: 1 };
+const ov = { cv: null, ctx: null, dpr: 1, tags: [] };
 function initOverlay() {
   ov.cv = $("#ov"); ov.ctx = ov.cv.getContext("2d");
   const resize = () => {
@@ -352,7 +352,7 @@ function initOverlay() {
   resize();
 }
 
-function tagBox(ctx, x, y, text, color, align, strong) {
+function tagBox(ctx, x, y, text, color, align, strong, meta) {
   ctx.font = `${strong ? 600 : 500} 10.5px "IBM Plex Mono", monospace`;
   const w = ctx.measureText(text).width + 10, h = 15, x0 = align === "right" ? x - w : x;
   ctx.fillStyle = strong ? color : "rgba(11,14,18,.88)";
@@ -361,6 +361,7 @@ function tagBox(ctx, x, y, text, color, align, strong) {
   ctx.fillStyle = strong ? "#0b0e12" : color;
   ctx.textBaseline = "middle"; ctx.textAlign = "left";
   ctx.fillText(text, x0 + 5, y + 0.5);
+  if (meta && ov.tags) ov.tags.push({ x0, x1: x0 + w, y0: y - h / 2, y1: y + h / 2, ...meta });   // 7f: để chú giải rê chuột trỏ ĐÚNG nhãn
 }
 
 function hline(ctx, y, x0, x1, color, width, dash, alpha) {
@@ -374,6 +375,7 @@ function drawOverlay() {
   const W = ov.cv.width / dpr, H = ov.cv.height / dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
+  ov.tags = []; window.TVLB_TAGS = ov.tags;   // 7f: nhãn vẽ ở lần này (hình chữ nhật + loại)
   const psW = chart.priceScale("right").width() || 70;
   const plotW = W - psW, tsH = 28, plotH = H - tsH;
   const Y = (p) => { const y = candleS.priceToCoordinate(p); return y == null || y < 2 || y > plotH - 2 ? null : y; };
@@ -397,7 +399,7 @@ function drawOverlay() {
       if (labelSet.has(s.strike) || isCW || isPW) {
         const d = s.d_oi != null ? ` ${s.d_oi >= 0 ? "+" : ""}${fmtK(s.d_oi)}` : "";
         const txt = `${src} ${s.strike} · ${Math.round(share * 100)}%${isCW ? " CW" : isPW ? " PW" : ""}${d}`;
-        tagBox(ctx, side === "left" ? 6 : plotW - 6, y, txt, lc, side, isCW || isPW);
+        tagBox(ctx, side === "left" ? 6 : plotW - 6, y, txt, lc, side, isCW || isPW, { k: "strike", src, strike: s.strike });
       }
     }
   }
@@ -407,11 +409,11 @@ function drawOverlay() {
   if (P && $("#lyKey").checked) {
     const c = P.chart;
     const yF = c.gamma_flip != null ? Y(c.gamma_flip) : null;
-    if (yF != null) { hline(ctx, yF, 0, plotW, C.flip, 1.2, [6, 4], 0.9); tagBox(ctx, plotW * 0.5, yF, `Γ FLIP ${fmt(c.gamma_flip)}`, C.flip, "left", true); }
+    if (yF != null) { hline(ctx, yF, 0, plotW, C.flip, 1.2, [6, 4], 0.9); tagBox(ctx, plotW * 0.5, yF, `Γ FLIP ${fmt(c.gamma_flip)}`, C.flip, "left", true, { k: "flip" }); }
     const yM = c.magnet != null ? Y(c.magnet) : null;
-    if (yM != null) tagBox(ctx, plotW * 0.5, yM, `◎ MAGNET ${fmt(c.magnet)}`, C.mag, "left", true);
+    if (yM != null) tagBox(ctx, plotW * 0.5, yM, `◎ MAGNET ${fmt(c.magnet)}`, C.mag, "left", true, { k: "magnet" });
     const yP = c.max_pain != null ? Y(c.max_pain) : null;
-    if (yP != null) { hline(ctx, yP, 0, plotW, "#9aa3ad", 1, [2, 3], 0.6); tagBox(ctx, plotW * 0.5 + 150, yP, `MaxPain ${fmt(c.max_pain)}`, "#9aa3ad", "left", false); }
+    if (yP != null) { hline(ctx, yP, 0, plotW, "#9aa3ad", 1, [2, 3], 0.6); tagBox(ctx, plotW * 0.5 + 150, yP, `MaxPain ${fmt(c.max_pain)}`, "#9aa3ad", "left", false, { k: "mp" }); }
   }
 
   // Volume profile phiên
@@ -452,6 +454,7 @@ function drawOverlay() {
       }
       ctx.fillStyle = C.muted; ctx.textAlign = "center"; ctx.textBaseline = "top";
       ctx.fillText(`Net GEX ${P.source} /1%`, cx, 30);
+      { const tw = ctx.measureText(`Net GEX ${P.source} /1%`).width; ov.tags.push({ x0: cx - tw / 2 - 3, x1: cx + tw / 2 + 3, y0: 28, y1: 44, k: "gexcurve" }); }
     }
   }
   // Bước 5: vùng hedge lớn của LP (≥ ngưỡng HĐ/10 USD) — tô dải ngang mờ
@@ -462,11 +465,12 @@ function drawOverlay() {
       if (y1 == null || y2 == null || y2 < 0 || y1 > plotH) continue;
       const a = Math.max(0, y1), b = Math.min(plotH, y2), col = z.kind === "accel" ? C.down : C.up;
       ctx.fillStyle = z.kind === "accel" ? "rgba(229,83,75,.07)" : "rgba(38,179,132,.07)"; ctx.fillRect(0, a, plotW, Math.max(1, b - a));
-      if (b - a > 8) tagBox(ctx, plotW * 0.78, (a + b) / 2, `HEDGE ${z.kind === "accel" ? "−Γ" : "+Γ"} ${Math.abs(z.peak).toLocaleString("en-US")} HĐ/${hz.win}$`, col, "left", false);
+      if (b - a > 8) tagBox(ctx, plotW * 0.78, (a + b) / 2, `HEDGE ${z.kind === "accel" ? "−Γ" : "+Γ"} ${Math.abs(z.peak).toLocaleString("en-US")} HĐ/${hz.win}$`, col, "left", false, { k: "hedge", z, win: hz.win });
     }
   }
   if ($("#lySMC")?.checked && S.smc) drawSMC(ctx, plotW, plotH);
-  $("#chartInfo").textContent = P ? `${P.source} · ${P.strikes.length} strikes · Σ ${fmtK(P.net_gex)} · ${P.regime === "POSITIVE" ? "+Γ" : P.regime === "NEGATIVE" ? "−Γ" : "?"}${p0 != null ? "" : ""}` : "Chưa có dữ liệu Options";
+  { const rg = P ? regimePct(P.underlying, P.gamma_flip) : null;
+    $("#chartInfo").textContent = P ? `${P.source} · ${P.strikes.length} strikes · Σ ${fmtK(P.net_gex)} · ${rg.pct == null ? "?" : rg.far ? `? không rõ (${rg.pctTxt} Flip)` : `${rg.pct >= 0 ? "+Γ" : "−Γ"} ${rg.pctTxt} Flip`} · mốc chưa kiểm định` : "Chưa có dữ liệu Options"; }
 }
 
 // Vẽ SMC: vùng Premium/Discount, thanh khoản, trendline, HH/HL/LH/LL, BOS/CHoCH
@@ -730,7 +734,7 @@ function renderAgent() {
   }
   const L = a.L, dealer = a.neg ? "LP bán khi giá giảm → gia tốc" : "LP mua dip / bán rip → giữ biên";
   $("#decision").innerHTML = `<div class="act ${a.act.toLowerCase()}">${a.act}</div>
-    <dl><dt>Regime</dt><dd>${a.regime}</dd><dt>Dealer</dt><dd>${dealer}</dd>
+    <dl><dt>Regime</dt><dd>${a.regime} <span class="muted">(${regimePct(a.p, a.L.gamma_flip).short})</span></dd><dt>Dealer</dt><dd>${dealer}</dd>
     <dt>Lệnh lớn</dt><dd>${(() => { const f = bigFlow(S.cfg?.signals?.cvd_slope_bars ?? 5); return f ? `MUA ${f.b.toFixed(0)} · BÁN ${f.s.toFixed(0)} oz → ròng ${f.d >= 0 ? "+" : "−"}${Math.abs(f.d).toFixed(0)} (${f.nb}/${f.ns} lệnh ≥ ${S.big.thr?.toFixed(0)} oz)` : "đang thu thập"; })()}</dd>
     <dt>Hedge LP</dt><dd>${(() => { const v = hedgePer(a.p), z = hZoneAt(a.p); return v == null ? "—" : `≈ ${Math.abs(Math.round(v)).toLocaleString("en-US")} HĐ/${hedgeSt().win}$ (${hTier(v)}, ${v > 0 ? "−Γ gia tốc" : "+Γ hãm"})${z ? " · trong vùng hedge lớn" : ""}`; })()}</dd>
     <dt>Target</dt><dd>${fmt(a.target)} <span class="muted">(${esc(a.why)})</span></dd><dt>Conviction</dt><dd>${sgn(a.conv, 2)}</dd>
@@ -813,12 +817,42 @@ function renderProfile() {
   if (!S.profScrolled && $("#atmRow")) { const w = $(".sp .tablewrap"), r = $("#atmRow"); w.scrollTop = r.offsetTop - w.clientHeight / 2; S.profScrolled = true; }
 }
 
+// ─── 7f: HIỂN THỊ chế độ Gamma theo % khoảng cách tới Flip (B2), cảnh báo CME chậm, hệ số kỳ hạn ───
+// Chỉ đổi NHÃN hiển thị; Agent, kế hoạch, tín hiệu vẫn dùng dấu trên/dưới Flip như cũ.
+// FLIP_FAR_PCT = 2,5%: ngưỡng do Claude chọn, tương đương 100 điểm ở giá 4.000 (quy tắc "không rõ" của bước 6 là 100 điểm cố định). Chưa kiểm định.
+const FLIP_FAR_PCT = 2.5;
+function regimePct(p, flip) {
+  const fx = (v) => Number(v).toFixed(1).replace(".", ","), farTxt = fx(FLIP_FAR_PCT);
+  if (p == null || flip == null || !(flip > 0)) return { cls: "unk", pct: null, far: false, pctTxt: "", farTxt, short: "không rõ (không có Flip)" };
+  const pct = ((p - flip) / flip) * 100, far = Math.abs(pct) > FLIP_FAR_PCT, pctTxt = `${pct >= 0 ? "+" : "−"}${fx(Math.abs(pct))}%`;
+  return { cls: far ? "unk" : pct >= 0 ? "pos" : "neg", pct, far, pctTxt, farTxt, short: far ? `không rõ (Flip cách ${fx(Math.abs(pct))}%)` : `${pct >= 0 ? "Long γ" : "Short γ"} ${pctTxt}` };
+}
+window.regimePct = regimePct;
+// Ngày giao dịch CME (MM/DD/YYYY) cũ hơn phiên lẽ ra đã có? Phiên "đã có" = ngày làm việc của (bây giờ − 23h30 UTC) (settle đăng xong khoảng 23:03 UTC theo bước 4).
+// Ngưỡng do Claude chọn; ngày lễ cũng báo (nên chữ ghi "có thể"). Dashboard không thấy giờ đăng, chỉ so được ngày.
+function cmeStale(cme, nowMs) {
+  const m = cme && cme.trade_date ? /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(cme.trade_date).trim()) : null; if (!m) return null;
+  const DAY = 86400e3, td = Date.UTC(+m[3], +m[1] - 1, +m[2]), d0 = new Date((nowMs ?? Date.now()) - 23.5 * 3600e3);
+  let e = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth(), d0.getUTCDate());
+  while ([0, 6].includes(new Date(e).getUTCDay())) e -= DAY;
+  if (td >= e) return null;
+  let n = 0; for (let x = td + DAY; x <= e; x += DAY) if (![0, 6].includes(new Date(x).getUTCDay())) n++;
+  return n > 0 ? { n, txt: `CME chậm ${n} phiên (settle mới nhất ${m[2]}/${m[1]}/${m[3]}); có thể chưa đăng số mới, hoặc ngày lễ` } : null;
+}
+window.cmeStale = cmeStale;
+function tenorWTxt(o) {
+  const t = o && o.tenor_w; if (!t) return "—";
+  if (!t.on) return "tắt";
+  const BN = { d: "DATE", w: "WEEK", m: "MONTH" };
+  return "A " + Object.entries(t.buckets).map(([b, v]) => `${BN[b]}·${v.n_exp}kỳ·${String(v.f.toFixed(2)).replace(".", ",")}`).join(" ");
+}
 function renderKpis() {
   const P = prim(), gld = opt("GLD"), iv = P?.strikes?.find((s) => s.iv)?.iv;
   const atmIv = (() => { const o = gld || P; if (!o) return null; const p = o.underlying; const s = o.strikes.reduce((b, x) => (b == null || Math.abs(x.strike - p) < Math.abs(b.strike - p) ? x : b), null); return s?.iv; })();
   $("#kpis").innerHTML = `<span>— Vol / Risk <b>${atmIv ? (atmIv * 100).toFixed(1) + "% IV" : "—"}</b></span>
     <span>— XAU / GLD <b>×${fmt(gld?.ratio, 3)}</b></span><span>— Net GEX <b>${fmtK(P?.net_gex)}</b></span>
-    <span>— Regime <b>${P?.regime === "POSITIVE" ? "Long γ" : P?.regime === "NEGATIVE" ? "Short γ" : "—"}</b></span>`;
+    <span>— Regime <b>${P?.gamma_flip == null ? "—" : regimePct(P.underlying, P.gamma_flip).short}</b></span>
+    <span>— Hệ số kỳ hạn <b>${tenorWTxt(P)}</b></span>`;
   void iv;
 }
 
@@ -1063,7 +1097,10 @@ function renderBuild() {
   const b = S.state.build || S.state.options_updated, cme = S.state.options?.GC?.cme, oiLbl = oiLabelVN(cme);
   const age = b ? (Date.now() - new Date(b)) / 60000 : null;
   el.textContent = `${STATIC ? "Build" : "Engine"} ${b ? new Date(b).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : "—"}${oiLbl ? ` · ${oiLbl}` : cme?.trade_date ? ` · CME phiên ${cme.trade_date}` : ""}${STATIC && age > 90 ? " · máy tính chưa gửi bản mới" : ""}`;
-  if (oiLbl) el.title = OI_LABEL_TIP;
+  const stl = cmeStale(cme);   // 7f: cảnh báo CME chậm
+  if (stl) el.textContent += ` · ⚠ ${stl.txt}`;
+  el.style.color = stl ? "#ffb300" : "";
+  if (oiLbl) el.title = OI_LABEL_TIP + (stl ? "\n⚠ " + stl.txt + ". Dashboard không thấy giờ đăng, chỉ so được ngày giao dịch với phiên lẽ ra đã có." : "");
   el.className = "build" + (STATIC && age > 24 * 60 ? " old" : "");
 }
 async function copyTV(e) {
