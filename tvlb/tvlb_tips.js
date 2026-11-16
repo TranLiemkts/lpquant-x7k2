@@ -12,12 +12,14 @@
   const code = (x) => `<code style="background:#1d2530;padding:0 4px;border-radius:3px;color:#ffe9a8">${x}</code>`;
   const star = (n) => `<span style="color:#ffc400">${"★".repeat(n)}</span><span style="color:#5f6b7a">${"★".repeat(5 - n)}</span>`;
   const H = (t, c) => `<div style="font-weight:700;font-size:13px;color:${c || "#f3d38c"};margin-bottom:4px">${t}</div>`;
+  // 7e: CME ghi ngày kiểu Mỹ MM/DD/YYYY (11/13/2026 = 13/11/2026). Đổi sang DD/MM/YYYY khi hiển thị; chuỗi khác dạng đó giữ nguyên.
+  const dmy = (s) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s ?? "").trim()); return m ? `${m[2]}/${m[1]}/${m[3]}` : String(s ?? ""); };
   const ZONE = 4, SLU = 3;
   const phi = (x) => Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI);
   const ncdf = (x) => { const t = 1 / (1 + 0.2316419 * Math.abs(x)), d = 0.3989423 * Math.exp(-x * x / 2), p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return x > 0 ? 1 - p : p; };
   const px = () => { try { return lastPrice(); } catch (e) { return null; } };
   const flip = () => { try { return primV()?.chart?.gamma_flip ?? null; } catch (e) { return null; } };
-  const srcInfo = (o) => o.source === "GLD" ? `yfinance (OPRA) · ${o.n_expiries ?? (o.expiries || []).length} kỳ: ${(o.expiries || []).slice(0, 4).join(", ")}` : `CME Settlements ${o.cme?.trade_date || ""}${o.cme?.prev_date ? ` (phiên trước ${o.cme.prev_date})` : ""} · ${o.n_expiries ?? (o.expiries || []).length} kỳ: ${(o.expiries || []).slice(0, 4).join(", ")}`;
+  const srcInfo = (o) => o.source === "GLD" ? `yfinance (OPRA) · ${o.n_expiries ?? (o.expiries || []).length} kỳ: ${(o.expiries || []).slice(0, 4).join(", ")}` : `CME Settlements: settle phiên ${dmy(o.cme?.trade_date) || "—"} · OI của phiên trước${o.cme?.prev_date ? ` (${dmy(o.cme.prev_date)})` : ""} · ${o.n_expiries ?? (o.expiries || []).length} kỳ: ${(o.expiries || []).slice(0, 4).join(", ")}`;
   const conv = (o, s) => o.source === "GLD"
     ? `• <b>Đổi ra giá XAU:</b> Hệ số XAU/GLD = giá chart ÷ giá GLD = ${code(f4(o.ratio))} → Giá XAU = Strike GLD × hệ số = ${s.strike} × ${f4(o.ratio)} = ${code(f2(s.chart))}`
     : `• <b>Đổi ra giá XAU:</b> Giá XAU = Strike GC × (giá chart ÷ giá GC Future) = ${s.strike} × ${f4(o.ratio)} = ${code(f2(s.chart))} <span style="color:#9aa4b2">(tương đương trừ basis ${f2(s.strike - s.chart)}$)</span>`;
@@ -27,7 +29,7 @@
     const sq = iv * Math.sqrt(T), d1 = (Math.log(F / K) + (b + iv * iv / 2) * T) / sq, g = Math.exp((b - r) * T) * phi(d1) / (F * sq);
     return `• d1 = [ln(F/K) + (b + σ²/2)·T] ÷ (σ√T) = [ln(${f2(F)}/${K}) + (${b.toFixed(4)} + ${iv.toFixed(3)}²/2)×${T.toFixed(4)}] ÷ (${iv.toFixed(3)}×√${T.toFixed(4)}) = ${code(d1.toFixed(4))}<br>
       • Γ = e^((b−r)T)·φ(d1) ÷ (F·σ·√T) = ${code(g.toExponential(4))} <span style="color:#9aa4b2">(bảng: ${s.gamma != null ? Number(s.gamma).toExponential(3) : "—"}; kỳ gần nhất ${s.dte} ngày, IV ${(iv * 100).toFixed(1)}%)</span><br>
-      • GEX 1 kỳ = Γ × OI × ${o.multiplier || 100} × F² × 1% — cộng mọi kỳ, mỗi kỳ nhân trọng số rổ DATE ×1.2 · WEEK ×1.2 · MONTH ×0.6 (40/40/20)`;
+      • GEX 1 kỳ = Γ × OI × ${o.multiplier || 100} × F² × 1% × w — cộng mọi kỳ. w = hệ số rổ: khi đủ 3 rổ DATE ×1.2 · WEEK ×1.2 · MONTH ×0.6 (40/40/20); thiếu rổ thì chuẩn hoá lại (w = trọng số rổ ÷ tổng trọng số các rổ có mặt × số rổ có mặt). <b>w = 0 cho strike giá sàn</b> (settle chân OTM ≤ 0,1 — IV không thật, 7d A5; chỉ áp cho GC có settle).`;
   }
   function score(l) { try { return window.tvlbScore ? window.tvlbScore(l) : null; } catch (e) { return null; } }
 
@@ -39,8 +41,8 @@
     const nm = isCW ? "Call Wall" : isPW ? "Put Wall" : res ? "tường kháng cự (OI lớn)" : "tường hỗ trợ (OI lớn)";
     const maxC = Math.max(1, ...o.strikes.map((x) => x.call_oi)), maxP = Math.max(1, ...o.strikes.map((x) => x.put_oi));
     const hard = res ? Math.round((100 * s.call_oi) / maxC) : Math.round((100 * s.put_oi) / maxP);
-    const why = isCW ? `Strike có <b>Call OI lớn nhất</b> phía trên giá (trong ±8% quanh giá ${isGld ? "GLD" : "GC"} ${f2(o.underlying)}).`
-      : isPW ? `Strike có <b>Put OI lớn nhất</b> phía dưới giá (trong ±8%).`
+    const why = isCW ? `Strike có <b>Call OI lớn nhất</b> phía trên giá (trong ±8% quanh giá ${isGld ? "GLD" : "GC"} ${f2(o.underlying)}). Dùng OI thật: không nhân 40/40/20, không loại strike giá sàn.`
+      : isPW ? `Strike có <b>Put OI lớn nhất</b> phía dưới giá (trong ±8%). Dùng OI thật: không nhân 40/40/20, không loại strike giá sàn.`
       : `Một trong 10 strike có <b>tổng OI (Call + Put) lớn nhất</b> quanh giá — nhãn hiện khi OI ≥ 12% strike lớn nhất.`;
     const key = isGld ? (res ? "GCW" : "GPW") : isCW ? "CW" : isPW ? "PW" : res ? "T1" : "T2";
     const w = score({ key, xau: s.chart, hard, doi: s.d_oi, pool: o.source });
@@ -53,7 +55,7 @@
       • <b>Strike gốc ${s.strike}:</b> Call OI ${code(f0(s.call_oi))} · Put OI ${code(f0(s.put_oi))} (Volume Call ${f0(s.call_vol)} / Put ${f0(s.put_vol)}) → tổng ${f0(oi)} = ${share}% strike lớn nhất (số % trên nhãn chart).<br>
       ${conv(o, s)}<br>
       • <b>Độ cứng ${hard}%</b> = ${res ? "Call" : "Put"} OI tại strike ÷ ${res ? "Call" : "Put"} OI lớn nhất cùng bảng × 100 = ${f0(res ? s.call_oi : s.put_oi)} ÷ ${f0(res ? maxC : maxP)} × 100 = ${code(hard + "%")}<br>
-      • <b>ΔOI</b> = tổng OI hôm nay − phiên trước = ${s.d_oi == null ? "— (chưa có phiên trước để so)" : code(sg(s.d_oi, f0)) + ` hợp đồng (${s.d_oi >= 0 ? "vị thế mở thêm → tường dày lên" : "vị thế đóng bớt → tường mỏng đi"})`}<br>
+      • <b>ΔOI</b> = OI hiện có − OI của kỳ liền trước (GC: ưu tiên số phiên trước cùng hợp đồng của CME, nếu không có thì bản lưu gần nhất) = ${s.d_oi == null ? "— (chưa có số trước để so)" : code(sg(s.d_oi, f0)) + ` hợp đồng (${s.d_oi >= 0 ? "vị thế mở thêm → tường dày lên" : "vị thế đóng bớt → tường mỏng đi"})`}<br>
       • <b>Khoảng cách</b> = mốc − giá live = ${f2(s.chart)} − ${f2(p)} = ${code(sg(dist) + "$")}`
       + sec(`GEX tại strike (${isGld ? "Black-Scholes có carry trên ETF GLD" : "Black-76 trên HĐTL GC"}, r = ${((o.rate || 0) * 100).toFixed(2)}%)`,
         `• Call GEX ${code(M$(s.call_gex))} + Put GEX ${code(M$(s.put_gex))} = Net ${code(M$(s.net_gex))} <span style="color:#9aa4b2">(USD dealer phải mua/bán khi giá đi 1%; dương = kìm giá, âm = đẩy giá)</span><br>
@@ -63,7 +65,7 @@
         : "Nơi tập trung Put OI lớn: khi giá rơi sát tường, dealer phải <b>MUA hợp đồng tương lai</b> để cân bằng Delta → lực đỡ đẩy giá bật lên. Thủng Put Wall khi Gamma âm → dealer bán đuổi, giá rơi nhanh.")
       + (w ? sec("3. Uy tín tường", `<b>${star(w.st)} ${w.txt} (${w.s}/100)</b><br><span style="color:#9aa4b2">${w.plus.join(" · ")}</span>${w.minus.length ? ` · <span style="color:#ff8a80">${w.minus.join(" · ")}</span>` : ""}<br><span style="color:#9aa4b2">★★★★ trở lên = mạnh · ★★★ = đánh nhỏ · ★★ trở xuống = bỏ qua.</span>`) : "")
       + sec("4. Tình huống & hành động", act)
-      + `<div style="color:#9aa4b2;margin-top:6px">Kiểm tra: ${isGld ? `OptionCharts / Barchart GLD, strike ${s.strike}` : `QuikStrike / CME Settlements, strike ${s.strike}`} → Call OI ${f0(s.call_oi)} · Put OI ${f0(s.put_oi)}. Nguồn: ${srcInfo(o)}.</div>`;
+      + `<div style="color:#9aa4b2;margin-top:6px">Kiểm tra: ${isGld ? `OptionCharts / Barchart GLD, strike ${s.strike}` : `QuikStrike / CME Settlements, strike ${s.strike}`} → Call OI ${f0(s.call_oi)} · Put OI ${f0(s.put_oi)}. Nguồn: ${srcInfo(o)}.${isGld ? "" : " Số OI của GC là của phiên trước ngày settle (ghi nhận từ một quan sát 29/10/2026, chưa phải chuẩn): so đúng phiên."}</div>`;
   }
   function plansShort() {
     try { const P = window.tvlbPlans ? window.tvlbPlans().PLANS : []; if (!P.length) return "<span style=\"color:#9aa4b2\">(mở trang ③ Vào lệnh để xem 3 kế hoạch)</span>";
@@ -72,7 +74,7 @@
   function tipFlip(o) {
     const p = px(), v = o.chart.gamma_flip, pos = p != null && p >= v;
     return H(`${o.source} – Gamma Flip: ${f2(v)} | ${sg(v - p)}$`, "#b388ff")
-      + `<b>1. Thông số & công thức</b><br>• Gamma Flip = mức giá giả định làm <b>tổng Net GEX đổi dấu</b>. Engine quét lưới 241 mức giá trong ±12% quanh giá ${o.source} ${f2(o.underlying)}, mỗi mức tính lại GEX toàn chuỗi (mọi kỳ, trọng số 40/40/20), rồi nội suy tuyến tính chỗ đổi dấu gần giá nhất: Flip = x0 − y0 × (x1 − x0) ÷ (y1 − y0).<br>
+      + `<b>1. Thông số & công thức</b><br>• Gamma Flip = mức giá giả định làm <b>tổng Net GEX đổi dấu</b>. Engine quét lưới 241 mức giá trong ±12% quanh giá ${o.source} ${f2(o.underlying)}, mỗi mức tính lại GEX toàn chuỗi (mọi kỳ, trọng số 40/40/20, bỏ strike giá sàn), rồi nội suy tuyến tính chỗ đổi dấu gần giá nhất: Flip = x0 − y0 × (x1 − x0) ÷ (y1 − y0).<br>
       • Flip (giá ${o.source}) = ${code(f2(o.gamma_flip))} → giá chart ${code(f2(v))} · Net GEX tại giá hiện tại ${code(M$(o.net_gex))}<br>
       • Khoảng cách = Flip − giá live = ${f2(v)} − ${f2(p)} = ${code(sg(v - p) + "$")} → hiện đang <b style="color:${pos ? "#26a69a" : "#ef5350"}">${pos ? "TRÊN Flip (Gamma dương)" : "DƯỚI Flip (Gamma âm)"}</b>`
       + sec("2. Ý nghĩa", "Trên Flip: dealer <b>long gamma</b> → bán khi giá lên, mua khi giá xuống → giá bị kìm, đi ngang, hay hồi về tường.<br>Dưới Flip: dealer <b>short gamma</b> → mua đuổi khi lên, bán đuổi khi xuống → biến động mạnh, dễ phá tường, không bắt đáy/đỉnh.")
@@ -81,7 +83,7 @@
   function tipMag(o) {
     const p = px(), v = o.chart.magnet, s = o.strikes.find((x) => x.strike === o.magnet) || {}, g = s.net_gex;
     return H(`${o.source} – Magnet: ${f2(v)} | ${sg(v - p)}$`, "#ffd54f")
-      + `• Magnet = strike có <b>tổng lực Gamma lớn nhất</b> (Call GEX − Put GEX, tức |Call GEX| + |Put GEX|) quanh giá: strike ${o.magnet}, Call GEX ${code(M$(s.call_gex))} · Put GEX ${code(M$(s.put_gex))} · Net ${code(M$(g))}<br>
+      + `• Magnet = strike có <b>tổng lực Gamma lớn nhất</b> (Call GEX − Put GEX, tức |Call GEX| + |Put GEX|; GEX đã nhân 40/40/20 và bỏ strike giá sàn) quanh giá (±8%): strike ${o.magnet}, Call GEX ${code(M$(s.call_gex))} · Put GEX ${code(M$(s.put_gex))} · Net ${code(M$(g))}<br>
       ${conv(o, Object.assign({ strike: o.magnet, chart: v }, s))}<br>• Khoảng cách = ${code(sg(v - p) + "$")}`
       + sec("Ý nghĩa", g >= 0 ? "<b>Magnet HÚT (Net GEX dương):</b> dealer bán khi giá lên / mua khi giá xuống quanh strike này → giá bị <b>hút về / ghim quanh</b> mốc, nhất là gần giờ đáo hạn. Dùng làm <b>mục tiêu chốt lời</b>, đánh hồi về Magnet."
         : "<b>Magnet ĐẨY (Net GEX âm):</b> dealer mua đuổi khi giá lên / bán đuổi khi giá xuống → khi giá phá qua mốc này dễ <b>chạy xa</b>; đi theo hướng phá, không bắt ngược.");
@@ -89,7 +91,7 @@
   function tipMp(o) {
     const p = px(), v = o.chart.max_pain;
     return H(`${o.source} – Max Pain: ${f2(v)} | ${sg(v - p)}$`, "#b0bec5")
-      + `• Max Pain = strike K* làm <b>tổng giá trị nội tại</b> người mua quyền chọn nhận được <b>nhỏ nhất</b>: min Σ [Call OI × max(K* − K, 0) + Put OI × max(K − K*, 0)] × ${o.multiplier || 100}.<br>• K* = ${o.max_pain} → giá chart ${code(f2(v))} · cách ${code(sg(v - p) + "$")}`
+      + `• Max Pain = strike K* làm <b>tổng giá trị nội tại</b> người mua quyền chọn nhận được <b>nhỏ nhất</b>: min Σ [Call OI × max(K* − K, 0) + Put OI × max(K − K*, 0)] × ${o.multiplier || 100}, tính trên OI thật trong ±8% quanh giá (không nhân 40/40/20, không loại strike giá sàn).<br>• K* = ${o.max_pain} → giá chart ${code(f2(v))} · cách ${code(sg(v - p) + "$")}`
       + sec("Ý nghĩa", "Tham khảo: giá hay dao động về gần Max Pain vào ngày đáo hạn khi không có tin lớn. Không dùng riêng lẻ để vào lệnh.");
   }
   function chartTip(e) {
@@ -115,14 +117,14 @@
   const COLS = [
     ["Giá XAU", "Giá chart (XAUUSD) tương ứng của strike = Strike × (giá chart ÷ giá nguồn). Dòng vàng = gần giá nhất; CW / PW = Call Wall / Put Wall."],
     ["Strike gốc", "Strike gốc trên sàn: GC = giá hợp đồng tương lai vàng CME; GLD = giá cổ phiếu ETF GLD."],
-    ["Call OI", "Open Interest quyền chọn Call — số hợp đồng đang mở (cộng mọi kỳ hạn đang xem)."],
+    ["Call OI", "Open Interest quyền chọn Call — số hợp đồng đang mở (cộng mọi kỳ hạn đang xem). GC: là OI của phiên TRƯỚC ngày settle (nhãn ở dòng meta; ghi nhận từ một quan sát 29/10/2026, chưa phải chuẩn)."],
     ["Call Vol", "Khối lượng Call giao dịch trong phiên (báo cáo cuối ngày CME / Yahoo)."],
     ["Put OI", "Open Interest quyền chọn Put — số hợp đồng đang mở."],
     ["Put Vol", "Khối lượng Put giao dịch trong phiên."],
-    ["GEX", "GEX = Σ Γ × (Call OI − Put OI) × 100 × S² × 1% — USD dealer phải mua/bán khi giá đi 1%. Dương (xanh) = dealer kìm giá; âm (đỏ) = dealer đẩy theo giá. TVLB: mỗi kỳ nhân trọng số 40/40/20. Thanh nền = độ lớn so với strike lớn nhất."],
+    ["GEX", "GEX = Σ Γ × (Call OI − Put OI) × 100 × S² × 1% — USD dealer phải mua/bán khi giá đi 1%. Dương (xanh) = dealer kìm giá; âm (đỏ) = dealer đẩy theo giá. TVLB: mỗi kỳ nhân trọng số 40/40/20. Strike giá sàn (settle chân OTM ≤ 0,1) có trọng số 0 nên GEX không tính. Thanh nền = độ lớn so với strike lớn nhất."],
     ["DEX", "DEX = Σ Δ × OI × 100 × S — tổng Delta danh nghĩa (USD) dealer đang giữ tại strike. Δcall = N(d1), Δput = N(d1) − 1."],
-    ["IV", "Implied Volatility kỳ gần nhất tại strike (GC: suy ngược từ giá settle CME; GLD: Yahoo), đã làm mượt theo smile."],
-    ["ΔOI", "ΔOI = Tổng OI hôm nay − phiên trước. Vàng = |ΔOI| lớn (≥ ngưỡng doi_big) — LP mở/đóng vị thế mạnh, vùng nghi vấn. “—” = chưa có phiên trước."],
+    ["IV", "Implied Volatility kỳ gần nhất tại strike (GC: suy ngược từ giá settle CME; GLD: Yahoo), đã làm mượt theo smile. Strike giá sàn (settle ≤ 0,1) không có IV thật: IV được điền theo strike gần nhất và vẫn vào đường khớp smile, nhưng GEX của strike đó = 0 (7d A5)."],
+    ["ΔOI", "ΔOI = OI hiện có − OI của kỳ liền trước (GC: số phiên trước cùng hợp đồng của CME nếu có). Vàng = |ΔOI| lớn (≥ ngưỡng doi_big) — LP mở/đóng vị thế mạnh, vùng nghi vấn. “—” = chưa có phiên trước."],
     ["B/A C·P", "Chênh lệch Bid/Ask Call · Put kỳ gần nhất, % so với giá giữa (chỉ GLD, giờ Mỹ). Vàng = ≥ 15% → thanh khoản mỏng, số liệu kém tin cậy."],
     ["DTE", "Số ngày tới đáo hạn của kỳ gần nhất dùng để tính Greeks (tính đúng giờ: GC 12:30 Chicago, GLD 16:00 New York)."],
     ["Δ", "Delta Call = e^(−rT)·N(d1) (Black-76) — giá quyền chọn đổi bao nhiêu khi giá cơ sở +1$. Gần 0.5 = sát giá."],
@@ -139,7 +141,7 @@
     return H(`${o.source === "GLD" ? "Bể GLD" : "Bể GC"} – Strike ${s.strike} → ${f2(s.chart)}${s.strike === o.call_wall ? " (Call Wall)" : s.strike === o.put_wall ? " (Put Wall)" : ""}`)
       + `${conv(o, s)} · cách giá ${code(sg(s.chart - p) + "$")}<br>
       • Call OI ${f0(s.call_oi)} · Put OI ${f0(s.put_oi)} → tổng ${f0(oi)} = ${code(Math.round((oi / maxOI) * 100) + "%")} strike lớn nhất · Vol Call ${f0(s.call_vol)} / Put ${f0(s.put_vol)}<br>
-      • ΔOI = ${s.d_oi == null ? "— (chưa có phiên trước)" : code(sg(s.d_oi, f0)) + " hợp đồng so với phiên trước"}${s.d_oi != null && Math.abs(s.d_oi) >= (S.cfg?.signals?.doi_big || 1500) ? ' · <b style="color:#ffd600">ΔOI lớn → vùng nghi vấn (LP mở/đóng mạnh)</b>' : ""}`
+      • ΔOI = ${s.d_oi == null ? "— (chưa có phiên trước)" : code(sg(s.d_oi, f0)) + " hợp đồng so với kỳ liền trước"}${s.d_oi != null && Math.abs(s.d_oi) >= (S.cfg?.signals?.doi_big || 1500) ? ' · <b style="color:#ffd600">ΔOI lớn → vùng nghi vấn (LP mở/đóng mạnh)</b>' : ""}`
       + sec("GEX / DEX", `• Call GEX ${code(M$(s.call_gex))} + Put GEX ${code(M$(s.put_gex))} = Net ${code(M$(s.net_gex))} (40/40/20)<br>• DEX ${code(M$(s.dex))} · Vanna Exp ${M$(s.vex)} · Charm Exp ${M$(s.cex)}<br>${front(o, s)}`)
       + sec("Greeks kỳ gần nhất (Call)", `Δ ${s.delta != null ? Number(s.delta).toFixed(3) : "—"} · Γ ${s.gamma != null ? Number(s.gamma).toExponential(3) : "—"} · Vega ${s.vega != null ? Number(s.vega).toFixed(2) : "—"} · Vanna ${s.vanna != null ? Number(s.vanna).toFixed(4) : "—"} · Θ ${s.theta != null ? Number(s.theta).toFixed(3) : "—"}/ngày · ρ ${s.rho != null ? Number(s.rho).toFixed(3) : "—"} · Charm ${s.charm != null ? Number(s.charm).toFixed(4) : "—"} · DTE ${s.dte ?? "—"}`)
       + `<div style="color:#9aa4b2;margin-top:5px">Nguồn: ${srcInfo(o)}</div>`;
