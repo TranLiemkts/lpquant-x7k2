@@ -71,6 +71,12 @@ button.sell { background: #2c1312; color: var(--down); border-color: #5e2a27; fo
 .ov { position: absolute; inset: 0; pointer-events: none; z-index: 5; } /* nằm trên canvas của thư viện chart (z-index 1–2) */
 .chartinfo, .sigcount { position: absolute; top: 6px; font: 11px var(--f-data); color: var(--muted); background: rgba(11,14,18,.85); border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; pointer-events: none; }
 .chartinfo { left: 6px; z-index: 6; } .sigcount { left: 50%; transform: translateX(-50%); z-index: 6; }
+/* 7g: (1) khung thông tin góc trái và số tín hiệu nhận chuột để hiện chú giải (trước đây pointer-events: none nên rê chuột không thấy gì);
+   (2) số tín hiệu dời sang phải (cạnh trục giá) và khung góc trái giới hạn bề ngang để không đè mất chữ "mốc chưa kiểm định". */
+#chartInfo, .chartinfo, #sigCount, .sigcount { pointer-events: auto; cursor: help; }
+#chartInfo, .chartinfo { max-width: calc(100% - 340px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sigCount, .sigcount { left: auto; right: 74px; transform: none; }
+@media (max-width: 760px) { #chartInfo, .chartinfo { max-width: calc(100% - 12px); } }
 .cvdhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font: 600 12px var(--f-label); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .cvdhead b { font: 600 13px var(--f-data); color: var(--fg); letter-spacing: 0; }
 .cvdhead .small { text-transform: none; letter-spacing: 0; font-family: var(--f-body); font-weight: 400; }
