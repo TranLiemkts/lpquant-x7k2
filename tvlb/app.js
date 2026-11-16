@@ -734,7 +734,7 @@ function renderAgent() {
   }
   const L = a.L, dealer = a.neg ? "LP bán khi giá giảm → gia tốc" : "LP mua dip / bán rip → giữ biên";
   $("#decision").innerHTML = `<div class="act ${a.act.toLowerCase()}">${a.act}</div>
-    <dl><dt>Regime</dt><dd>${a.regime} <span class="muted">(${regimePct(a.p, a.L.gamma_flip).short})</span></dd><dt>Dealer</dt><dd>${dealer}</dd>
+    <dl><dt>Regime</dt><dd>${a.regime} <span class="muted">(${regimePct(a.p, a.L.gamma_flip).short.replace(/ \((.*)\)$/, ", $1")})</span></dd><dt>Dealer</dt><dd>${dealer}</dd>
     <dt>Lệnh lớn</dt><dd>${(() => { const f = bigFlow(S.cfg?.signals?.cvd_slope_bars ?? 5); return f ? `MUA ${f.b.toFixed(0)} · BÁN ${f.s.toFixed(0)} oz → ròng ${f.d >= 0 ? "+" : "−"}${Math.abs(f.d).toFixed(0)} (${f.nb}/${f.ns} lệnh ≥ ${S.big.thr?.toFixed(0)} oz)` : "đang thu thập"; })()}</dd>
     <dt>Hedge LP</dt><dd>${(() => { const v = hedgePer(a.p), z = hZoneAt(a.p); return v == null ? "—" : `≈ ${Math.abs(Math.round(v)).toLocaleString("en-US")} HĐ/${hedgeSt().win}$ (${hTier(v)}, ${v > 0 ? "−Γ gia tốc" : "+Γ hãm"})${z ? " · trong vùng hedge lớn" : ""}`; })()}</dd>
     <dt>Target</dt><dd>${fmt(a.target)} <span class="muted">(${esc(a.why)})</span></dd><dt>Conviction</dt><dd>${sgn(a.conv, 2)}</dd>
