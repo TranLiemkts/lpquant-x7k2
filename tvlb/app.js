@@ -422,7 +422,7 @@ function drawOverlay() {
       const isCW = s.strike === o.call_wall, isPW = s.strike === o.put_wall;
       if (share < 0.12 && !isCW && !isPW) continue;
       if (window.TVLB_MINOR === false && !labelSet.has(s.strike) && !isCW && !isPW) continue;   // TVLB+: ẩn vạch strike phụ không có nhãn
-      const lc = isCW ? C.down : isPW ? C.up : color, labelled = labelSet.has(s.strike) || isCW || isPW;
+      const lc = OLD ? color : isCW ? C.down : isPW ? C.up : color, labelled = labelSet.has(s.strike) || isCW || isPW;   // kiểu 2: màu theo nguồn (GC cam/vàng, GLD tím, theo Master Plan Trụ cột 3); Call/Put phân biệt bằng độ dày và chữ CW/PW trên nhãn
       if (OLD) {
         if (!labelled) continue;   // kiểu cũ: chỉ vẽ tường có nhãn, không vẽ vạch phụ
         const tr = OLD_TIER[isCW || isPW ? 1 : share >= OLD_TIER2_SHARE ? 2 : 3];
