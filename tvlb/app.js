@@ -367,6 +367,11 @@ function tagBox(ctx, x, y, text, color, align, strong, meta) {
 // 7h: cách vẽ tường. Menu TVLB+ (tvlb_tinhieu.js, mục Hiển thị, ô "Cách vẽ tường") đặt window.TVLB_WALLSTYLE = "old" (Kiểu 2) hoặc "tvlb" (Kiểu 1, như cũ);
 // menu tự lưu lựa chọn cùng các ô chọn khác. Không có hoặc giá trị lạ thì dùng Kiểu 1.
 function wallStyle() { return window.TVLB_WALLSTYLE === "old" ? "old" : "tvlb"; }
+// Kiểu 2: vạch tường chia 3 BẬC để nhìn là biết mức quan trọng: bậc 1 = Call/Put Wall (dày, liền, đậm); bậc 2 = tường lớn (OI >= 60% tường lớn nhất của nguồn: vừa, liền);
+// bậc 3 = tường phụ có nhãn (mảnh, nét đứt, nhạt). Ngưỡng 60% và các độ dày/độ đậm do Claude chọn, chưa kiểm trên màn hình thật.
+const OLD_TIER = { 1: { w: 2.2, dash: [], a: 1 }, 2: { w: 1.5, dash: [], a: 0.85 }, 3: { w: 1, dash: [6, 4], a: 0.5 } }, OLD_TIER2_SHARE = 0.6;
+// Màu riêng cho Flip / Magnet / Max Pain ở kiểu 2 để không lẫn với tường GC (vàng) và GLD (tím): Flip trắng, Magnet xanh lơ, Max Pain xám chấm.
+const OLD_COL = { flip: C.fg, mag: "#4cc3d9", mp: "#9aa3ad" };
 // Xếp nhãn kiểu cũ: duyệt theo độ ưu tiên (tường lớn nhất, Flip, Magnet trước), mỗi nhãn bắt đầu ở x = 6;
 // nếu chạm nhãn đã đặt (lệch dọc dưới 16 px và chồng ngang) thì dời sang phải ngay sau nhãn đó; tối đa 12 lần dời.
 // Hết chỗ (quá maxX) thì lùi về maxX − bề rộng. 16 px và khoảng đệm 6 px là do Claude chọn, chưa đo trên màn hình thật.
@@ -420,7 +425,8 @@ function drawOverlay() {
       const lc = isCW ? C.down : isPW ? C.up : color, labelled = labelSet.has(s.strike) || isCW || isPW;
       if (OLD) {
         if (!labelled) continue;   // kiểu cũ: chỉ vẽ tường có nhãn, không vẽ vạch phụ
-        hline(ctx, y, 0, plotW, lc, isCW || isPW ? 1.8 : 1.2, [], isCW || isPW ? 0.95 : 0.45 + 0.4 * share);
+        const tr = OLD_TIER[isCW || isPW ? 1 : share >= OLD_TIER2_SHARE ? 2 : 3];
+        hline(ctx, y, 0, plotW, lc, tr.w, tr.dash, tr.a);
       } else hline(ctx, y, 0, plotW, lc, isCW || isPW ? 1.6 : 1, isCW || isPW ? [] : [4, 4], isCW || isPW ? 0.95 : 0.25 + 0.6 * share);
       if (labelled) {
         const d = s.d_oi != null ? ` ${s.d_oi >= 0 ? "+" : ""}${fmtK(s.d_oi)}` : "";
@@ -438,19 +444,19 @@ function drawOverlay() {
     const yF = c.gamma_flip != null ? Y(c.gamma_flip) : null;
     if (yF != null) {
       const t = `Γ FLIP ${fmt(c.gamma_flip)}`;
-      if (OLD) { hline(ctx, yF, 0, plotW, C.flip, 1.4, [], 0.9); oldItems.push({ y: yF, txt: t, color: C.flip, strong: true, pri: 1, meta: { k: "flip" } }); }
+      if (OLD) { hline(ctx, yF, 0, plotW, OLD_COL.flip, 1.8, [], 0.95); oldItems.push({ y: yF, txt: t, color: OLD_COL.flip, strong: true, pri: 1, meta: { k: "flip" } }); }
       else { hline(ctx, yF, 0, plotW, C.flip, 1.2, [6, 4], 0.9); tagBox(ctx, plotW * 0.5, yF, t, C.flip, "left", true, { k: "flip" }); }
     }
     const yM = c.magnet != null ? Y(c.magnet) : null;
     if (yM != null) {
       const t = `◎ MAGNET ${fmt(c.magnet)}`;
-      if (OLD) { hline(ctx, yM, 0, plotW, C.mag, 1.2, [], 0.8); oldItems.push({ y: yM, txt: t, color: C.mag, strong: true, pri: 2, meta: { k: "magnet" } }); }   // kiểu cũ có thêm vạch Magnet (kiểu TVLB chỉ có nhãn)
+      if (OLD) { hline(ctx, yM, 0, plotW, OLD_COL.mag, 1.6, [], 0.9); oldItems.push({ y: yM, txt: t, color: OLD_COL.mag, strong: true, pri: 2, meta: { k: "magnet" } }); }   // kiểu cũ có thêm vạch Magnet (kiểu TVLB chỉ có nhãn)
       else tagBox(ctx, plotW * 0.5, yM, t, C.mag, "left", true, { k: "magnet" });
     }
     const yP = c.max_pain != null ? Y(c.max_pain) : null;
     if (yP != null) {
       const t = `MaxPain ${fmt(c.max_pain)}`;
-      if (OLD) { hline(ctx, yP, 0, plotW, "#9aa3ad", 1, [], 0.6); oldItems.push({ y: yP, txt: t, color: "#9aa3ad", strong: false, pri: 5, meta: { k: "mp" } }); }
+      if (OLD) { hline(ctx, yP, 0, plotW, OLD_COL.mp, 1, [2, 3], 0.7); oldItems.push({ y: yP, txt: t, color: OLD_COL.mp, strong: false, pri: 5, meta: { k: "mp" } }); }
       else { hline(ctx, yP, 0, plotW, "#9aa3ad", 1, [2, 3], 0.6); tagBox(ctx, plotW * 0.5 + 150, yP, t, "#9aa3ad", "left", false, { k: "mp" }); }
     }
   }
