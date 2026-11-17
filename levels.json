@@ -1,10 +1,10 @@
 {
  "schema": "lpquant.levels.v1",
- "built": "17/11/2026 20:18",
- "build_ms": 1794921442707,
- "spot": 3858.85,
+ "built": "17/11/2026 20:23",
+ "build_ms": 1794921725069,
+ "spot": 3853.63,
  "basis": 12.0,
- "gld_mult": 10.9338,
+ "gld_mult": 10.919,
  "gld": 352.93,
  "rf": 0.04125,
  "default_set": "all",
@@ -15,16 +15,16 @@
    "date": "2026-11-16",
    "rank": "oi",
    "gex": {
-    "cme": -1206.66,
-    "gld": -647.39,
-    "at_spot": -1846.78,
-    "at_spot_all": -2035.41
+    "cme": -1213.99,
+    "gld": -660.34,
+    "at_spot": -1867.64,
+    "at_spot_all": -2066.75
    },
    "hedge": [
     {
-     "lo": 3709.0,
-     "hi": 3909.0,
-     "hd": -1459.0
+     "lo": 3704.0,
+     "hi": 3908.0,
+     "hd": -1462.0
     }
    ],
    "levels": [
@@ -36,7 +36,7 @@
      "strike": 4100.0,
      "hard": 100,
      "doi": 58,
-     "gex": 23.1481,
+     "gex": 21.7311,
      "oi": 3991,
      "side": "c"
     },
@@ -48,7 +48,7 @@
      "strike": 4000.0,
      "hard": 60,
      "doi": 41,
-     "gex": -72.0822,
+     "gex": -69.1296,
      "oi": 2395,
      "side": "c"
     },
@@ -60,7 +60,7 @@
      "strike": 3850.0,
      "hard": 39,
      "doi": -137,
-     "gex": -101.4059,
+     "gex": -101.732,
      "oi": 2363,
      "side": "p"
     },
@@ -72,7 +72,7 @@
      "strike": 3700.0,
      "hard": 100,
      "doi": -4,
-     "gex": -121.1156,
+     "gex": -125.8831,
      "oi": 6110,
      "side": "p"
     },
@@ -84,7 +84,7 @@
      "strike": 3900.0,
      "hard": null,
      "doi": null,
-     "gex": -224.3206,
+     "gex": -221.7677,
      "oi": null,
      "side": null
     },
@@ -104,8 +104,8 @@
      "key": "FLIP",
      "name": "Gamma Flip",
      "pool": "GC+GLD",
-     "xau": 3853.0,
-     "strike": 3865.0,
+     "xau": 3848.0,
+     "strike": 3860.0,
      "hard": null,
      "doi": null,
      "gex": null,
@@ -120,16 +120,16 @@
    "date": "2026-11-16",
    "rank": "gex",
    "gex": {
-    "cme": -50.74,
-    "gld": -647.39,
-    "at_spot": -693.68,
-    "at_spot_all": -2035.41
+    "cme": -55.09,
+    "gld": -660.34,
+    "at_spot": -711.51,
+    "at_spot_all": -2066.75
    },
    "hedge": [
     {
-     "lo": 3709.0,
-     "hi": 3909.0,
-     "hd": -1459.0
+     "lo": 3704.0,
+     "hi": 3908.0,
+     "hd": -1462.0
     }
    ],
    "levels": [
@@ -141,7 +141,7 @@
      "strike": 3900.0,
      "hard": 100,
      "doi": 51,
-     "gex": 0.2778,
+     "gex": 0.1932,
      "oi": 58,
      "side": "c"
     },
@@ -151,9 +151,9 @@
      "pool": "GC",
      "xau": 3863.0,
      "strike": 3875.0,
-     "hard": 42,
+     "hard": 56,
      "doi": 0,
-     "gex": -0.2272,
+     "gex": -0.2073,
      "oi": 10,
      "side": "c"
     },
@@ -163,9 +163,9 @@
      "pool": "GC",
      "xau": 3813.0,
      "strike": 3825.0,
-     "hard": 24,
+     "hard": 27,
      "doi": 42,
-     "gex": -5.2726,
+     "gex": -6.9709,
      "oi": 81,
      "side": "p"
     },
@@ -177,7 +177,7 @@
      "strike": 3850.0,
      "hard": 100,
      "doi": 97,
-     "gex": -21.4858,
+     "gex": -24.4588,
      "oi": 116,
      "side": "p"
     },
@@ -189,7 +189,7 @@
      "strike": 3850.0,
      "hard": null,
      "doi": null,
-     "gex": -21.4858,
+     "gex": -24.4588,
      "oi": null,
      "side": null
     },
@@ -209,8 +209,8 @@
      "key": "FLIP",
      "name": "Gamma Flip",
      "pool": "GC+GLD",
-     "xau": 3853.0,
-     "strike": 3865.0,
+     "xau": 3848.0,
+     "strike": 3860.0,
      "hard": null,
      "doi": null,
      "gex": null,
@@ -225,16 +225,16 @@
    "date": "2026-11-16",
    "rank": "gex",
    "gex": {
-    "cme": -41.29,
-    "gld": -647.39,
-    "at_spot": -686.79,
-    "at_spot_all": -2035.41
+    "cme": -43.26,
+    "gld": -660.34,
+    "at_spot": -701.74,
+    "at_spot_all": -2066.75
    },
    "hedge": [
     {
-     "lo": 3709.0,
-     "hi": 3909.0,
-     "hd": -1459.0
+     "lo": 3704.0,
+     "hi": 3908.0,
+     "hd": -1462.0
     }
    ],
    "levels": [
@@ -246,7 +246,7 @@
      "strike": 3900.0,
      "hard": 100,
      "doi": 393,
-     "gex": 14.9648,
+     "gex": 14.6863,
      "oi": 441,
      "side": "c"
     },
@@ -256,9 +256,9 @@
      "pool": "GC",
      "xau": 3938.0,
      "strike": 3950.0,
-     "hard": 48,
+     "hard": 47,
      "doi": 39,
-     "gex": -1.8379,
+     "gex": -1.5122,
      "oi": 289,
      "side": "c"
     },
@@ -268,9 +268,9 @@
      "pool": "GC",
      "xau": 3738.0,
      "strike": 3750.0,
-     "hard": 54,
+     "hard": 56,
      "doi": 210,
-     "gex": -9.3083,
+     "gex": -9.8067,
      "oi": 317,
      "side": "p"
     },
@@ -282,7 +282,7 @@
      "strike": 3825.0,
      "hard": 100,
      "doi": 237,
-     "gex": -17.4451,
+     "gex": -17.8043,
      "oi": 330,
      "side": "p"
     },
@@ -294,7 +294,7 @@
      "strike": 3825.0,
      "hard": null,
      "doi": null,
-     "gex": -17.4451,
+     "gex": -17.8043,
      "oi": null,
      "side": null
     },
@@ -314,8 +314,8 @@
      "key": "FLIP",
      "name": "Gamma Flip",
      "pool": "GC+GLD",
-     "xau": 3853.0,
-     "strike": 3865.0,
+     "xau": 3848.0,
+     "strike": 3860.0,
      "hard": null,
      "doi": null,
      "gex": null,
@@ -330,16 +330,16 @@
    "date": "2026-11-16",
    "rank": "gex",
    "gex": {
-    "cme": -1318.75,
-    "gld": -647.39,
-    "at_spot": -2035.41,
-    "at_spot_all": -2035.41
+    "cme": -1333.39,
+    "gld": -660.34,
+    "at_spot": -2066.75,
+    "at_spot_all": -2066.75
    },
    "hedge": [
     {
-     "lo": 3709.0,
-     "hi": 3909.0,
-     "hd": -1459.0
+     "lo": 3704.0,
+     "hi": 3908.0,
+     "hd": -1462.0
     }
    ],
    "levels": [
@@ -351,7 +351,7 @@
      "strike": 3900.0,
      "hard": 100,
      "doi": 545,
-     "gex": -212.0861,
+     "gex": -209.7362,
      "oi": 1821,
      "side": "c"
     },
@@ -363,7 +363,7 @@
      "strike": 4000.0,
      "hard": 73,
      "doi": 154,
-     "gex": -72.3812,
+     "gex": -69.4427,
      "oi": 2630,
      "side": "c"
     },
@@ -373,9 +373,9 @@
      "pool": "GC",
      "xau": 3688.0,
      "strike": 3700.0,
-     "hard": 92,
+     "hard": 93,
      "doi": 127,
-     "gex": -124.2112,
+     "gex": -129.1873,
      "oi": 6321,
      "side": "p"
     },
@@ -387,7 +387,7 @@
      "strike": 3850.0,
      "hard": 100,
      "doi": 16,
-     "gex": -135.1967,
+     "gex": -138.6811,
      "oi": 2695,
      "side": "p"
     },
@@ -399,7 +399,7 @@
      "strike": 3900.0,
      "hard": null,
      "doi": null,
-     "gex": -212.0861,
+     "gex": -209.7362,
      "oi": null,
      "side": null
     },
@@ -407,8 +407,8 @@
      "key": "MP",
      "name": "Max Pain",
      "pool": "GC",
-     "xau": 4028.0,
-     "strike": 4040.0,
+     "xau": 4023.0,
+     "strike": 4035.0,
      "hard": null,
      "doi": null,
      "gex": null,
@@ -419,8 +419,8 @@
      "key": "FLIP",
      "name": "Gamma Flip",
      "pool": "GC+GLD",
-     "xau": 3853.0,
-     "strike": 3865.0,
+     "xau": 3848.0,
+     "strike": 3860.0,
      "hard": null,
      "doi": null,
      "gex": null,
@@ -435,11 +435,11 @@
    "key": "GCW",
    "name": "Call Wall",
    "pool": "GLD",
-   "xau": 3914.3,
+   "xau": 3909.0,
    "strike": 358.0,
    "hard": 100,
    "doi": 806,
-   "gex": 8.2594,
+   "gex": 7.5775,
    "oi": 1624,
    "side": "c"
   },
@@ -447,20 +447,20 @@
    "key": "GPW",
    "name": "Put Wall",
    "pool": "GLD",
-   "xau": 3848.7,
+   "xau": 3843.49,
    "strike": 352.0,
    "hard": 100,
    "doi": 887,
-   "gex": -12.3012,
+   "gex": -12.3635,
    "oi": 973,
    "side": "p"
   }
  ],
  "macro": {
   "DXY": {
-   "v": 103.595,
-   "chg": 0.045,
-   "pct": 0.04
+   "v": 103.607,
+   "chg": 0.057,
+   "pct": 0.06
   },
   "US10Y": {
    "v": 5.121,
