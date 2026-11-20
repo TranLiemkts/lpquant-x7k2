@@ -185,4 +185,8 @@ html { -webkit-text-size-adjust: 100%; }
   .tablewrap { -webkit-overflow-scrolling: touch; }
   .prof { font-size: 11px; }
   .sigcount { display: none; }
+  /* 7k số 127: điện thoại — cả trang không trượt ngang; bảng rộng cuộn NGANG ngay trong khung của nó (trước đây cú vuốt ngang kéo cả trang qua lại) */
+  html, body { overflow-x: hidden; max-width: 100%; touch-action: pan-y pinch-zoom; }
+  .panel, .jgrid { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  .tablewrap { overscroll-behavior-x: contain; }
 }
