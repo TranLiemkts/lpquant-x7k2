@@ -79,14 +79,14 @@
     return H(`${o.source} – ${nm}: ${f2(s.chart)} (Strike ${s.strike} | Cứng ${hard}% | ΔOI ${s.d_oi == null ? "—" : sg(s.d_oi, f0)} | ${sg(dist)}$)`, res ? "#ff8a80" : "#69f0ae")
       + sec("1. Tình huống & hành động", act)
       + (w ? sec("2. Uy tín tường", `<b>${star(w.st)} ${w.txt} (${w.s}/100)</b><br><span style="color:#9aa4b2">${w.plus.join(" · ")}</span>${w.minus.length ? ` · <span style="color:#ff8a80">${w.minus.join(" · ")}</span>` : ""}<br><span style="color:#9aa4b2">★★★★ trở lên = mạnh · ★★★ = đánh nhỏ · ★★ trở xuống = bỏ qua.</span>`) : "")
+      + sec("3. Bản chất (cơ chế Delta Hedging của Dealer/MM)", res
+        ? "Nơi tập trung Call OI lớn: khi giá tăng sát tường, Delta của dealer tăng buộc dealer <b>BÁN hợp đồng tương lai</b> để cân bằng (Rebalance Hedge) → lực cản ép giá quay đầu (Mean Reversion). Khi Gamma âm, lực này yếu và tường dễ bị xuyên."
+        : "Nơi tập trung Put OI lớn: khi giá rơi sát tường, dealer phải <b>MUA hợp đồng tương lai</b> để cân bằng Delta → lực đỡ đẩy giá bật lên. Thủng Put Wall khi Gamma âm → dealer bán đuổi, giá rơi nhanh.")
       + unv(isGld ? "gld" : "wall")
-      + sec("3. Giải nghĩa từng thông số & công thức kiểm tra", ctx)
+      + sec("4. Giải nghĩa từng thông số & công thức kiểm tra", ctx)
       + sec(`GEX tại strike (${isGld ? "Black-Scholes có carry trên ETF GLD" : "Black-76 trên HĐTL GC"}, r = ${((o.rate || 0) * 100).toFixed(2)}%)`,
         `• Call GEX ${code(M$(s.call_gex))} + Put GEX ${code(M$(s.put_gex))} = Net ${code(M$(s.net_gex))} <span style="color:#9aa4b2">(USD dealer phải mua/bán khi giá đi 1%; dương = kìm giá, âm = đẩy giá)</span><br>
         • DEX = Σ Δ × OI × ${o.multiplier || 100} × S = ${code(M$(s.dex))} · IV ${s.iv ? (s.iv * 100).toFixed(1) + "%" : "—"} · DTE ${s.dte ?? "—"}<br>${front(o, s)}`)
-      + sec("4. Bản chất (cơ chế Delta Hedging của Dealer/MM)", res
-        ? "Nơi tập trung Call OI lớn: khi giá tăng sát tường, Delta của dealer tăng buộc dealer <b>BÁN hợp đồng tương lai</b> để cân bằng (Rebalance Hedge) → lực cản ép giá quay đầu (Mean Reversion). Khi Gamma âm, lực này yếu và tường dễ bị xuyên."
-        : "Nơi tập trung Put OI lớn: khi giá rơi sát tường, dealer phải <b>MUA hợp đồng tương lai</b> để cân bằng Delta → lực đỡ đẩy giá bật lên. Thủng Put Wall khi Gamma âm → dealer bán đuổi, giá rơi nhanh.")
       + `<div style="color:#9aa4b2;margin-top:6px">Kiểm tra: ${isGld ? `OptionCharts / Barchart GLD, strike ${s.strike}` : `QuikStrike / CME Settlements, strike ${s.strike}`} → Call OI ${f0(s.call_oi)} · Put OI ${f0(s.put_oi)}. Nguồn: ${srcInfo(o)}.${isGld ? "" : " Số OI của GC là của phiên trước ngày settle (ghi nhận từ một quan sát 29/10/2026, chưa phải chuẩn): so đúng phiên."}</div>`;
   }
   function plansShort() {

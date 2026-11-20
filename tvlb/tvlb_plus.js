@@ -34,6 +34,9 @@
 #tvlbTip .tbody { overflow: hidden; min-height: 0; flex: 1 1 auto; }
 #tvlbTip .tmore { display: none; flex: 0 0 auto; margin-top: 4px; padding-top: 3px; border-top: 1px solid #e0a83a; color: #ffd54f; font-weight: 700; text-align: center; }
 #tvlbTip.more .tmore { display: block; }
+#tvlbTip.cols { width: min(1060px, 96vw); max-width: min(1060px, 96vw); }
+#tvlbTip.cols .tbody { flex: 0 1 auto; column-count: 2; column-gap: 18px; column-rule: 1px solid #2b3440; max-height: calc(92vh - 26px); }
+#tvlbTip.cols .tbody > div { break-inside: avoid; }
 #tvlbCd { position: absolute; right: 64px; bottom: 30px; z-index: 5; padding: 2px 7px; border-radius: 4px; background: #e0a83a; color: #111;
   font: 700 11px var(--f-mono, monospace); pointer-events: auto; cursor: help; }
 #tvlbCd[hidden] { display: none; }`;
@@ -129,7 +132,10 @@
   function showTip(html) { if (!P.tips || !html) return hideTip();
     // 7k: giữ vị trí cuộn khi chú giải được vẽ lại (mỗi lần chuột nhúc nhích) nếu vẫn là cùng một mốc; mốc khác thì về đầu
     const key = String(html).replace(/<[^>]*>/g, "").slice(0, 24), keep = tip.style.display === "flex" && key === tipKey ? tbody.scrollTop : 0; tipKey = key;
-    tip.style.display = "flex"; tbody.innerHTML = html; tip.classList.toggle("wide", String(html).indexOf('data-2c="1"') >= 0); /* 7f: chú giải 2 cột cần khung rộng */
+    const two = String(html).indexOf('data-2c="1"') >= 0;   // 7f: chú giải đã tự chia 2 cột (Magnet/Flip trùng tường) → giữ nguyên cách cũ
+    tip.style.display = "flex"; tip.classList.remove("cols"); tbody.innerHTML = html; tip.classList.toggle("wide", two);
+    // 7k số 124: một cột không đủ chiều cao → chia 2 cột cạnh nhau; nếu 2 cột vẫn tràn (màn hình nhỏ) thì về 1 cột + Shift/lăn chuột
+    if (!two && tbody.scrollHeight > tbody.clientHeight + 2) { tip.classList.add("cols"); if (tbody.scrollWidth > tbody.clientWidth + 2) tip.classList.remove("cols"); }
     tbody.scrollTop = keep; moreHint(); place(); }
   function hideTip() { tip.style.display = "none"; tipKey = ""; }
   function place() { const r = tip.getBoundingClientRect(); let x = mx + 14, y = my + 16;
