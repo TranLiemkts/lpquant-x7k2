@@ -1504,6 +1504,16 @@ async function loadMt5() {
 
 // ─────────────────────────── sự kiện ───────────────────────────
 function bind() {
+  // 7i: nhớ bật/tắt 6 nút lớp qua F5 (localStorage "tvlb.layers"). Chưa bấm nút nào thì giữ mặc định của trang. Không đổi số liệu nào.
+  const LY_IDS = ["#lyKey", "#lyGLD", "#lyGex", "#lyVP", "#lySMC", "#lyMk"];
+  let lySaved = {};
+  try { lySaved = JSON.parse(localStorage.getItem("tvlb.layers") || "{}"); } catch { lySaved = {}; }
+  if (!lySaved || typeof lySaved !== "object" || Array.isArray(lySaved)) lySaved = {};
+  LY_IDS.forEach((id) => {
+    const el = $(id); if (!el) return;
+    if (typeof lySaved[id] === "boolean") el.checked = lySaved[id];
+    el.addEventListener("change", () => { lySaved[id] = !!el.checked; try { localStorage.setItem("tvlb.layers", JSON.stringify(lySaved)); } catch { } });
+  });
   $("#tfs").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     document.querySelectorAll("#tfs button").forEach((x) => x.classList.toggle("on", x === b));
