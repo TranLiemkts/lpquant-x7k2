@@ -37,6 +37,13 @@
 #tvlbTip.cols { width: min(1060px, 96vw); max-width: min(1060px, 96vw); }
 #tvlbTip.cols .tbody { flex: 0 1 auto; column-count: 2; column-gap: 18px; column-rule: 1px solid #2b3440; max-height: calc(92vh - 26px); }
 #tvlbTip.cols .tbody > div { break-inside: avoid; }
+/* 7l số 128: chú giải 2 trang (giữ Shift = trang 2) */
+#tvlbTip.paged:not(.p2) .pg2 { display: none; }
+#tvlbTip.paged.p2 .pg1 { display: none; }
+#tvlbTip .pghint { margin-top: 6px; padding-top: 3px; border-top: 1px dashed #e0a83a; color: #ffd54f; font-weight: 700; }
+#tvlbTip .pg2 > .pghint:first-child { margin: 0 0 6px; padding: 0 0 3px; border-top: 0; border-bottom: 1px dashed #e0a83a; }
+#tvlbTip.cols .pg1, #tvlbTip.cols .pg2 { break-inside: auto; }
+#tvlbTip .pg1 > div, #tvlbTip .pg2 > div { break-inside: avoid; }
 #tvlbCd { position: absolute; right: 64px; bottom: 30px; z-index: 5; padding: 2px 7px; border-radius: 4px; background: #e0a83a; color: #111;
   font: 700 11px var(--f-mono, monospace); pointer-events: auto; cursor: help; }
 #tvlbCd[hidden] { display: none; }`;
@@ -128,14 +135,35 @@
   const tmore = document.createElement("div"); tmore.className = "tmore"; tmore.textContent = "⇩ Còn nữa · giữ Shift + lăn chuột để xem tiếp"; tip.appendChild(tmore);
   let tipKey = "";
   let mx = 0, my = 0;
+  // 7l số 128: tách chú giải thành 2 trang. Trang 1 = từ sau dòng tiêu đề đến hết mục 3; trang 2 = từ mục "4. Giải nghĩa" đến hết. Không thấy mục 4 thì để nguyên.
+  function paginate(root) {
+    while (root.children.length === 1 && root.firstElementChild.tagName === "DIV") root = root.firstElementChild;
+    const nodes = Array.from(root.childNodes);
+    const i = nodes.findIndex((n) => n.nodeType === 1 && n.textContent.trim().indexOf("4. Giải nghĩa") === 0);
+    const h = nodes.findIndex((n) => n.nodeType === 1);   // phần tử đầu = dòng tiêu đề, luôn hiện
+    if (i < 1 || h < 0 || h >= i) return false;
+    const p1 = document.createElement("div"), p2 = document.createElement("div");
+    p1.className = "pg1"; p2.className = "pg2";
+    for (let k = h + 1; k < i; k++) p1.appendChild(nodes[k]);
+    for (let k = i; k < nodes.length; k++) p2.appendChild(nodes[k]);
+    const h1 = document.createElement("div"); h1.className = "pghint"; h1.textContent = "⇧ Giữ Shift để xem trang 2/2: giải nghĩa thông số & công thức kiểm tra";
+    const h2 = document.createElement("div"); h2.className = "pghint"; h2.textContent = "Trang 2/2 · thả Shift để về trang 1";
+    p1.appendChild(h1); p2.insertBefore(h2, p2.firstChild);
+    root.appendChild(p1); root.appendChild(p2);
+    return true;
+  }
+  function fit() {   // 7l số 128: chọn 1 cột / 2 cột theo trang đang hiện (tách từ va_124c)
+    tip.classList.remove("cols");
+    if (!tip.classList.contains("wide") && tbody.scrollHeight > tbody.clientHeight + 2) { tip.classList.add("cols"); if (tbody.scrollWidth > tbody.clientWidth + 2) tip.classList.remove("cols"); }
+  }
   function moreHint() { const more = tbody.scrollHeight > tbody.clientHeight + 2 && tbody.scrollTop + tbody.clientHeight < tbody.scrollHeight - 2; tip.classList.toggle("more", more); }
   function showTip(html) { if (!P.tips || !html) return hideTip();
     // 7k: giữ vị trí cuộn khi chú giải được vẽ lại (mỗi lần chuột nhúc nhích) nếu vẫn là cùng một mốc; mốc khác thì về đầu
     const key = String(html).replace(/<[^>]*>/g, "").slice(0, 24), keep = tip.style.display === "flex" && key === tipKey ? tbody.scrollTop : 0; tipKey = key;
     const two = String(html).indexOf('data-2c="1"') >= 0;   // 7f: chú giải đã tự chia 2 cột (Magnet/Flip trùng tường) → giữ nguyên cách cũ
-    tip.style.display = "flex"; tip.classList.remove("cols"); tbody.innerHTML = html; tip.classList.toggle("wide", two);
+    tip.style.display = "flex"; tip.classList.remove("cols"); tbody.innerHTML = html; tip.classList.toggle("wide", two); tip.classList.toggle("paged", !two && paginate(tbody));
     // 7k số 124: một cột không đủ chiều cao → chia 2 cột cạnh nhau; nếu 2 cột vẫn tràn (màn hình nhỏ) thì về 1 cột + Shift/lăn chuột
-    if (!two && tbody.scrollHeight > tbody.clientHeight + 2) { tip.classList.add("cols"); if (tbody.scrollWidth > tbody.clientWidth + 2) tip.classList.remove("cols"); }
+    fit();
     tbody.scrollTop = keep; moreHint(); place(); }
   function hideTip() { tip.style.display = "none"; tipKey = ""; }
   function place() { const r = tip.getBoundingClientRect(); let x = mx + 14, y = my + 16;
@@ -163,6 +191,15 @@
     hideTip();
   }, { passive: true });
   document.addEventListener("mouseleave", hideTip);
+  // 7l số 128: giữ Shift = xem trang 2 của chú giải (công thức); thả Shift = về trang 1
+  function setPage2(on) {
+    if (tip.classList.contains("p2") === on) return;
+    tip.classList.toggle("p2", on);
+    if (tip.style.display === "flex") { tbody.scrollTop = 0; fit(); moreHint(); place(); }
+  }
+  document.addEventListener("keydown", (e) => { if (e.key === "Shift") setPage2(true); }, true);
+  document.addEventListener("keyup", (e) => { if (e.key === "Shift") setPage2(false); }, true);
+  window.addEventListener("blur", () => setPage2(false));
   document.addEventListener("wheel", (e) => {   // 7k số 124: Shift + lăn chuột = cuộn chú giải (chỉ khi chú giải đang hiện và dài hơn khung)
     if (!e.shiftKey || tip.style.display !== "flex" || tbody.scrollHeight <= tbody.clientHeight + 2) return;
     tbody.scrollTop += (e.deltaY || e.deltaX) * (e.deltaMode === 1 ? 40 : 1); moreHint(); e.preventDefault(); e.stopPropagation();
