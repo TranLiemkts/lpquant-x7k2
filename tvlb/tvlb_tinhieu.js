@@ -8,6 +8,38 @@
    Tín hiệu Option Flow gốc của anh Thắng giữ nguyên; phần này là một họ tín hiệu RIÊNG để so sánh. */
 (function () {
   "use strict";
+  // 7l số 127 (phần 2): điện thoại vuốt ngang bảng bị nhảy về đầu. Nguyên nhân: các khung (trang ④/⑤ mỗi 2 giây, Hedge/Nhật ký/Strike Profile mỗi 30 giây trên bản web) gán lại innerHTML nên bảng bị tạo MỚI → thanh cuộn về 0.
+  // (1) mỗi lần gán innerHTML: nhớ vị trí cuộn của các phần tử con đang cuộn lệch, gán xong đặt lại đúng chỗ đó; (2) 7 khung vẽ lại định kỳ: nội dung y hệt lần trước thì không gán lại. Không đổi số liệu nào.
+  (function () {
+    try {
+      const d = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
+      if (!d || !d.set || d.set.__tvlb127) return;
+      const set = d.set, KEEP = new Set(["t4sig", "t4bt", "t5cmp", "t4rx", "t4fw", "hedgeOut", "jOut"]), SC = new Set();
+      document.addEventListener("scroll", (ev) => { const e = ev.target; if (!e || e.nodeType !== 1) return; if (e.scrollLeft || e.scrollTop) SC.add(e); else SC.delete(e); if (SC.size > 300) SC.forEach((x) => { if (!x.isConnected) SC.delete(x); }); }, true);
+      const patched = function (v) {
+        let saved = null;
+        try {
+          if (this.id && KEEP.has(this.id)) { const t = String(v); if (this.__h127 === t && this.firstChild) return; this.__h127 = t; }
+          if (SC.size) {
+            saved = [];
+            SC.forEach((e) => {
+              if (!e.isConnected) { SC.delete(e); return; }
+              if (e !== this && !this.contains(e)) return;
+              const path = []; let n = e;
+              while (n && n !== this) { const p = n.parentNode; if (!p) { n = null; break; } path.push(Array.prototype.indexOf.call(p.children, n)); n = p; }
+              if (n === this) saved.push([path.reverse(), e.scrollLeft, e.scrollTop]);
+            });
+          }
+        } catch (err) { saved = null; }
+        set.call(this, v);
+        if (saved && saved.length) {
+          try { for (const [path, l, t] of saved) { let e = this; for (const i of path) e = e && e.children[i]; if (e) { if (l) e.scrollLeft = l; if (t) e.scrollTop = t; } } } catch (err) { }
+        }
+      };
+      patched.__tvlb127 = true;
+      Object.defineProperty(Element.prototype, "innerHTML", { configurable: true, enumerable: d.enumerable, get: d.get, set: patched });
+    } catch (e) { }
+  })();
   const f2 = (x) => (x == null || !isFinite(x) ? "—" : Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   const f0 = (x) => (x == null || !isFinite(x) ? "—" : Math.round(x).toLocaleString("en-US"));
   const sg = (x, f = f2) => (x == null || !isFinite(x) ? "—" : (x >= 0 ? "+" : "−") + f(Math.abs(x)));
