@@ -26,10 +26,14 @@
 #tvlbPlus .pb.on { border-color: #e0a83a; color: #f3d38c; }
 #tvlbPlus .pb:hover { border-color: #e0a83a; }
 #tvlbPlus .ps { color: #7d8796; font-size: 11px; margin: 10px 0 4px; }
-#tvlbTip { position: fixed; z-index: 70; max-width: 560px; max-height: 88vh; overflow: hidden; padding: 9px 11px; border-radius: 6px; background: #0d1117; color: #dfe5ec; border: 1px solid #e0a83a;
+#tvlbTip { position: fixed; z-index: 70; max-width: 560px; max-height: 92vh; overflow: hidden; padding: 9px 11px; border-radius: 6px; background: #0d1117; color: #dfe5ec; border: 1px solid #e0a83a;
   font: 12px/1.5 var(--f-body, sans-serif); pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,.55); display: none; }
 #tvlbTip b { color: #f3d38c; }
 #tvlbTip.wide { max-width: min(1120px, 96vw); }
+#tvlbTip { flex-direction: column; }
+#tvlbTip .tbody { overflow: hidden; min-height: 0; flex: 1 1 auto; }
+#tvlbTip .tmore { display: none; flex: 0 0 auto; margin-top: 4px; padding-top: 3px; border-top: 1px solid #e0a83a; color: #ffd54f; font-weight: 700; text-align: center; }
+#tvlbTip.more .tmore { display: block; }
 #tvlbCd { position: absolute; right: 64px; bottom: 30px; z-index: 5; padding: 2px 7px; border-radius: 4px; background: #e0a83a; color: #111;
   font: 700 11px var(--f-mono, monospace); pointer-events: auto; cursor: help; }
 #tvlbCd[hidden] { display: none; }`;
@@ -116,9 +120,18 @@
     max_pain: ["Max Pain", "Giá đáo hạn khiến người mua quyền chọn lỗ nhiều nhất — lực hút yếu, rõ hơn ở kỳ sắp đáo hạn."],
   };
   const tip = document.createElement("div"); tip.id = "tvlbTip"; document.body.appendChild(tip);
+  // 7k số 124: chú giải dài hơn khung → giữ Shift + lăn chuột để cuộn trong khung (lăn không Shift vẫn zoom chart như cũ)
+  const tbody = document.createElement("div"); tbody.className = "tbody"; tip.appendChild(tbody);
+  const tmore = document.createElement("div"); tmore.className = "tmore"; tmore.textContent = "⇩ Còn nữa · giữ Shift + lăn chuột để xem tiếp"; tip.appendChild(tmore);
+  let tipKey = "";
   let mx = 0, my = 0;
-  function showTip(html) { if (!P.tips || !html) return hideTip(); tip.innerHTML = html; tip.classList.toggle("wide", String(html).indexOf('data-2c="1"') >= 0); /* 7f: chú giải 2 cột cần khung rộng */ tip.style.display = "block"; place(); }
-  function hideTip() { tip.style.display = "none"; }
+  function moreHint() { const more = tbody.scrollHeight > tbody.clientHeight + 2 && tbody.scrollTop + tbody.clientHeight < tbody.scrollHeight - 2; tip.classList.toggle("more", more); }
+  function showTip(html) { if (!P.tips || !html) return hideTip();
+    // 7k: giữ vị trí cuộn khi chú giải được vẽ lại (mỗi lần chuột nhúc nhích) nếu vẫn là cùng một mốc; mốc khác thì về đầu
+    const key = String(html).replace(/<[^>]*>/g, "").slice(0, 24), keep = tip.style.display === "flex" && key === tipKey ? tbody.scrollTop : 0; tipKey = key;
+    tip.style.display = "flex"; tbody.innerHTML = html; tip.classList.toggle("wide", String(html).indexOf('data-2c="1"') >= 0); /* 7f: chú giải 2 cột cần khung rộng */
+    tbody.scrollTop = keep; moreHint(); place(); }
+  function hideTip() { tip.style.display = "none"; tipKey = ""; }
   function place() { const r = tip.getBoundingClientRect(); let x = mx + 14, y = my + 16;
     if (x + r.width > innerWidth - 6) x = mx - r.width - 14; if (y + r.height > innerHeight - 6) y = my - r.height - 14; tip.style.left = Math.max(4, x) + "px"; tip.style.top = Math.max(4, y) + "px"; }
   function applyTips() {
@@ -144,6 +157,10 @@
     hideTip();
   }, { passive: true });
   document.addEventListener("mouseleave", hideTip);
+  document.addEventListener("wheel", (e) => {   // 7k số 124: Shift + lăn chuột = cuộn chú giải (chỉ khi chú giải đang hiện và dài hơn khung)
+    if (!e.shiftKey || tip.style.display !== "flex" || tbody.scrollHeight <= tbody.clientHeight + 2) return;
+    tbody.scrollTop += (e.deltaY || e.deltaX) * (e.deltaMode === 1 ? 40 : 1); moreHint(); e.preventDefault(); e.stopPropagation();
+  }, { passive: false, capture: true });
   function esc2(s) { return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
 
   // ───────────────────── giá nhảy theo từng lệnh khớp ─────────────────────
