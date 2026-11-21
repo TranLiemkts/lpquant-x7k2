@@ -8,6 +8,15 @@
   "use strict";
   const K = "tvlb.plus";
   const P = Object.assign({ tips: true, fast: true, cd: true, grid: true }, (() => { try { return JSON.parse(localStorage.getItem(K) || "{}"); } catch (e) { return {}; } })());
+  // 7n số 135: chế độ gọn. Chưa chọn lần nào: điện thoại (cảm ứng, cạnh ngắn của màn hình ≤ 600 px) = BẬT, máy tính = TẮT.
+  const isPhone = () => { try { return matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) <= 600; } catch (e) { return false; } };
+  if (typeof P.compact !== "boolean") P.compact = isPhone();
+  function applyCompact() {
+    window.TVLB_COMPACT = !!P.compact;
+    document.documentElement.classList.toggle("tvlb-compact", !!P.compact);
+    try { drawOverlay(); } catch (e) { }
+    setTimeout(() => window.dispatchEvent(new Event("resize")), 30);
+  }
   const save = () => { try { localStorage.setItem(K, JSON.stringify(P)); } catch (e) { } };
   const $1 = (s) => document.querySelector(s);
   const f2 = (x) => (x == null || !isFinite(x) ? "—" : Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -59,20 +68,24 @@
   // ───────────────────── menu ẩn bên trái ─────────────────────
   const box = document.createElement("div"); box.id = "tvlbPlus";
   box.innerHTML = `<div class="pm"><h3>TVLB+</h3>
-    <button class="pb" data-k="tips"></button><button class="pb" data-k="fast"></button><button class="pb" data-k="cd"></button><button class="pb" data-k="grid"></button>
+    <button class="pb" data-k="tips"></button><button class="pb" data-k="fast"></button><button class="pb" data-k="cd"></button><button class="pb" data-k="grid"></button><button class="pb" data-k="compact"></button>
     <div class="ps">Web xem trên điện thoại</div><button class="pb" id="pGh">🌐 Copy link web GitHub</button>
     <div class="ps" id="pGhUrl" style="word-break:break-all"></div>
     <div class="ps">Menu này chỉ hiện khi rê chuột sát mép trái màn hình.</div></div>`;
   document.body.appendChild(box);
-  const LBL = { tips: "💡 Giải thích khi rê chuột", fast: "⚡ Giá nhảy theo từng lệnh khớp", cd: "⏱ Đếm ngược đóng nến", grid: "▦ Lưới dọc/ngang trên chart" };
+  const LBL = { tips: "💡 Giải thích khi rê chuột", fast: "⚡ Giá nhảy theo từng lệnh khớp", cd: "⏱ Đếm ngược đóng nến", grid: "▦ Lưới dọc/ngang trên chart", compact: "📱 Chế độ gọn (nhãn ngắn, xoay ngang ẩn đầu trang)" };
   const syncBtns = () => box.querySelectorAll("[data-k]").forEach((b) => { const k = b.dataset.k; b.textContent = `${LBL[k]}: ${P[k] ? "BẬT" : "TẮT"}`; b.classList.toggle("on", !!P[k]); });
-  box.querySelectorAll("[data-k]").forEach((b) => { b.onclick = () => { P[b.dataset.k] = !P[b.dataset.k]; save(); syncBtns(); if (!P.tips) hideTip(); cdTick(); applyGrid(); }; });
+  box.querySelectorAll("[data-k]").forEach((b) => { b.onclick = () => { P[b.dataset.k] = !P[b.dataset.k]; save(); syncBtns(); if (!P.tips) hideTip(); cdTick(); applyGrid(); applyCompact(); }; });
   syncBtns();
   function applyGrid() {
     try { const g = { vertLines: { visible: !!P.grid }, horzLines: { visible: !!P.grid } };
       if (typeof chart !== "undefined" && chart) chart.applyOptions({ grid: g }); if (typeof cvdChart !== "undefined" && cvdChart) cvdChart.applyOptions({ grid: g }); } catch (e) { }
   }
   setTimeout(applyGrid, 1500); setTimeout(applyGrid, 5000);
+  applyCompact();
+  // 7n số 135: tvlb_tinhieu.js gom các nút vào nhóm "Hiển thị"; nếu nút Chế độ gọn chưa nằm cùng chỗ với nút Lưới thì dời sang cạnh nút Lưới
+  const placeCompact = () => { const g = box.querySelector('[data-k="grid"]'), c = box.querySelector('[data-k="compact"]'); if (g && c && g.parentNode && c.parentNode !== g.parentNode) g.parentNode.insertBefore(c, g.nextSibling); };
+  [300, 1000, 2500, 5000].forEach((t) => setTimeout(placeCompact, t));
   let WEB = null;
   async function webUrl() {
     if (WEB) return WEB;

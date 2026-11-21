@@ -4,6 +4,7 @@
    Lớp phủ (canvas) vẽ mốc GC bên trái, GLD bên phải, đường cong Net GEX ngay trên chart.
    SMC (smc.js): cấu trúc H4 + khung chart, OTE/Extreme, thanh khoản, nến quét, CL1 Buy/Sell hồi & CL2 thuận (KB1/KB2/KB3). */
 "use strict";
+// 7n số 135: chế độ gọn (window.TVLB_COMPACT do tvlb_plus.js đặt)
 
 const $ = (s) => document.querySelector(s);
 const LC = window.LightweightCharts;
@@ -430,7 +431,7 @@ function drawOverlay() {
       } else hline(ctx, y, 0, plotW, lc, isCW || isPW ? 1.6 : 1, isCW || isPW ? [] : [4, 4], isCW || isPW ? 0.95 : 0.25 + 0.6 * share);
       if (labelled) {
         const d = s.d_oi != null ? ` ${s.d_oi >= 0 ? "+" : ""}${fmtK(s.d_oi)}` : "";
-        const txt = `${src} ${s.strike} · ${Math.round(share * 100)}%${isCW ? " CW" : isPW ? " PW" : ""}${d}`;
+        const txt = window.TVLB_COMPACT ? `${s.strike}${isCW ? " CW" : isPW ? " PW" : ""}` : `${src} ${s.strike} · ${Math.round(share * 100)}%${isCW ? " CW" : isPW ? " PW" : ""}${d}`;   // 7n số 135: chế độ gọn chỉ ghi strike + CW/PW (màu và bên trái/phải cho biết GC hay GLD; % và ΔOI xem ở bảng Strike Profile)
         if (OLD) oldItems.push({ y, txt, color: lc, strong: isCW || isPW, pri: isCW || isPW ? 0 : 3 + (1 - share), meta: { k: "strike", src, strike: s.strike } });
         else tagBox(ctx, side === "left" ? 6 : plotW - 6, y, txt, lc, side, isCW || isPW, { k: "strike", src, strike: s.strike });
       }
@@ -443,19 +444,19 @@ function drawOverlay() {
     const c = P.chart;
     const yF = c.gamma_flip != null ? Y(c.gamma_flip) : null;
     if (yF != null) {
-      const t = `Γ FLIP ${fmt(c.gamma_flip)}`;
+      const t = window.TVLB_COMPACT ? `Γ ${Math.round(c.gamma_flip)}` : `Γ FLIP ${fmt(c.gamma_flip)}`;
       if (OLD) { hline(ctx, yF, 0, plotW, OLD_COL.flip, 1.8, [], 0.95); oldItems.push({ y: yF, txt: t, color: OLD_COL.flip, strong: true, pri: 1, meta: { k: "flip" } }); }
       else { hline(ctx, yF, 0, plotW, C.flip, 1.2, [6, 4], 0.9); tagBox(ctx, plotW * 0.5, yF, t, C.flip, "left", true, { k: "flip" }); }
     }
     const yM = c.magnet != null ? Y(c.magnet) : null;
     if (yM != null) {
-      const t = `◎ MAGNET ${fmt(c.magnet)}`;
+      const t = window.TVLB_COMPACT ? `◎ ${Math.round(c.magnet)}` : `◎ MAGNET ${fmt(c.magnet)}`;
       if (OLD) { hline(ctx, yM, 0, plotW, OLD_COL.mag, 1.6, [], 0.9); oldItems.push({ y: yM, txt: t, color: OLD_COL.mag, strong: true, pri: 2, meta: { k: "magnet" } }); }   // kiểu cũ có thêm vạch Magnet (kiểu TVLB chỉ có nhãn)
       else tagBox(ctx, plotW * 0.5, yM, t, C.mag, "left", true, { k: "magnet" });
     }
     const yP = c.max_pain != null ? Y(c.max_pain) : null;
     if (yP != null) {
-      const t = `MaxPain ${fmt(c.max_pain)}`;
+      const t = window.TVLB_COMPACT ? `MP ${Math.round(c.max_pain)}` : `MaxPain ${fmt(c.max_pain)}`;
       if (OLD) { hline(ctx, yP, 0, plotW, OLD_COL.mp, 1, [2, 3], 0.7); oldItems.push({ y: yP, txt: t, color: OLD_COL.mp, strong: false, pri: 5, meta: { k: "mp" } }); }
       else { hline(ctx, yP, 0, plotW, "#9aa3ad", 1, [2, 3], 0.6); tagBox(ctx, plotW * 0.5 + 150, yP, t, "#9aa3ad", "left", false, { k: "mp" }); }
     }
@@ -515,7 +516,7 @@ function drawOverlay() {
       if (y1 == null || y2 == null || y2 < 0 || y1 > plotH) continue;
       const a = Math.max(0, y1), b = Math.min(plotH, y2), col = z.kind === "accel" ? C.down : C.up;
       ctx.fillStyle = z.kind === "accel" ? "rgba(229,83,75,.07)" : "rgba(38,179,132,.07)"; ctx.fillRect(0, a, plotW, Math.max(1, b - a));
-      if (b - a > 8) tagBox(ctx, plotW * 0.78, (a + b) / 2, `HEDGE ${z.kind === "accel" ? "−Γ" : "+Γ"} ${Math.abs(z.peak).toLocaleString("en-US")} HĐ/${hz.win}$`, col, "left", false, { k: "hedge", z, win: hz.win });
+      if (b - a > 8) tagBox(ctx, plotW * 0.78, (a + b) / 2, (window.TVLB_COMPACT ? `${z.kind === "accel" ? "−Γ" : "+Γ"} ${Math.abs(z.peak).toLocaleString("en-US")}` : `HEDGE ${z.kind === "accel" ? "−Γ" : "+Γ"} ${Math.abs(z.peak).toLocaleString("en-US")} HĐ/${hz.win}$`), col, "left", false, { k: "hedge", z, win: hz.win });
     }
   }
   if ($("#lySMC")?.checked && S.smc) drawSMC(ctx, plotW, plotH);

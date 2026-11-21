@@ -190,3 +190,13 @@ html { -webkit-text-size-adjust: 100%; }
   .panel, .jgrid { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
   .tablewrap { overscroll-behavior-x: contain; }
 }
+
+/* 7n số 135: chế độ gọn (lớp html.tvlb-compact do tvlb_plus.js đặt). Điện thoại xoay ngang: ẩn bớt đầu trang để chart chiếm gần hết màn hình. */
+@media (orientation: landscape) and (max-height: 520px) {
+  html.tvlb-compact .bar1 .meta, html.tvlb-compact .bar1 .inst, html.tvlb-compact .bar1 .bars, html.tvlb-compact .bar1 .sel,
+  html.tvlb-compact .bar1 .actions, html.tvlb-compact .bar2 .chips, html.tvlb-compact #notes, html.tvlb-compact #warn { display: none !important; }
+  html.tvlb-compact .bar1 { padding-top: 3px; padding-bottom: 3px; gap: 4px 12px; flex-wrap: nowrap; }
+  html.tvlb-compact .bar1 .toggles { order: 0; width: auto; flex-wrap: nowrap; overflow-x: auto; min-width: 0; }
+  html.tvlb-compact .bar2 { padding-top: 3px; padding-bottom: 3px; }
+  html.tvlb-compact .chart { height: calc(100vh - 92px); height: calc(100dvh - 92px); min-height: 200px; }
+}
