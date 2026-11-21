@@ -200,3 +200,6 @@ html { -webkit-text-size-adjust: 100%; }
   html.tvlb-compact .bar2 { padding-top: 3px; padding-bottom: 3px; }
   html.tvlb-compact .chart { height: calc(100vh - 92px); height: calc(100dvh - 92px); min-height: 200px; }
 }
+
+/* 7n số 138: iPhone có tai thỏ / cụm camera (iPhone 11): chừa lề trên bằng vùng an toàn để phần đầu trang không nằm dưới cụm camera. Không có tai thỏ thì lề = 0. */
+body { padding-top: env(safe-area-inset-top, 0px); }
