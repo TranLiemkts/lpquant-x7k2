@@ -62,7 +62,14 @@
 #tvlbTip .pg1 > div, #tvlbTip .pg2 > div { break-inside: avoid; }
 #tvlbCd { position: absolute; right: 64px; bottom: 30px; z-index: 5; padding: 2px 7px; border-radius: 4px; background: #e0a83a; color: #111;
   font: 700 11px var(--f-mono, monospace); pointer-events: auto; cursor: help; }
-#tvlbCd[hidden] { display: none; }`;
+#tvlbCd[hidden] { display: none; }
+/* 7n số 136: điện thoại (cảm ứng): khung giải thích vuốt cuộn được, có nút ✕ */
+#tvlbTip .tclose { display: none; position: absolute; top: 4px; right: 6px; z-index: 3; width: 30px; height: 30px; padding: 0; border-radius: 15px; background: #1b222b; color: #ffd54f; border: 1px solid #e0a83a; font: 700 15px/26px sans-serif; text-align: center; cursor: pointer; }
+@media (pointer: coarse) {
+  #tvlbTip { pointer-events: auto; }
+  #tvlbTip .tbody { overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; padding-right: 34px; }
+  #tvlbTip .tclose { display: block; }
+}`;
   document.head.appendChild(css);
 
   // ───────────────────── menu ẩn bên trái ─────────────────────
@@ -153,6 +160,11 @@
   // 7k số 124: chú giải dài hơn khung → giữ Shift + lăn chuột để cuộn trong khung (lăn không Shift vẫn zoom chart như cũ)
   const tbody = document.createElement("div"); tbody.className = "tbody"; tip.appendChild(tbody);
   const tmore = document.createElement("div"); tmore.className = "tmore"; tmore.textContent = "⇩ Còn nữa · giữ Shift + lăn chuột để xem tiếp"; tip.appendChild(tmore);
+  // 7n số 136: màn hình cảm ứng — vuốt để cuộn, nút ✕ để đóng, chữ nhắc "Chạm"
+  const COARSE = (() => { try { return matchMedia("(pointer: coarse)").matches; } catch (e) { return false; } })();
+  if (COARSE) tmore.textContent = "⇩ Còn nữa · vuốt lên để xem tiếp";
+  const tclose = document.createElement("button"); tclose.type = "button"; tclose.className = "tclose"; tclose.textContent = "✕"; tclose.onclick = (e) => { e.stopPropagation(); hideTip(); }; tip.appendChild(tclose);
+  tbody.addEventListener("scroll", () => moreHint(), { passive: true });
   let tipKey = "", tipFull = false, tipFK = "";   // 7l số 129
   let mx = 0, my = 0;
   // 7l số 128: tách chú giải thành 2 trang. Trang 1 = từ sau dòng tiêu đề đến hết mục 3; trang 2 = từ mục "4. Giải nghĩa" đến hết. Không thấy mục 4 thì để nguyên.
@@ -171,7 +183,7 @@
     root.appendChild(p1); root.appendChild(p2); root.appendChild(h1);   // 7l số 131: dòng nhắc dưới cùng
     return true;
   }
-  function hintText() { return tipFull ? "🖱 Bấm chuột lần nữa để thu gọn về trang 1" : "🖱 Bấm chuột để xem thêm trang 2/2: giải nghĩa thông số & công thức kiểm tra"; }   // 7l số 129
+  function hintText() { const t = COARSE ? "👆 Chạm" : "🖱 Bấm chuột"; return tipFull ? t + " lần nữa để thu gọn về trang 1" : t + " để xem thêm trang 2/2: giải nghĩa thông số & công thức kiểm tra"; }   // 7l số 129
   function fit() {   // 7l số 128: chọn 1 cột / 2 cột theo trang đang hiện (tách từ va_124c)
     tip.classList.remove("cols");
     if (!tip.classList.contains("wide") && !tip.classList.contains("full") && tbody.scrollHeight > tbody.clientHeight + 2) { tip.classList.add("cols"); if (tbody.scrollWidth > tbody.clientWidth + 2) tip.classList.remove("cols"); }
@@ -201,6 +213,7 @@
   document.addEventListener("mousemove", (e) => {
     mx = e.clientX; my = e.clientY;
     if (!P.tips) return;
+    if (e.target && e.target.closest && e.target.closest("#tvlbTip")) return;   // 7n số 136: chạm vào khung giải thích (cuộn, nút ✕) không làm khung biến mất
     if (Date.now() - lastTip < 40) { if (tip.style.display === "block") place(); return; }   // nhẹ máy: tối đa ~25 lần/giây
     lastTip = Date.now();
     try { const x = window.tvlbTipX && window.tvlbTipX(e); if (x) return showTip(x); } catch (err) { }
