@@ -240,7 +240,7 @@ function drawTH(ctx, plotW, h) {
   // lệnh Pro đang chờ xác nhận
   if (smcOn('pro')) [['proB', 'proBi', '⏳ Chờ Buy i', 0], ['proS', 'proSi', '⏳ Chờ Sell i', 1]].forEach(([k, ki, t, ci]) => { const p = TH.st[k]; if (p == null) return;
     const x0 = X(TH.st[ki]), x1 = X(TH.n + 15), y = Y(p); if (!ok(x0, x1, y)) return; ctx.strokeStyle = SMC_COL.pro[ci]; ctx.setLineDash([1, 3]); ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = SMC_COL.pro[ci]; ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(t, x1 + 3, y + 3.5); ctx.textAlign = 'center'; });
+    ctx.fillStyle = SMC_COL.pro[ci]; ctx.font = '600 10px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(window.TVLB_COMPACT ? (ci ? "⏳S" : "⏳B") : t, x1 + 3, y + 3.5);   /* 7o số 140: chế độ gọn */ ctx.textAlign = 'center'; });
   ctx.restore();
 }
   // ───────────────────── tín hiệu LP Quant: tường, Hedge, Hợp lưu + chấm điểm ─────────────────────
@@ -482,7 +482,7 @@ function drawTH(ctx, plotW, h) {
             cx.strokeStyle = `rgba(${col},.55)`; cx.setLineDash([4, 3]); cx.strokeRect(plotW * 0.55, a, plotW * 0.45, b - a); cx.setLineDash([]); }
           cx.fillStyle = `rgb(${col})`; cx.font = "700 10px sans-serif"; cx.textAlign = "right";
           const ly = p.d < 0 ? a - 4 - 12 * k_ : b + 11 + 12 * k_;   // SELL ghi trên vùng, BUY ghi dưới vùng; cùng vùng thì xếp chồng
-          cx.fillText(`${p.id} ${p.kind === "break" ? "PHÁ" : "BẬT"} ${p.d < 0 ? "SELL" : "BUY"} ${"★".repeat(p.z.st)} · ${p.st}`, plotW - 6, ly); }); }
+          cx.fillText((window.TVLB_COMPACT ? `${p.id} ${p.d < 0 ? "SELL" : "BUY"} ${p.z.st}★${p.st === "CHỜ" ? "" : " · " + p.st}` : `${p.id} ${p.kind === "break" ? "PHÁ" : "BẬT"} ${p.d < 0 ? "SELL" : "BUY"} ${"★".repeat(p.z.st)} · ${p.st}`)   /* 7o số 140: chế độ gọn */, plotW - 6, ly); }); }
       // hộp SL/TP lệnh KH đang chạy + 3 lệnh vừa đóng
       if (O.box && O.boxn >= 0) { const T = (window.tvlbPlans ? window.tvlbPlans().TRK : []).filter((t) => t.tf === S.tf && !t.drop);
         const show = T.filter((t) => !t.res).concat(T.filter((t) => t.res).slice(0, O.boxn === 999 ? 1e9 : Math.max(1, O.boxn))); const idx = new Map(bars.map((b, i) => [b.time, i]));
