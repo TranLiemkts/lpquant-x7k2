@@ -203,3 +203,6 @@ html { -webkit-text-size-adjust: 100%; }
 
 /* 7n số 138: iPhone có tai thỏ / cụm camera (iPhone 11): chừa lề trên bằng vùng an toàn để phần đầu trang không nằm dưới cụm camera. Không có tai thỏ thì lề = 0. */
 body { padding-top: max(0px, calc(env(safe-area-inset-top, 0px) - 10px)); }   /* 7n số 139: bớt 10 px so với va_138 để đỡ dư khoảng trống */
+
+/* 7o số 141: chế độ gọn — ô thông tin góc trái chart nhỏ hơn và không che trục giá bên phải. */
+html.tvlb-compact #chartInfo, html.tvlb-compact .chartinfo { font-size: 10px; padding: 1px 6px; max-width: calc(100% - 84px); }

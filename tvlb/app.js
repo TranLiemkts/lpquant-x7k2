@@ -474,7 +474,8 @@ function drawOverlay() {
       const y = Y(vp[k]); if (y == null) continue;
       hline(ctx, y, 0, plotW, C.vp, k === "poc" ? 1.5 : 1, k === "poc" ? [] : [3, 3], 0.8);
       ctx.fillStyle = C.vp; ctx.font = "10px 'IBM Plex Mono', monospace"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-      ctx.fillText(`${lab} ${fmt(vp[k])}`, 6, y - 2);
+      if (window.TVLB_COMPACT) { ctx.font = "9.5px 'IBM Plex Mono', monospace"; ctx.fillText(`${lab} ${Math.round(vp[k])}`, Math.round(plotW * 0.36), y - 2); }   // 7o số 141: chế độ gọn — chữ VAL/POC/VAH dời vào giữa (tránh nhãn tường ở mép trái), bỏ phần thập phân
+      else ctx.fillText(`${lab} ${fmt(vp[k])}`, 6, y - 2);
     }
   }
 
@@ -521,7 +522,8 @@ function drawOverlay() {
   }
   if ($("#lySMC")?.checked && S.smc) drawSMC(ctx, plotW, plotH);
   { const rg = P ? regimePct(P.underlying, P.gamma_flip) : null;
-    $("#chartInfo").textContent = P ? `${P.source} · ${P.strikes.length} strikes · Σ ${fmtK(P.net_gex)} · ${rg.pct == null ? "?" : rg.far ? `? không rõ (${rg.pctTxt} Flip)` : `${rg.pct >= 0 ? "+Γ" : "−Γ"} ${rg.pctTxt} Flip`} · mốc chưa kiểm định` : "Chưa có dữ liệu Options"; }
+    $("#chartInfo").textContent = P ? `${P.source} · ${P.strikes.length} strikes · Σ ${fmtK(P.net_gex)} · ${rg.pct == null ? "?" : rg.far ? `? không rõ (${rg.pctTxt} Flip)` : `${rg.pct >= 0 ? "+Γ" : "−Γ"} ${rg.pctTxt} Flip`} · mốc chưa kiểm định` : "Chưa có dữ liệu Options";
+    if (window.TVLB_COMPACT && P) { const el = $("#chartInfo"); el.textContent = el.textContent.replace(/ · \d+ strikes/, "").replace("mốc chưa kiểm định", "chưa kiểm định"); } }   // 7o số 141: chế độ gọn rút gọn ô thông tin
 }
 
 // Vẽ SMC: vùng Premium/Discount, thanh khoản, trendline, HH/HL/LH/LL, BOS/CHoCH
