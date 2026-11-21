@@ -66,7 +66,7 @@
 /* 7n số 136: điện thoại (cảm ứng): khung giải thích vuốt cuộn được, có nút ✕ */
 #tvlbTip .tclose { display: none; position: absolute; top: 4px; right: 6px; z-index: 3; width: 30px; height: 30px; padding: 0; border-radius: 15px; background: #1b222b; color: #ffd54f; border: 1px solid #e0a83a; font: 700 15px/26px sans-serif; text-align: center; cursor: pointer; }
 @media (pointer: coarse) {
-  #tvlbTip { pointer-events: auto; }
+  #tvlbTip { pointer-events: auto; margin-top: env(safe-area-inset-top, 0px); max-height: calc(92vh - env(safe-area-inset-top, 0px)); }   /* 7n số 137: tránh thanh trạng thái iPhone (giờ, pin) che nút ✕ */
   #tvlbTip .tbody { overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; padding-right: 34px; }
   #tvlbTip .tclose { display: block; }
 }`;
