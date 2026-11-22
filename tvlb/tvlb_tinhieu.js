@@ -873,7 +873,7 @@ function drawTH(ctx, plotW, h) {
       Chỉ đổi cách XẾP; không đổi số liệu nào. Lựa chọn nhớ qua F5 (localStorage "tvlb.wide"). Màn hình dưới 1000 px: không có chế độ này.
    ② Thêm nút khung "1W" (Tuần) và "1M" (Tháng) vào #tfs. Gộp từ nến 1h theo ngày giao dịch neo 18:00 New York (giống D1):
       tuần = Thứ 2→Thứ 6 của ngày giao dịch, tháng = tháng lịch của ngày giao dịch. GIẢ ĐỊNH, chưa đối chiếu TradingView.
-      Lịch sử chỉ từ mốc smc.h4_from (khoảng 26 nến tuần / 6 nến tháng). Tín hiệu trên khung này không có ý nghĩa (vùng ±4$ so với nến ~100$): chỉ để XEM.
+      Lịch sử lùi ~840 ngày, không bị giới hạn bởi smc.h4_from (tối đa ~2,3 năm nếu nguồn giá có dữ liệu đó). Tín hiệu trên khung này không có ý nghĩa (vùng ±4$ so với nến ~100$): chỉ để XEM.
    (Chế độ 2 chart đã bỏ theo yêu cầu.) */
 (function () {
   "use strict";
@@ -947,6 +947,7 @@ html.tvlb-wide .right.fly{visibility:visible;opacity:1;pointer-events:auto}
   // ───────────── khung Tuần / Tháng ─────────────
   (function () {
     if (typeof SMC === "undefined" || typeof AGG === "undefined" || typeof TF_SEC === "undefined" || !SMC.aggregate || !SMC.bucketOf) return;
+    const WM_BACK_DAYS = 840;   // tuần/tháng lùi ~2,3 năm (app.js chỉ tải tối đa ~21000 nến 1h ≈ 2,4 năm); không đổi h4_from của các khung khác
     const WSEC = 604800, MSEC = 2592000;   // MSEC chỉ là "mã" cho tháng (độ dài thật thay đổi)
     const isW = (s) => s === WSEC || s === MSEC;
     const labelDay = (t) => new Date((t + 10800) * 1000);   // ngày giao dịch (giờ mở nến neo 18:00 NY → +3h rơi sang ngày kế)
@@ -970,7 +971,7 @@ html.tvlb-wide .right.fly{visibility:visible;opacity:1;pointer-events:auto}
       return out;
     };
     // khung tuần/tháng không được lùi theo "ltf_bars" (sẽ đòi dữ liệu từ nhiều năm trước): chỉ lấy từ mốc h4_from
-    if (typeof SMC.ltfStart === "function") { const oLtf = SMC.ltfStart.bind(SMC); SMC.ltfStart = function (now, sec, bars, h4) { return isW(sec) ? h4 : oLtf(now, sec, bars, h4); }; }
+    if (typeof SMC.ltfStart === "function") { const oLtf = SMC.ltfStart.bind(SMC); SMC.ltfStart = function (now, sec, bars, h4) { return isW(sec) ? Math.min(h4, now - WM_BACK_DAYS * 86400) : oLtf(now, sec, bars, h4); }; }
     TF_SEC["1w"] = WSEC; AGG["1w"] = WSEC; TF_SEC["1M"] = MSEC; AGG["1M"] = MSEC;
     const tfs = q("#tfs"); if (!tfs || tfs.querySelector('[data-tf="1w"]')) return;
     const last = tfs.lastElementChild;
