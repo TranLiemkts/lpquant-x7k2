@@ -869,7 +869,7 @@ function drawTH(ctx, plotW, h) {
 
 /* ═══════════════ va_142b · CHART MỞ RỘNG + KHUNG TUẦN/THÁNG (ghi 22/11/2026) ═══════════════
    ① Nút "⤢ Mở rộng" trên thanh khung giờ: chart giãn sang phải; cột bảng bên phải thu thành MỘT CỘT TIÊU ĐỀ (chữ dọc).
-      Rê chuột vào tiêu đề nào thì bảng đó bật ra (như menu bên trái); bấm "⤡ Thu gọn" thì về đúng như bình thường.
+      BẤM vào tiêu đề nào thì bảng đó bật ra (bấm lại, bấm ra ngoài hoặc Esc để đóng); bấm "⤡ Thu gọn" thì về đúng như bình thường.
       Chỉ đổi cách XẾP; không đổi số liệu nào. Lựa chọn nhớ qua F5 (localStorage "tvlb.wide"). Màn hình dưới 1000 px: không có chế độ này.
    ② Thêm nút khung "1W" (Tuần) và "1M" (Tháng) vào #tfs. Gộp từ nến 1h theo ngày giao dịch neo 18:00 New York (giống D1):
       tuần = Thứ 2→Thứ 6 của ngày giao dịch, tháng = tháng lịch của ngày giao dịch. GIẢ ĐỊNH, chưa đối chiếu TradingView.
@@ -920,7 +920,6 @@ html.tvlb-wide .right.fly{visibility:visible;opacity:1;pointer-events:auto}
     const items = bs.length ? bs.map((b) => [b.dataset.pg, b.textContent.trim()]) : [["", "Bảng điều khiển"]];
     items.forEach(([pg, t]) => {
       const x = document.createElement("button"); x.type = "button"; x.dataset.pg = pg; x.textContent = t; x.title = t;
-      x.addEventListener("mouseenter", () => openFly(pg));
       x.addEventListener("click", (e) => { e.stopPropagation(); if (aside.classList.contains("fly") && x.classList.contains("on")) hideFly(); else openFly(pg); });
       rail.appendChild(x);
     });
@@ -941,7 +940,6 @@ html.tvlb-wide .right.fly{visibility:visible;opacity:1;pointer-events:auto}
     clearTimeout(flyTimer);
     flyTimer = setTimeout(() => { const a = document.activeElement; if (a && aside.contains(a) && /^(SELECT|INPUT|TEXTAREA)$/.test(a.tagName)) return; hideFly(); }, 350);   // đang chọn trong ô thả xuống thì giữ nguyên
   }
-  [rail, aside].forEach((e) => { e.addEventListener("mouseenter", () => clearTimeout(flyTimer)); e.addEventListener("mouseleave", () => { if (document.documentElement.classList.contains("tvlb-wide")) schedHide(); }); });
   document.addEventListener("mousedown", (e) => { if (aside.classList.contains("fly") && !aside.contains(e.target) && !rail.contains(e.target)) hideFly(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideFly(); });
   setInterval(() => { if (document.documentElement.classList.contains("tvlb-wide")) buildRail(); }, 2000);
@@ -971,6 +969,8 @@ html.tvlb-wide .right.fly{visibility:visible;opacity:1;pointer-events:auto}
       }
       return out;
     };
+    // khung tuần/tháng không được lùi theo "ltf_bars" (sẽ đòi dữ liệu từ nhiều năm trước): chỉ lấy từ mốc h4_from
+    if (typeof SMC.ltfStart === "function") { const oLtf = SMC.ltfStart.bind(SMC); SMC.ltfStart = function (now, sec, bars, h4) { return isW(sec) ? h4 : oLtf(now, sec, bars, h4); }; }
     TF_SEC["1w"] = WSEC; AGG["1w"] = WSEC; TF_SEC["1M"] = MSEC; AGG["1M"] = MSEC;
     const tfs = q("#tfs"); if (!tfs || tfs.querySelector('[data-tf="1w"]')) return;
     const last = tfs.lastElementChild;
@@ -989,7 +989,7 @@ html.tvlb-wide .right.fly{visibility:visible;opacity:1;pointer-events:auto}
     const W = window.innerWidth, w = pref.wide && W >= 1000, de = document.documentElement;
     de.classList.toggle("tvlb-wide", w);
     wBtn.textContent = w ? "⤡" : "⤢"; wBtn.classList.toggle("on", w); wBtn.disabled = !w && W < 1000;
-    wBtn.title = W < 1000 && !w ? "Màn hình quá hẹp để mở rộng (cần ≥ 1000 px)" : w ? "Thu gọn: về bố cục bình thường" : "Mở rộng: chart giãn sang phải; bảng bên phải thu thành cột tiêu đề, rê chuột để mở";
+    wBtn.title = W < 1000 && !w ? "Màn hình quá hẹp để mở rộng (cần ≥ 1000 px)" : w ? "Thu gọn: về bố cục bình thường" : "Mở rộng: chart giãn sang phải; bảng bên phải thu thành cột tiêu đề, bấm vào tiêu đề để mở";
     if (w) buildRail(); else { hideFly(); ["top", "right", "left", "bottom", "maxHeight", "height"].forEach((k) => { aside.style[k] = ""; }); }
   }
   wBtn.addEventListener("click", () => { pref.wide = !pref.wide; K.set("wide", pref.wide); apply(); setTimeout(() => window.dispatchEvent(new Event("resize")), 60); });

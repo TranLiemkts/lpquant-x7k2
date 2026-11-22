@@ -139,7 +139,7 @@ async function loadHistory() {
     try {
       S.basis = basisNow(f.symbol);
       const { rows, h1 } = await loadTF(f, S.tf, t0 - 3 * 86400); // lùi 3 ngày để có nến mồi kể cả qua cuối tuần
-      if (rows.length < 30) continue;
+      if (rows.length < (AGG[S.tf] && TF_SEC[S.tf] > 86400 ? 3 : 30)) continue; /* va_142b: tuan/thang it nen */
       S.candles = fromSeed(rows, t0); S.h1 = h1; S.ltfT0 = t0;
       S.feed = f;
       $("#sym").textContent = S.basis ? `XAUUSD (${f.symbol} ${S.basis >= 0 ? "+" : ""}${S.basis.toFixed(2)})` : f.symbol;
