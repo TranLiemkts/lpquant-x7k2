@@ -866,3 +866,133 @@ function drawTH(ctx, plotW, h) {
   setTimeout(showVer, 2500); setInterval(showVer, 10 * 60 * 1000);
   window.tvlbSig = () => ({ SIG, TH, RX, FWD });
 })();
+
+/* ═══════════════ va_142b · CHART MỞ RỘNG + KHUNG TUẦN/THÁNG (ghi 22/11/2026) ═══════════════
+   ① Nút "⤢ Mở rộng" trên thanh khung giờ: chart giãn sang phải; cột bảng bên phải thu thành MỘT CỘT TIÊU ĐỀ (chữ dọc).
+      Rê chuột vào tiêu đề nào thì bảng đó bật ra (như menu bên trái); bấm "⤡ Thu gọn" thì về đúng như bình thường.
+      Chỉ đổi cách XẾP; không đổi số liệu nào. Lựa chọn nhớ qua F5 (localStorage "tvlb.wide"). Màn hình dưới 1000 px: không có chế độ này.
+   ② Thêm nút khung "1W" (Tuần) và "1M" (Tháng) vào #tfs. Gộp từ nến 1h theo ngày giao dịch neo 18:00 New York (giống D1):
+      tuần = Thứ 2→Thứ 6 của ngày giao dịch, tháng = tháng lịch của ngày giao dịch. GIẢ ĐỊNH, chưa đối chiếu TradingView.
+      Lịch sử chỉ từ mốc smc.h4_from (khoảng 26 nến tuần / 6 nến tháng). Tín hiệu trên khung này không có ý nghĩa (vùng ±4$ so với nến ~100$): chỉ để XEM.
+   (Chế độ 2 chart đã bỏ theo yêu cầu.) */
+(function () {
+  "use strict";
+  if (window.__tvlb142) return;
+  window.__tvlb142 = true;
+  const q = (s) => document.querySelector(s);
+  const K = { get(k, d) { try { const v = localStorage.getItem("tvlb." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem("tvlb." + k, JSON.stringify(v)); } catch (e) { } } };
+  const chartCol = q(".chartcol"), aside = q(".right");
+  if (!chartCol || !aside) return;
+  const host = chartCol.parentElement, pgbar = q("#pgbar"), bar2 = q(".bar2") || (q("#tfs") && q("#tfs").parentElement);
+  host.classList.add("tvlb-wgrid");
+
+  // ───────────── CSS ─────────────
+  const css = document.createElement("style");
+  css.textContent = `
+.wtools{display:flex;gap:6px;align-items:center;margin-right:auto;margin-left:-2px}
+.wtools button{padding:3px 11px;font:600 13px var(--f-label)}
+.wtools button.on{background:var(--gold);color:#1b1407;border-color:var(--gold)}
+.wrail{display:none}
+html.tvlb-wide .tvlb-wgrid{grid-template-columns:minmax(0,1fr) 38px}
+html.tvlb-wide .wrail{display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:0;overflow:hidden}
+.wrail button{writing-mode:vertical-rl;transform:rotate(180deg);flex:0 0 auto;padding:10px 4px;font:600 12px var(--f-label);letter-spacing:.06em;color:var(--muted);background:var(--bg-2);border:1px solid var(--line);border-radius:5px;cursor:pointer;white-space:nowrap}
+.wrail button:hover,.wrail button.on{color:#1b1407;background:var(--gold);border-color:var(--gold)}
+html.tvlb-wide .right{display:flex;flex-direction:column;position:fixed;z-index:30;width:min(820px,64vw);max-width:calc(100vw - 70px);overflow:auto;background:var(--bg);border:1px solid var(--gold);border-radius:6px;padding:8px;box-shadow:0 10px 30px rgba(0,0,0,.65);visibility:hidden;opacity:0;pointer-events:none;transition:opacity .12s}
+html.tvlb-wide .right.fly{visibility:visible;opacity:1;pointer-events:auto}
+`;
+  document.head.appendChild(css);
+
+  // ───────────── nút trên thanh khung giờ ─────────────
+  const tools = document.createElement("div"); tools.className = "wtools";
+  tools.innerHTML = '<button type="button" class="ghost small" id="wBtn"></button>';
+  const tfsEl = q("#tfs");
+  if (tfsEl && tfsEl.parentElement === bar2) tfsEl.after(tools);   // ngay cạnh khung 1M
+  else if (bar2) bar2.insertBefore(tools, bar2.lastElementChild); else chartCol.insertBefore(tools, chartCol.firstChild);
+  const wBtn = q("#wBtn");
+
+  // ───────────── cột tiêu đề + bảng bật ra khi rê chuột ─────────────
+  const rail = document.createElement("div"); rail.className = "wrail"; host.appendChild(rail);
+  let flyTimer = null, railSig = "";
+  const pgBtns = () => (pgbar ? [...pgbar.querySelectorAll("button[data-pg]")].filter((b) => b.style.display !== "none") : []);
+  function buildRail() {
+    const bs = pgBtns(), sig = bs.map((b) => b.dataset.pg + "|" + b.textContent).join("¦");
+    if (sig === railSig) return; railSig = sig; rail.innerHTML = "";
+    const items = bs.length ? bs.map((b) => [b.dataset.pg, b.textContent.trim()]) : [["", "Bảng điều khiển"]];
+    items.forEach(([pg, t]) => {
+      const x = document.createElement("button"); x.type = "button"; x.dataset.pg = pg; x.textContent = t; x.title = t;
+      x.addEventListener("mouseenter", () => openFly(pg));
+      x.addEventListener("click", (e) => { e.stopPropagation(); if (aside.classList.contains("fly") && x.classList.contains("on")) hideFly(); else openFly(pg); });
+      rail.appendChild(x);
+    });
+  }
+  function placeFly() {
+    const r = rail.getBoundingClientRect(), top = Math.max(8, r.top);
+    aside.style.top = top + "px"; aside.style.right = Math.max(8, window.innerWidth - r.left + 6) + "px"; aside.style.left = "auto"; aside.style.bottom = "auto";
+    aside.style.maxHeight = ""; aside.style.height = Math.max(240, window.innerHeight - top - 12) + "px";   // cao đủ như lúc thu gọn
+  }
+  function openFly(pg) {
+    clearTimeout(flyTimer);
+    const b = pg && pgbar ? pgbar.querySelector('button[data-pg="' + pg + '"]') : null; if (b) b.click();   // dùng đúng cơ chế đổi trang có sẵn
+    placeFly(); aside.classList.add("fly");
+    rail.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.pg === pg));
+  }
+  function hideFly() { aside.classList.remove("fly"); rail.querySelectorAll("button").forEach((x) => x.classList.remove("on")); }
+  function schedHide() {
+    clearTimeout(flyTimer);
+    flyTimer = setTimeout(() => { const a = document.activeElement; if (a && aside.contains(a) && /^(SELECT|INPUT|TEXTAREA)$/.test(a.tagName)) return; hideFly(); }, 350);   // đang chọn trong ô thả xuống thì giữ nguyên
+  }
+  [rail, aside].forEach((e) => { e.addEventListener("mouseenter", () => clearTimeout(flyTimer)); e.addEventListener("mouseleave", () => { if (document.documentElement.classList.contains("tvlb-wide")) schedHide(); }); });
+  document.addEventListener("mousedown", (e) => { if (aside.classList.contains("fly") && !aside.contains(e.target) && !rail.contains(e.target)) hideFly(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideFly(); });
+  setInterval(() => { if (document.documentElement.classList.contains("tvlb-wide")) buildRail(); }, 2000);
+
+  // ───────────── khung Tuần / Tháng ─────────────
+  (function () {
+    if (typeof SMC === "undefined" || typeof AGG === "undefined" || typeof TF_SEC === "undefined" || !SMC.aggregate || !SMC.bucketOf) return;
+    const WSEC = 604800, MSEC = 2592000;   // MSEC chỉ là "mã" cho tháng (độ dài thật thay đổi)
+    const isW = (s) => s === WSEC || s === MSEC;
+    const labelDay = (t) => new Date((t + 10800) * 1000);   // ngày giao dịch (giờ mở nến neo 18:00 NY → +3h rơi sang ngày kế)
+    const keyOf = (t, sec) => { const d = labelDay(t); if (sec === MSEC) return d.getUTCFullYear() * 100 + d.getUTCMonth(); const m = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) / 86400000; return Math.floor(m - ((new Date(m * 86400000).getUTCDay() + 6) % 7)); };
+    const oBucket = SMC.bucketOf.bind(SMC), oAgg = SMC.aggregate.bind(SMC);
+    // đầu nến tuần/tháng = đầu nến NGÀY sớm nhất cùng tuần/tháng (lùi từng ngày giao dịch, an toàn với đổi giờ mùa hè)
+    SMC.bucketOf = function (ts, sec) {
+      if (!isW(sec)) return oBucket(ts, sec);
+      let b = oBucket(ts, 86400); const k = keyOf(b, sec);
+      for (let i = 0; i < 40; i++) { const p = oBucket(b - 1, 86400); if (p >= b || keyOf(p, sec) !== k) break; b = p; }
+      return b;
+    };
+    SMC.aggregate = function (rows, sec) {
+      if (!isW(sec)) return oAgg(rows, sec);
+      const days = oAgg(rows, 86400), out = []; let k = null, cur = null;
+      for (const r of days) {
+        const kk = keyOf(r.time, sec);
+        if (kk !== k || !cur) { cur = Object.assign({}, r); out.push(cur); k = kk; }
+        else { cur.high = Math.max(cur.high, r.high); cur.low = Math.min(cur.low, r.low); cur.close = r.close; cur.vol = (+cur.vol || 0) + (+r.vol || 0); cur.delta = (+cur.delta || 0) + (+r.delta || 0); }
+      }
+      return out;
+    };
+    TF_SEC["1w"] = WSEC; AGG["1w"] = WSEC; TF_SEC["1M"] = MSEC; AGG["1M"] = MSEC;
+    const tfs = q("#tfs"); if (!tfs || tfs.querySelector('[data-tf="1w"]')) return;
+    const last = tfs.lastElementChild;
+    [["1w", "1W"], ["1M", "1M"]].forEach(([tf, name]) => {
+      const b = document.createElement("button"); b.type = "button"; b.dataset.tf = tf; b.textContent = name;
+      b.title = (tf === "1w" ? "Tuần" : "Tháng") + " — gộp từ nến 1h, chỉ để xem (tín hiệu không có ý nghĩa ở khung này)";
+      if (last && last.className) b.className = last.className; tfs.appendChild(b);
+    });
+    // nút đã lưu từ lần trước (nếu đang ở 1w/1M) được app.js đánh dấu "on" khi khởi động; nếu nút chưa có lúc đó thì bật lại ở đây
+    tfs.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x.dataset.tf === S.tf));
+  })();
+
+  // ───────────── áp dụng chế độ ─────────────
+  const pref = { wide: !!K.get("wide", false) };
+  function apply() {
+    const W = window.innerWidth, w = pref.wide && W >= 1000, de = document.documentElement;
+    de.classList.toggle("tvlb-wide", w);
+    wBtn.textContent = w ? "⤡" : "⤢"; wBtn.classList.toggle("on", w); wBtn.disabled = !w && W < 1000;
+    wBtn.title = W < 1000 && !w ? "Màn hình quá hẹp để mở rộng (cần ≥ 1000 px)" : w ? "Thu gọn: về bố cục bình thường" : "Mở rộng: chart giãn sang phải; bảng bên phải thu thành cột tiêu đề, rê chuột để mở";
+    if (w) buildRail(); else { hideFly(); ["top", "right", "left", "bottom", "maxHeight", "height"].forEach((k) => { aside.style[k] = ""; }); }
+  }
+  wBtn.addEventListener("click", () => { pref.wide = !pref.wide; K.set("wide", pref.wide); apply(); setTimeout(() => window.dispatchEvent(new Event("resize")), 60); });
+  let rz = null; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(apply, 200); });
+  apply();
+})();
