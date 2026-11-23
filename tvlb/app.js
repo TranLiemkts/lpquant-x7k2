@@ -653,6 +653,8 @@ function evaluate(i, live) {
   const volSpike = vavg > 0 && k.vol >= sc.vol_spike_mult * vavg;
   const dxy = live ? (S.state?.macro?.DXY?.chg_n_pct ?? 0) : 0, dxyUp = dxy >= sc.dxy_thr_pct, dxyDn = dxy <= -sc.dxy_thr_pct;
   const doi = nearDoi(k.close), doiFlat = !!doi && doi.d_oi <= 0;
+  // TVLB B9b0 (TL1): Gamma ÂM (giá dưới Flip) = đi theo xu hướng, KHÔNG bắt đáy -> chặn Bear Trap BUY. TL2: ΔOI ≥ doi_big = vùng nghi vấn.
+  const negG = L.gamma_flip != null && k.close < L.gamma_flip, doiBig = !!doi && Math.abs(doi.d_oi) >= sc.doi_big;
   const bf = live ? bigFlow(sc.cvd_slope_bars) : null;   // lệnh lớn ròng (chỉ có dữ liệu cho nến live)
   const mkSig = (type, side, conf, sl, tp1, tp2) => {
     if (bf) conf = { ...conf, [side === "BUY" ? "Lệnh lớn mua ròng" : "Lệnh lớn bán ròng"]: side === "BUY" ? bf.d > 0 : bf.d < 0 };
@@ -669,7 +671,7 @@ function evaluate(i, live) {
     s = mkSig("Squeeze qua Call Wall", "BUY", { "CVD dốc lên": slope > 0, "Delta nến dương": k.delta > 0, "DXY giảm": dxyDn, "Volume spike": volSpike }, cw - sc.sl_buffer, tp1, tp1 != null ? nextStrike(tp1, true) : null);
   }
   if (!s && k.high >= cw - tol && k.close < cw && k.close < k.open)
-    s = mkSig("Bull Trap tại Call Wall", "SELL", { "Phân kỳ CVD âm": d0.bear || d1.bear, "CVD dốc xuống": slope < 0, "DXY tăng": dxyUp, "Volume spike": volSpike, "Vol↑ mà ΔOI≤0": volSpike && doiFlat }, k.high + sc.sl_buffer, nextStrike(k.close, false), pw);
+    s = mkSig("Bull Trap tại Call Wall", "SELL", { "Phân kỳ CVD âm": d0.bear || d1.bear, "CVD dốc xuống": slope < 0, "DXY tăng": dxyUp, "Volume spike": volSpike, "Vol↑ mà ΔOI≤0": volSpike && doiFlat, "ΔOI≥1500 tại vùng": doiBig }, k.high + sc.sl_buffer, nextStrike(k.close, false), pw);
   // Bước 5 – vùng hedge lớn −Γ (LP hedge thuận chiều giá). Hai kiểu tín hiệu (30/10, người dùng đồng ý):
   //  • HEDGE trap (ưu tiên): râu/nến chọc VÀO vùng rồi nến đóng NGƯỢC ra khỏi mép vùng → LP mua/bán lại, giá bật mạnh
   //    (như 30/10 14:55: rơi vào vùng 3,960–3,977 rồi bật về Put Wall/Magnet 3,989). SL ngoài cực trị 3 nến gần nhất.
@@ -701,8 +703,8 @@ function evaluate(i, live) {
       }
     }
   }
-  if (!s && k.low <= pw + tol && k.close > pw && k.close > k.open)
-    s = mkSig("Bear Trap tại Put Wall", "BUY", { "Phân kỳ CVD dương": d0.bull || d1.bull, "CVD dốc lên": slope > 0, "DXY giảm": dxyDn, "Volume spike": volSpike, "Vol↑ mà ΔOI≤0": volSpike && doiFlat }, k.low - sc.sl_buffer, nextStrike(k.close, true), cw);
+  if (!s && !negG && k.low <= pw + tol && k.close > pw && k.close > k.open)
+    s = mkSig("Bear Trap tại Put Wall", "BUY", { "Phân kỳ CVD dương": d0.bull || d1.bull, "CVD dốc lên": slope > 0, "DXY giảm": dxyDn, "Volume spike": volSpike, "Vol↑ mà ΔOI≤0": volSpike && doiFlat, "ΔOI≥1500 tại vùng": doiBig }, k.low - sc.sl_buffer, nextStrike(k.close, true), cw);
   return s;
 }
 function addSignal(s, live) {
