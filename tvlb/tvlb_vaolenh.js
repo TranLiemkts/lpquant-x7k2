@@ -178,6 +178,12 @@
       else { const conf = p.d < 0 ? lb.close < p.ref && lc.d < 0 : lb.close > p.ref && lc.d > 0;
         p.chk = { okC: p.d < 0 ? lb.close < p.ref : lb.close > p.ref, okD: p.d < 0 ? lc.d < 0 : lc.d > 0, dl: lc.d };
         p.st = conf && Math.abs(spot - p.ref) <= 3 * ZONE ? "XÁC NHẬN" : inZ ? "ĐANG THỬ PHÁ" : "CHỜ"; p.dist = p.d < 0 ? spot - z.lo : z.hi - spot; p.toward = p.d < 0 ? mv3 < 0 : mv3 > 0; } });
+    // TVLB B9b1: đếm điều kiện đạt x/y cho KH1–KH3 (chỉ hiển thị, không đổi cách tính trạng thái)
+    P.forEach((p) => { if (!lb || !p.chk) { p.xc = null; return; } const z = p.z;
+      if (p.kind === "fade") { const near = spot >= z.lo - 2 * ZONE && spot <= z.hi + 2 * ZONE, touched = near && lb.high >= z.lo && lb.low <= z.hi, broke = p.d < 0 ? lb.close > p.sl : lb.close < p.sl;
+        p.xc = [[touched, `Nến chạm vùng ${f2(z.lo)}–${f2(z.hi)}`], [p.chk.okW, `Râu ${p.d < 0 ? "trên" : "dưới"} ${f2(p.chk.wk)} ≥ ${f2(p.chk.need)} (thân hoặc 40% biên độ)`], [p.chk.okD, `Delta nến ${p.d < 0 ? "âm" : "dương"} (${sg(p.chk.dl, f0)})`], [!broke, `Chưa bị phá (nến đóng chưa vượt SL ${f2(p.sl)})`]]; }
+      else { p.xc = [[p.chk.okC, `Nến đóng ${p.d < 0 ? "dưới" : "trên"} ${f2(p.ref)}`], [p.chk.okD, `Delta nến ${p.d < 0 ? "âm" : "dương"} (${sg(p.chk.dl, f0)})`], [Math.abs(spot - p.ref) <= 3 * ZONE, `Giá còn gần điểm vào (≤ ${3 * ZONE}$)`], [!(p.d < 0 ? lb.close > p.sl : lb.close < p.sl), `Chưa phá giả (chưa quay lại ${p.d < 0 ? "trên" : "dưới"} ${f2(p.sl)})`]]; }
+      p.xo = p.xc.filter((x) => x[0]).length; });
     { const tw = P.filter((p) => p.st !== "HUỶ").reduce((a, p) => a + p.w, 0) || 1; P.forEach((p) => (p.prob = p.st === "HUỶ" ? 0 : Math.round((p.w / tw) * 100))); }
     // XÁC NHẬN → ghi lệnh (mã K1-0001…) và theo dõi tới TP / SL
     let ch = false;
@@ -276,11 +282,13 @@
   function plansHtml() {
     if (!PLANS.length) return '<span class="muted">Chưa đủ dữ liệu tường quanh giá để lập kế hoạch (chờ engine có dữ liệu Options).</span>';
     return PLANS.map((p) => { const c = p.d < 0 ? "#ef5350" : "#26a69a", zc = p.z.st >= 4 ? "#26a69a" : p.z.st === 3 ? "#ffd600" : "#ff7043";
-      return `<div class="v3c" style="border-left-color:${c}${p.st === "HUỶ" ? ";opacity:.55" : ""}"><span class="kt" style="color:${c}">${p.id} · ${p.role}</span> <b>${p.prob}%</b>${stChip(p.st)}
+      return `<div class="v3c" style="border-left-color:${c}${p.st === "HUỶ" ? ";opacity:.55" : ""}"><span class="kt" style="color:${c}">${p.id} · ${p.role}</span> <b>${p.prob}%</b>${stChip(p.st)}${xChip(p)}
         <br>Vùng: <b>${f2(p.z.lo)}–${f2(p.z.hi)}</b> = ${p.z.nm} <span style="color:${zc}" title="${[...p.z.why.plus, ...p.z.why.minus].join("\n")}">${starTxt(p.z.st)} ${p.z.txt} ${p.z.s}</span> · cách ${sg(p.z.x - spot)}
         ${p.z.fl.length ? `<br><b style="color:#ffd600">↳ ${p.z.fl.join(" · ")}</b>` : ""}
-        <br>Điều kiện: ${p.trig}<br>SL <b>${f2(p.sl)}</b> · TP <b>${f2(p.tp)}</b> <span class="muted">(${p.tpNm})</span> · R:R 1:${p.rr.toFixed(1)}<br><span class="muted">Huỷ khi: ${p.inval}</span></div>`; }).join("");
+        <br>Điều kiện: ${p.trig}${xList(p)}SL <b>${f2(p.sl)}</b> · TP <b>${f2(p.tp)}</b> <span class="muted">(${p.tpNm})</span> · R:R 1:${p.rr.toFixed(1)}<br><span class="muted">Huỷ khi: ${p.inval}</span></div>`; }).join("");
   }
+  const xChip = (p) => { if (!p.xc) return ""; const t = p.xc.length, col = p.xo === t ? "#26b384" : p.xo * 2 >= t ? "#f0b429" : "#9aa4b2"; return `<span title="Điều kiện đạt trên nến vừa đóng" style="font:700 10px/1 monospace;padding:2px 4px;border-radius:4px;background:rgba(255,255,255,.08);color:${col};border:1px solid ${col}55">${p.xo}/${t}</span>`; };
+  const xList = (p) => p.xc ? `<div style="font-size:11px;margin:3px 0 3px 6px;padding-left:8px;border-left:2px solid rgba(255,255,255,.12)">${p.xc.map(([ok, t]) => `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`).join("")}</div>` : "";
   function ordCard(o, compact) {
     const a = ordAdvice(o), w = isWatched(o), c = o.d < 0 ? "#ef5350" : "#26a69a";
     return `<div class="v3c" style="border-left-color:${c}${w ? "" : ";opacity:.45"}"><label style="cursor:pointer"><input type="checkbox" data-ow="${o.code}" ${w ? "checked" : ""}> <b>${o.code}</b></label> <b style="color:${c}">${o.d < 0 ? "SELL" : "BUY"} ${f2(o.e)}</b> <span class="muted">${o.src}</span>
@@ -328,7 +336,7 @@
         else if (p.st === "XÁC NHẬN") det = `<b>vào ${p.d < 0 ? "SELL" : "BUY"}</b> · SL ${f2(p.sl)} · TP ${f2(p.tp)}`;
         else if (p.st === "HUỶ") det = `kịch bản sai: ${p.inval}`;
         else det = `còn ${f2(Math.max(0, p.dist))} tới vùng · ${p.toward ? '<span style="color:#ffd600">giá đang tiến lại gần</span>' : '<span class="muted">giá đang đi ra xa</span>'}`;
-        return `<div class="v3row"><b style="color:${p.d < 0 ? "#ef5350" : "#26a69a"};min-width:30px">${p.id}</b>${stChip(p.st)}<span>${det}</span></div>`; }).join("");
+        return `<div class="v3row"><b style="color:${p.d < 0 ? "#ef5350" : "#26a69a"};min-width:30px">${p.id}</b>${stChip(p.st)}${xChip(p)}<span>${det}</span></div>`; }).join("");
       const oLine = (o) => { const a = ordAdvice(o); return `<div class="v3row"><b>${o.code}</b><b style="color:${o.d < 0 ? "#ef5350" : "#26a69a"}">${o.d < 0 ? "SELL" : "BUY"}</b>${a.R != null ? `<span class="${a.R >= 0 ? "pos" : "neg"}">${a.R >= 0 ? "+" : ""}${a.R.toFixed(2)}R</span>` : ""}<b style="color:${a.col}">${a.act}</b>${a.trail ? `<span class="muted">SL→${f2(a.trail)}</span>` : ""}</div>`; };
       const recent = TRK.filter((t) => t.tf === S.tf).slice(0, 3).map((t) => `<div class="v3row"><span class="muted">${new Date(t.t * 1000).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span><b style="color:${t.d < 0 ? "#ef5350" : "#26a69a"}">${t.code} ${t.d < 0 ? "SELL" : "BUY"}</b> ${f2(t.e)} → ${t.res ? `<b class="${t.res === "TP" ? "pos" : "neg"}">${t.res}</b>` : '<b style="color:#ffb300">đang chạy</b>'}</div>`).join("");
       tb.innerHTML = `<div style="margin:2px 0 6px"><b>Diễn biến:</b> ${dienBien() || '<span class="muted">chưa đủ nến</span>'}</div>${rows}`

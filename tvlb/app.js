@@ -481,7 +481,17 @@ function drawOverlay() {
     vpl.sort((u, v) => u.y - v.y);
     for (let j = 1; j < vpl.length; j++) if (vpl[j].y - vpl[j - 1].y < 12) vpl[j].y = vpl[j - 1].y + 12;
     ctx.fillStyle = C.vp; ctx.font = "9.5px 'IBM Plex Mono', monospace"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-    for (const it of vpl) ctx.fillText(it.t, Math.round(plotW * 0.36), it.y - 2);
+    // B9b1: nhãn ra mép trái; nếu đè lên nhãn tường/Flip/Magnet đã vẽ thì dịch sang phải, hết nhãn đó rồi đặt tiếp (xếp hàng như tường)
+    const placed = [];
+    for (const it of vpl) {
+      const w = ctx.measureText(it.t).width, y0 = it.y - 14, y1 = it.y;
+      let x = 6;
+      for (let g = 0; g < 12; g++) {
+        const hit = [...(ov.tags || []), ...placed].find((t) => t.y0 != null && t.x0 < x + w + 3 && t.x1 > x - 3 && t.y0 < y1 && t.y1 > y0);
+        if (!hit) break; x = hit.x1 + 6;
+      }
+      ctx.fillText(it.t, x, it.y - 2); placed.push({ x0: x, x1: x + w, y0, y1 });
+    }
   }
 
   // TVLB B9b0: vùng xem xét Option Flow (TL1·TL2·HG), vẽ như KH1-KH3
@@ -492,8 +502,10 @@ function drawOverlay() {
       const y1 = Y(p.hi), y0 = Y(p.lo); if (y1 == null || y0 == null) continue;
       const h = Math.max(6, y0 - y1), top = (y0 + y1) / 2 - h / 2, col = p.side === "SELL" ? "239,83,80" : p.side === "BOTH" ? "240,180,41" : "38,166,154";
       const x0 = Math.round(plotW * 0.54);   // vùng ngắn, chỉ nằm ở nửa phải như KH1-KH3 (không kéo ngang cả chart)
-      ctx.fillStyle = `rgba(${col},${p.blocked ? 0.05 : 0.11})`; ctx.fillRect(x0, top, plotW - x0, h);
-      ctx.strokeStyle = `rgba(${col},.35)`; ctx.lineWidth = 0.6; ctx.setLineDash([3, 3]); ctx.strokeRect(x0 + 0.5, top, plotW - x0 - 1, h); ctx.setLineDash([]); ctx.lineWidth = 1;
+      if (!(/^hg/.test(p.id) && OFS.hg_show !== true)) {   // B9b1: vùng HG HEDGE trùng vùng HEDGE −Γ → mặc định chỉ giữ nhãn, ẩn nền + viền (tick "hg_show" để hiện lại)
+        ctx.fillStyle = `rgba(${col},${p.blocked ? 0.05 : 0.11})`; ctx.fillRect(x0, top, plotW - x0, h);
+        ctx.strokeStyle = `rgba(${col},.35)`; ctx.lineWidth = 0.6; ctx.setLineDash([3, 3]); ctx.strokeRect(x0 + 0.5, top, plotW - x0 - 1, h); ctx.setLineDash([]); ctx.lineWidth = 1;
+      }
       labs.push({ sell: p.side === "SELL", y: p.side === "SELL" ? top - 2 : top + h + 12, col, t: `${p.short} ${p.side} · ${p.state}${p.chk && p.chk.tot ? " · " + p.chk.ok + "/" + p.chk.tot : ""}` });   // SELL: nhãn nằm TRÊN vùng · BUY: nhãn nằm DƯỚI vùng
     }
     const up = labs.filter((l) => l.sell).sort((u, v) => v.y - u.y), dn = labs.filter((l) => !l.sell).sort((u, v) => u.y - v.y);
@@ -1039,7 +1051,7 @@ function ofInitUI() {
     <div id="ofWarn" style="display:none;color:#ff6b6b;font-weight:600;margin:4px 0"></div>
     <div class="muted" style="margin:2px 0 4px">Bảng theo dõi nằm ở trang "Vào lệnh OF" bên phải (đứng trước trang "Vào lệnh").</div>
     <div class="muted" style="margin:4px 0">Nhóm tín hiệu</div>${OF_GROUPS.map(([k, t]) => row(k, t, [k])).join("")}
-    <div class="muted" style="margin:6px 0 4px">Bộ lọc theo anh Nam (MẶC ĐỊNH TẮT = như TL1/TL2 cũ; chờ anh Nam xác nhận)</div>${OF_FILTERS.map(([k, t]) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="${k}"${ofX(k) ? " checked" : ""}> ${t}</label>`).join("")}
+    <div class="muted" style="margin:6px 0 4px">Bộ lọc theo anh Nam (MẶC ĐỊNH TẮT = như TL1/TL2 cũ; chờ anh Nam xác nhận)</div>${OF_FILTERS.map(([k, t]) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="${k}"${ofX(k) ? " checked" : ""}> ${t}</label>`).join("")}<div class="muted" style="margin:6px 0 4px">Hiển thị trên chart</div><label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="hg_show"${ofX("hg_show") ? " checked" : ""}> Hiện nền màu + viền nét đứt của vùng HG HEDGE (bỏ tick = ẩn, chỉ còn nhãn, vì trùng vùng HEDGE −Γ)</label>
     <div class="muted" style="margin:6px 0 4px">Số xác nhận tối thiểu: <select id="ofMin" style="font-size:12px">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}"${(Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm) === n ? " selected" : ""}>${n}</option>`).join("")}</select> (mặc định 2; nhớ để các điều kiện bên dưới được tick)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
   d.addEventListener("change", (e) => {
     if (e.target.id === "ofMin") { OFS.minConf = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); return; }
