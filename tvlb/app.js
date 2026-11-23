@@ -1090,9 +1090,21 @@ function ofInitPage() {
   if (b3) bar.insertBefore(btn, b3); else bar.appendChild(btn);
   const page = document.createElement("div"); page.className = "page"; page.dataset.pg = "6"; page.hidden = true;
   page.innerHTML = `<div class="v3grid">
-    <section class="panel v3track" style="overflow:visible;max-height:none"><header><h2>Theo dõi diễn biến</h2><span class="muted small" id="ofReg"></span></header><div id="ofNear" class="v3box">—</div><div id="ofT"></div></section>
+    <section class="panel v3track"><header><h2>Theo dõi diễn biến</h2><span class="muted small" id="ofReg"></span><span style="margin-left:auto;display:inline-flex;gap:4px"><button type="button" id="ofWide" title="Mở rộng sang ngang (bảng chiếm cả hàng trên)" style="cursor:pointer;border:1px solid #2b3440;background:#141a22;color:#9aa4b2;border-radius:5px;padding:2px 7px;font-size:12px;line-height:1.1">⇔</button><button type="button" id="ofTall" title="Phóng to chiều cao bảng" style="cursor:pointer;border:1px solid #2b3440;background:#141a22;color:#9aa4b2;border-radius:5px;padding:2px 7px;font-size:12px;line-height:1.1">⤢</button></span></header><div id="ofNear" class="v3box">—</div><div id="ofT"></div></section>
     <section class="panel v3ctx"><header><h2>Bối cảnh thị trường</h2></header><div class="v3kv" id="ofC"></div></section>
     <section class="panel v3plan"><header><h2>Kế hoạch giao dịch</h2><span class="muted small" id="ofAct"></span></header><div id="ofTabs"></div><div id="ofP"></div></section></div>`;
+  { // B9b1: nút ⇔ (rộng ngang) và ⤢ (cao) cho bảng "Theo dõi diễn biến"; bảng luôn có thanh trượt khi nội dung dài
+    const st = document.createElement("style");
+    st.textContent = `.v3grid.ofwide > .v3track { grid-column: 1 / -1; grid-row: 1; }
+.v3grid.ofwide > .v3ctx { grid-column: 1; grid-row: 2; } .v3grid.ofwide > .v3plan { grid-column: 2; grid-row: 2; }
+.v3grid.oftall { grid-template-rows: minmax(0, 2.4fr) minmax(0, 1fr); }
+.v3grid > .v3track { overflow: auto; }`;
+    document.head.appendChild(st);
+    const g = page.querySelector(".v3grid"), wb = page.querySelector("#ofWide"), tb = page.querySelector("#ofTall"), K = "tvlb.ofsz";
+    let z = {}; try { z = JSON.parse(localStorage.getItem(K) || "{}") || {}; } catch { z = {}; }
+    const ap = () => { g.classList.toggle("ofwide", !!z.w); g.classList.toggle("oftall", !!z.t); try { localStorage.setItem(K, JSON.stringify(z)); } catch { } };
+    wb.onclick = () => { z.w = !z.w; ap(); }; tb.onclick = () => { z.t = !z.t; ap(); }; ap();
+  }
   page.addEventListener("click", (e) => { const b = e.target.closest("button[data-oftab]"); if (b) { OFV.tab = b.dataset.oftab; ofRender(); } });
   aside.insertBefore(page, aside.querySelector("#pineOut") || null);
   // tự xử lý đổi trang cho nút này (nút thêm sau khi trang tải xong thì bộ đổi trang có sẵn không biết tới)
