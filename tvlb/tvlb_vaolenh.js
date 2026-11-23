@@ -235,7 +235,8 @@
 .v3s { display: inline-block; padding: 0 6px; margin: 0 4px; border-radius: 3px; font-size: 10.5px; font-weight: 700; }
 .v3row { display: flex; gap: 6px; align-items: baseline; margin: 3px 0; flex-wrap: wrap; }
 .v3kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; } .v3kv > div:nth-child(odd) { color: var(--muted, #7d8796); }
-.v3c { border-left: 3px solid #455064; padding: 5px 8px; margin: 6px 0; background: rgba(255,255,255,.02); border-radius: 0 5px 5px 0; line-height: 1.55; }
+.v3c { border-left: 3px solid #455064; padding: 5px 8px; margin: 6px 0; border-radius: 0 5px 5px 0; line-height: 1.55; }
+.v3plan svg { background: transparent !important; }
 .v3c .kt { font-weight: 700; }
 .v3sw button { background: var(--panel, #161b22); color: var(--fg, #ddd); border: 1px solid var(--line, #2b3440); border-radius: 4px; padding: 2px 8px; margin-right: 4px; cursor: pointer; font-size: 11.5px; }
 .v3sw button.on { border-color: #e0a83a; color: #f3d38c; }

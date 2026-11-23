@@ -842,7 +842,7 @@ function ofIllu(p, nocap) {
     g += cd(30, 86, 82, 88, 84) + cd(50, 84, 78, 86, 80) + cd(70, 80, 72, 82, 74) + cd(90, 70, 50, 78, 76) + cd(110, 76, 74, 90, 88);
     g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="10.5" fill="#cfd6e0">râu chọc vào vùng</text>`;
   }
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:460px;display:block;margin:4px 0 2px;background:rgba(255,255,255,.03);border-radius:4px" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${g}</svg>${nocap ? "" : '<div class="muted" style="font-size:10.5px">Hình minh họa tình huống (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div>'}`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:460px;display:block;margin:4px 0 2px;border-radius:4px" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${g}</svg>${nocap ? "" : '<div class="muted" style="font-size:10.5px">Hình minh họa tình huống (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div>'}`;
 }
 // ── TVLB B9b0: thêm hình minh họa vào ghi chú rê chuột (tường) và vào thẻ KH1-KH3 của trang ③ Vào lệnh ──
 function ofIlluPair(fade) {
@@ -872,7 +872,7 @@ function ofIlluHedgeTip() {
       c.forEach((v, i) => { g += cd(X[i], ...v); });
       g += tx(26, gold, "vùng Hedge −Γ") + tx(46, dn, "giá đi XUỐNG vào vùng") + tx(66, gold, "dealer phải BÁN đuổi theo") + tx(86, "#cfd6e0", "→ giá rơi xuống nhanh hơn");
     }
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:100%;display:block;margin:2px 0 0;background:rgba(255,255,255,.03);border-radius:4px" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${g}</svg>`;
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:100%;display:block;margin:2px 0 0;border-radius:4px" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${g}</svg>`;
   };
   return `<div data-ofillu="1" style="margin:4px 0 6px"><b style="font-size:11px">Hình minh họa: vì sao vùng này làm giá chạy nhanh</b>`
     + `<div style="display:flex;flex-wrap:wrap;gap:8px"><div style="flex:1 1 220px;min-width:0">${fig("up")}</div><div style="flex:1 1 220px;min-width:0">${fig("down")}</div></div>`
@@ -1036,10 +1036,10 @@ function ofRender() {
   $("#ofTabs").innerHTML = `<button type="button" data-oftab="new" class="${OFV.tab === "new" ? "on" : ""}" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "new" ? "#f0b429" : "transparent"};color:${OFV.tab === "new" ? "#1b1407" : "inherit"};cursor:pointer">Kế hoạch mới</button>`
     + `<button type="button" data-oftab="run" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "run" ? "#f0b429" : "transparent"};color:${OFV.tab === "run" ? "#1b1407" : "inherit"};cursor:pointer">Lệnh hôm nay (${sg.length}${run ? " · " + run + " đang chạy" : ""})</button>`;
   $("#ofP").innerHTML = OFV.tab === "new"
-    ? live.map((p) => `<div style="border-left:3px solid ${OF_COL[p.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[p.side]}">${p.name}</b> ${ofBadge(p.state, p.side)}</div>`
+    ? live.map((p) => `<div style="border-left:3px solid ${OF_COL[p.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[p.side]}">${p.name}</b> ${ofBadge(p.state, p.side)}</div>`
       + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.past ? " · giá ĐÃ QUA tường (chờ giá quay lại rồi mới tính)" : p.dist ? " · cách " + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div>${ofChkHtml(p)}${p.side === "BOTH" ? `<div class="muted" style="margin-top:4px">Hai kịch bản sau khi giá ra khỏi vùng rồi quay lại:</div>` + ofIllu({ id: "hg0", side: "SELL" }, true) + ofIllu({ id: "hg0", side: "BUY" }) : ofIllu(p)}`
       + `<div>SL ${p.sl} · TP1 <b>${typeof p.tp1 === "number" ? ofFm(p.tp1) : p.tp1 || "—"}</b>${p.tp2 != null ? " · TP2 " + ofFm(p.tp2) : ""}</div><div class="muted">Huỷ khi: ${p.cancel}</div></div>`).join("") || '<span class="muted">Chưa có nhóm nào được bật.</span>'
-    : sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side} ${g.score}/${g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type.replace("[Options Flow] ", "")}</div></div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>';
+    : sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side} ${g.score}/${g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type.replace("[Options Flow] ", "")}</div></div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>';
 }
 let ofTry = 0;
 function ofInitUI() {
@@ -1089,7 +1089,7 @@ function ofInitPage() {
   const btn = document.createElement("button"); btn.type = "button"; btn.dataset.pg = "6"; btn.className = "v3btn"; btn.textContent = "Vào lệnh OF"; btn.title = "Vào lệnh Option Flow (TL1·TL2)";
   if (b3) bar.insertBefore(btn, b3); else bar.appendChild(btn);
   const page = document.createElement("div"); page.className = "page"; page.dataset.pg = "6"; page.hidden = true;
-  page.innerHTML = `<div class="v3grid">
+  page.innerHTML = `<div class="v3grid ofgrid">
     <section class="panel v3track"><header><h2>Theo dõi diễn biến</h2><span class="muted small" id="ofReg"></span><span style="margin-left:auto;display:inline-flex;gap:4px"><button type="button" id="ofWide" title="Mở rộng sang ngang (bảng chiếm cả hàng trên)" style="cursor:pointer;border:1px solid #2b3440;background:#141a22;color:#9aa4b2;border-radius:5px;padding:2px 7px;font-size:12px;line-height:1.1">⇔</button><button type="button" id="ofTall" title="Phóng to chiều cao bảng" style="cursor:pointer;border:1px solid #2b3440;background:#141a22;color:#9aa4b2;border-radius:5px;padding:2px 7px;font-size:12px;line-height:1.1">⤢</button></span></header><div id="ofNear" class="v3box">—</div><div id="ofT"></div></section>
     <section class="panel v3ctx"><header><h2>Bối cảnh thị trường</h2></header><div class="v3kv" id="ofC"></div></section>
     <section class="panel v3plan"><header><h2>Kế hoạch giao dịch</h2><span class="muted small" id="ofAct"></span></header><div id="ofTabs"></div><div id="ofP"></div></section></div>`;
@@ -1097,7 +1097,9 @@ function ofInitPage() {
     const st = document.createElement("style");
     st.textContent = `.v3grid.ofwide > .v3track { grid-column: 1 / -1; grid-row: 1; }
 .v3grid.ofwide > .v3ctx { grid-column: 1; grid-row: 2; } .v3grid.ofwide > .v3plan { grid-column: 2; grid-row: 2; }
-.v3grid.oftall { grid-template-rows: minmax(0, 2.4fr) minmax(0, 1fr); }
+.v3grid.ofgrid { grid-template-rows: minmax(0, 1fr) fit-content(42%); }
+.v3grid.ofgrid.oftall { grid-template-rows: minmax(0, 2.4fr) minmax(0, 1fr); }
+.v3grid.ofgrid .v3plan svg { background: transparent !important; }
 .v3grid > .v3track { overflow: auto; }`;
     document.head.appendChild(st);
     const g = page.querySelector(".v3grid"), wb = page.querySelector("#ofWide"), tb = page.querySelector("#ofTall"), K = "tvlb.ofsz";
