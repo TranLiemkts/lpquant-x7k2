@@ -640,6 +640,47 @@ function divAt(i) {
     bull: k.low <= Math.min(...win.map((x) => x.low)) && k.cvd > Math.min(...prev.map((x) => x.cvd)),
   };
 }
+// ── TVLB B9b0: bật/tắt từng điều kiện Option Flow (lưu localStorage "tvlb.of"; false = tắt) ──
+const OF_LS = "tvlb.of";
+const OFS = (() => { try { const o = JSON.parse(localStorage.getItem(OF_LS) || "{}"); return o && typeof o === "object" && !Array.isArray(o) ? o : {}; } catch { return {}; } })();
+const ofOn = (k) => OFS[k] !== false;
+const OF_GROUPS = [
+  ["g_tl1", "TL1 · Thủng Put Wall / Squeeze Call Wall (đi theo xu hướng)"],
+  ["g_trap", "TL1+TL2 · Bẫy tại Call/Put Wall (đánh ngược)"],
+  ["g_hedge", "HG · Vùng Hedge −Γ (không có trong TL1/TL2)"],
+];
+const OF_CONDS = [
+  ["gamma", "Lọc Gamma: Gamma âm thì không BUY bắt đáy (TL1)", ["gamma"]],
+  ["Phân kỳ CVD", "Phân kỳ CVD với giá (TL2)", ["Phân kỳ CVD âm", "Phân kỳ CVD dương"]],
+  ["CVD dốc", "CVD dốc cùng chiều lệnh", ["CVD dốc xuống", "CVD dốc lên"]],
+  ["Delta nến", "Delta của nến cùng chiều lệnh", ["Delta nến âm", "Delta nến dương"]],
+  ["DXY", "DXY ngược chiều vàng (chỉ có khi live)", ["DXY tăng", "DXY giảm"]],
+  ["Volume spike", "Volume spike ≥ 1.8× SMA20", ["Volume spike"]],
+  ["Vol↑ΔOI", "Vol↑ mà ΔOI≤0 (TL2)", ["Vol↑ mà ΔOI≤0"]],
+  ["ΔOI lớn", "ΔOI ≥ 1500 tại vùng (TL2)", ["ΔOI≥1500 tại vùng"]],
+  ["Quét", "Nến quét thanh khoản (chỉ nhóm HG)", ["Nến quét thanh khoản"]],
+  ["Lệnh lớn", "Lệnh lớn ròng cùng chiều (chỉ live)", ["Lệnh lớn mua ròng", "Lệnh lớn bán ròng"]],
+];
+let ofTry = 0;
+function ofInitUI() {
+  if ($("#ofOpts")) return;
+  // tìm ô tick "Option Flow (mũi tên ...)": có thể là <label> hoặc phần tử khác bao quanh ô input
+  const inp = [...document.querySelectorAll('input[type="checkbox"]')].find((x) => /Option Flow \(mũi tên/.test((x.closest("label") || x.parentElement || x).textContent));
+  const lab = inp && (inp.closest("label") || inp.parentElement);
+  if (!lab) { ofTry = (ofTry || 0) + 1; if (ofTry < 20) setTimeout(ofInitUI, 500); else console.warn("[TVLB] không thấy ô Option Flow để gắn hộp bật/tắt"); return; }
+  const d = document.createElement("details"); d.id = "ofOpts"; d.style.cssText = "font-size:12px;margin:4px 0 8px 4px";
+  const row = (k, t, names) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-of="${names.join("|")}"${ofOn(names[0]) ? " checked" : ""}> ${t}</label>`;
+  d.innerHTML = `<summary style="cursor:pointer;font-weight:600">Bật/tắt điều kiện (TL1 · TL2 · HG)</summary>
+    <div class="muted" style="margin:4px 0">Nhóm tín hiệu</div>${OF_GROUPS.map(([k, t]) => row(k, t, [k])).join("")}
+    <div class="muted" style="margin:6px 0 4px">Điều kiện xác nhận (cần đạt ≥ 2)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
+  d.addEventListener("change", (e) => {
+    const el = e.target.closest("input[data-of]"); if (!el) return;
+    for (const k of el.dataset.of.split("|")) { if (el.checked) delete OFS[k]; else OFS[k] = false; }
+    try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { /* bỏ qua */ }
+    replaySignals();
+  });
+  lab.insertAdjacentElement("afterend", d);
+}
 function evaluate(i, live) {
   const sc = S.cfg.signals, c = S.candles, k = c[i], L = primaryLevels();
   if (!L || L.call_wall == null || L.put_wall == null) return null;
@@ -654,12 +695,16 @@ function evaluate(i, live) {
   const dxy = live ? (S.state?.macro?.DXY?.chg_n_pct ?? 0) : 0, dxyUp = dxy >= sc.dxy_thr_pct, dxyDn = dxy <= -sc.dxy_thr_pct;
   const doi = nearDoi(k.close), doiFlat = !!doi && doi.d_oi <= 0;
   // TVLB B9b0 (TL1): Gamma ÂM (giá dưới Flip) = đi theo xu hướng, KHÔNG bắt đáy -> chặn Bear Trap BUY. TL2: ΔOI ≥ doi_big = vùng nghi vấn.
-  const negG = L.gamma_flip != null && k.close < L.gamma_flip, doiBig = !!doi && Math.abs(doi.d_oi) >= sc.doi_big;
+  const negG = ofOn("gamma") && L.gamma_flip != null && k.close < L.gamma_flip, doiBig = !!doi && Math.abs(doi.d_oi) >= sc.doi_big;
   const bf = live ? bigFlow(sc.cvd_slope_bars) : null;   // lệnh lớn ròng (chỉ có dữ liệu cho nến live)
   const mkSig = (type, side, conf, sl, tp1, tp2) => {
     if (bf) conf = { ...conf, [side === "BUY" ? "Lệnh lớn mua ròng" : "Lệnh lớn bán ròng"]: side === "BUY" ? bf.d > 0 : bf.d < 0 };
+    const grp = /Thủng Put Wall|Squeeze/.test(type) ? "g_tl1" : /^HEDGE/.test(type) ? "g_hedge" : "g_trap";
+    if (!ofOn(grp)) return null;                                            // nhóm bị tắt
+    for (const kk of Object.keys(conf)) if (!ofOn("c:" + kk)) delete conf[kk]; // điều kiện bị tắt
+    const tag = grp === "g_tl1" ? "TL1" : grp === "g_trap" ? "TL1·2" : "HG";
     const score = Object.values(conf).filter(Boolean).length;
-    return score >= sc.min_confirm ? { i, time: k.time, type: "[Options Flow] " + type, side, conf, score, max: Object.keys(conf).length, entry: k.close, sl, tp1, tp2, live } : null;
+    return score >= sc.min_confirm ? { i, time: k.time, type: "[Options Flow] " + type, side, conf, score, max: Object.keys(conf).length, entry: k.close, sl, tp1, tp2, live, tag } : null;
   };
   let s = null;
   if (k.close < pw - tol && prev.close >= pw - tol) {
@@ -731,7 +776,7 @@ function setMarkers() {
   const show = $("#lyMk").checked, smcOn = $("#lySMC")?.checked && S.smc;
   const mk = show ? S.signals.map((s) => ({
     time: s.time + TZ, position: s.side === "SELL" ? "aboveBar" : "belowBar", color: s.side === "SELL" ? C.down : C.up,
-    shape: s.side === "SELL" ? "arrowDown" : "arrowUp", text: `${s.side} ${s.score}/${s.max}`,
+    shape: s.side === "SELL" ? "arrowDown" : "arrowUp", text: `${s.tag ? s.tag + " " : ""}${s.side} ${s.score}/${s.max}`,
   })) : [];
   if (smcOn) {
     const c = S.candles;
@@ -1579,7 +1624,7 @@ async function boot() {
   if (!opt("GC") && opt("GLD")) { S.profSrc = "GLD"; document.querySelectorAll("#profTabs button").forEach((x) => x.classList.toggle("on", x.dataset.src === "GLD")); }
   void 0;
   paperLoad();
-  initCharts(); initOverlay(); bind(); initTouchTips();
+  initCharts(); initOverlay(); bind(); ofInitUI(); initTouchTips();
   await startFeed();
   if (STATIC) { staticRecompute(true); renderAll(); }
   drawPlanLines(); renderPine();
