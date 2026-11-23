@@ -149,7 +149,9 @@
       const box = document.querySelector(chk); if (box && !box.checked) return;
       const o = optV(src); if (!o || !o.strikes) return;
       const maxOI = Math.max(1, ...o.strikes.map((s) => s.call_oi + s.put_oi));
+      const drawn = window.TVLB_DRAWN;   // TVLB B9b1: chỉ cho chú giải ở vạch đang được vẽ trên chart (tường đã ẩn thì không hiện; app.js cũ không có biến này thì giữ cách cũ)
       o.strikes.forEach((s) => { const isW = s.strike === o.call_wall || s.strike === o.put_wall; if (!isW && (s.call_oi + s.put_oi) / maxOI < 0.12) return;
+        if (Array.isArray(drawn) && !drawn.some((d) => d.src === src && d.strike === s.strike)) return;
         const c = yy(s.chart); if (c != null && Math.abs(c - y) <= 5) hits.push({ d: Math.abs(c - y), k: 0, f: () => tipStrike(o, s) }); });
     });
     const P = primV(); if (P && (!document.querySelector("#lyKey") || document.querySelector("#lyKey").checked)) {

@@ -402,7 +402,7 @@ function drawOverlay() {
   const W = ov.cv.width / dpr, H = ov.cv.height / dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  ov.tags = []; window.TVLB_TAGS = ov.tags;   // 7f: nhãn vẽ ở lần này (hình chữ nhật + loại)
+  ov.tags = []; window.TVLB_TAGS = ov.tags; ov.drawn = []; window.TVLB_DRAWN = ov.drawn;   // TVLB B9b1: vạch strike thật sự được vẽ (chú giải chỉ cho các vạch này)   // 7f: nhãn vẽ ở lần này (hình chữ nhật + loại)
   const psW = chart.priceScale("right").width() || 70;
   const plotW = W - psW, tsH = 28, plotH = H - tsH;
   const Y = (p) => { const y = candleS.priceToCoordinate(p); return y == null || y < 2 || y > plotH - 2 ? null : y; };
@@ -424,6 +424,7 @@ function drawOverlay() {
       if (share < 0.12 && !isCW && !isPW) continue;
       if (window.TVLB_MINOR === false && !labelSet.has(s.strike) && !isCW && !isPW) continue;   // TVLB+: ẩn vạch strike phụ không có nhãn
       const lc = OLD ? color : isCW ? C.down : isPW ? C.up : color, labelled = labelSet.has(s.strike) || isCW || isPW;   // kiểu 2: màu theo nguồn (GC cam/vàng, GLD tím, theo Master Plan Trụ cột 3); Call/Put phân biệt bằng độ dày và chữ CW/PW trên nhãn
+      if (!OLD || labelled) ov.drawn.push({ src, strike: s.strike });   // TVLB B9b1
       if (OLD) {
         if (!labelled) continue;   // kiểu cũ: chỉ vẽ tường có nhãn, không vẽ vạch phụ
         const tr = OLD_TIER[isCW || isPW ? 1 : share >= OLD_TIER2_SHARE ? 2 : 3];
@@ -692,6 +693,13 @@ function divAt(i) {
 const OF_LS = "tvlb.of";
 const OFS = (() => { try { const o = JSON.parse(localStorage.getItem(OF_LS) || "{}"); return o && typeof o === "object" && !Array.isArray(o) ? o : {}; } catch { return {}; } })();
 const ofOn = (k) => OFS[k] !== false;
+// TVLB B9b1: bộ lọc theo anh Nam, MẶC ĐỊNH TẮT (= hành vi TL1/TL2 cũ). Chỉ bật khi bạn tick ở hộp "Bật/tắt điều kiện". Chờ anh Nam xác nhận câu 4, 5 (bản 3.3).
+const ofX = (k) => OFS[k] === true;
+const OF_FILTERS = [
+  ["x_flipfar", "Ngày Flip xa (cách giá > 2,5%) thì ĐỨNG NGOÀI (theo B6; chờ xác nhận câu 4)"],
+  ["x_near", "Hiện thêm TƯỜNG GẦN theo B10b: top 3 OI trong ±2,5% quanh giá mở ngày (xấp xỉ, THAM KHẢO, chưa kiểm định; chờ xác nhận câu 3)"],
+  ["x_regime", "Bẫy chỉ khi Gamma DƯƠNG, Thủng/Squeeze chỉ khi Gamma ÂM (theo B1; chờ xác nhận câu 5)"],
+];
 const OF_GROUPS = [
   ["g_tl1", "TL1 · Thủng Put Wall / Squeeze Call Wall (đi theo xu hướng)"],
   ["g_trap", "TL1+TL2 · Bẫy tại Call/Put Wall (đánh ngược)"],
@@ -729,9 +737,10 @@ function ofModel() {
   if (!L || L.call_wall == null || L.put_wall == null || c.length < 30) return null;
   const i = c.length - 2, k = c[i], px = c[c.length - 1].close, tol = sc.touch_tol, buf = sc.sl_buffer;
   const cw = L.call_wall, pw = L.put_wall, flip = L.gamma_flip, negG = flip != null && px < flip, blockG = ofOn("gamma") && negG;
+  const rgp = regimePct(px, flip), flipFar = ofX("x_flipfar") && flip != null && rgp.far, regX = ofX("x_regime") && flip != null;   // TVLB B9b1
   const tfOk = (TF_SEC[S.tf] || 0) >= 300, sessOn = sc.session_only && ofOn("session"), inS = inUsSession(c[c.length - 1].time);
-  const since = i - S.lastSigIdx, cdOk = since > sc.cooldown_bars, gatesOk = tfOk && (!sessOn || inS);
-  const gates = [[tfOk, "Khung nến ≥ M5 (đang " + S.tf + ")"], [!sessOn || inS, sessOn ? (inS ? "Trong phiên Mỹ 19:00-23:00 VN" : "Ngoài phiên Mỹ 19:00-23:00 VN") : "Không lọc phiên"], [cdOk, cdOk ? "Hết nghỉ sau tín hiệu trước" : "Đang nghỉ " + (sc.cooldown_bars - since + 1) + " nến sau tín hiệu trước"]];
+  const since = i - S.lastSigIdx, cdOk = since > sc.cooldown_bars, gatesOk = tfOk && (!sessOn || inS) && !flipFar;
+  const gates = [[tfOk, "Khung nến ≥ M5 (đang " + S.tf + ")"], [!sessOn || inS, sessOn ? (inS ? "Trong phiên Mỹ 19:00-23:00 VN" : "Ngoài phiên Mỹ 19:00-23:00 VN") : "Không lọc phiên"], [!flipFar, flipFar ? `Flip cách giá ${rgp.pctTxt}: ngày "không rõ", đứng ngoài (bộ lọc B6 đang bật)` : "Không lọc ngày Flip xa"], [cdOk, cdOk ? "Hết nghỉ sau tín hiệu trước" : "Đang nghỉ " + (sc.cooldown_bars - since + 1) + " nến sau tín hiệu trước"]];
   const plans = [];
   const add = (o) => {
     o.past = (o.id === "bd" && px < o.lo) || (o.id === "sq" && px > o.hi); // giá đã ở phía bên kia tường: không còn "chờ tới vùng"
@@ -739,26 +748,39 @@ function ofModel() {
     o.state = !o.on ? "TẮT" : o.blocked ? "CHẶN Γ" : !gatesOk ? "NGOÀI CỔNG" : o.past ? "ĐÃ QUA" : o.dist <= tol ? (o.side === "BOTH" ? "TRONG VÙNG" : "SẴN SÀNG") : o.dist <= 6 ? "GẦN" : "CHỜ";
     plans.push(o);
   };
-  add({ id: "ts", short: "TL1·2 BẪY", name: "TL1·2 · Bẫy SELL tại Call Wall", side: "SELL", on: ofOn("g_trap"), lo: cw - tol, hi: cw + tol,
+  add({ id: "ts", short: "TL1·2 BẪY", name: "TL1·2 · Bẫy SELL tại Call Wall", side: "SELL", on: ofOn("g_trap"), blocked: regX && negG, why: "Gamma âm: bộ lọc B1 chặn bẫy", lo: cw - tol, hi: cw + tol,
     cond: `nến chạm ≥ ${ofFm(cw - tol)} rồi đóng DƯỚI tường, nến giảm, đủ xác nhận`, sl: `đỉnh nến + ${buf}$`, tp1: nextStrike(cw, false), tp2: pw, cancel: `nến đóng trên ${ofFm(cw + tol)} (thành Squeeze)` });
-  add({ id: "tb", short: "TL1·2 BẪY", name: "TL1·2 · Bẫy BUY tại Put Wall", side: "BUY", on: ofOn("g_trap"), blocked: blockG, lo: pw - tol, hi: pw + tol,
+  add({ id: "tb", short: "TL1·2 BẪY", name: "TL1·2 · Bẫy BUY tại Put Wall", side: "BUY", on: ofOn("g_trap"), blocked: blockG || (regX && negG), why: blockG ? "Gamma âm: không bắt đáy" : "Gamma âm: bộ lọc B1 chặn bẫy", lo: pw - tol, hi: pw + tol,
     cond: `nến chạm ≤ ${ofFm(pw + tol)} rồi đóng TRÊN tường, nến tăng, đủ xác nhận${blockG ? " · đang bị chặn vì Gamma âm" : ""}`, sl: `đáy nến − ${buf}$`, tp1: nextStrike(pw, true), tp2: cw, cancel: `nến đóng dưới ${ofFm(pw - tol)} (thành Thủng)` });
-  add({ id: "bd", short: "TL1 THỦNG", name: "TL1 · Thủng Put Wall (đi theo xu hướng)", side: "SELL", on: ofOn("g_tl1"), lo: pw - tol, hi: pw - tol,
+  add({ id: "bd", short: "TL1 THỦNG", name: "TL1 · Thủng Put Wall (đi theo xu hướng)", side: "SELL", on: ofOn("g_tl1"), blocked: regX && !negG, why: "Gamma dương: bộ lọc B1 chặn thủng/squeeze", lo: pw - tol, hi: pw - tol,
     cond: `nến đóng DƯỚI ${ofFm(pw - tol)} (nến trước còn ở trên), đủ xác nhận`, sl: `${ofFm(pw + buf)} (tường + ${buf}$)`, tp1: nextStrike(pw - tol, false), tp2: null, cancel: `giá quay lại trên ${ofFm(pw)}` });
-  add({ id: "sq", short: "TL1 SQUEEZE", name: "TL1 · Squeeze qua Call Wall (đi theo xu hướng)", side: "BUY", on: ofOn("g_tl1"), lo: cw + tol, hi: cw + tol,
+  add({ id: "sq", short: "TL1 SQUEEZE", name: "TL1 · Squeeze qua Call Wall (đi theo xu hướng)", side: "BUY", on: ofOn("g_tl1"), blocked: regX && !negG, why: "Gamma dương: bộ lọc B1 chặn thủng/squeeze", lo: cw + tol, hi: cw + tol,
     cond: `nến đóng TRÊN ${ofFm(cw + tol)} (nến trước còn ở dưới), đủ xác nhận`, sl: `${ofFm(cw - buf)} (tường − ${buf}$)`, tp1: nextStrike(cw + tol, true), tp2: null, cancel: `giá quay lại dưới ${ofFm(cw)}` });
   try {
     const hz = hedgeSt(), zs = ((hz && hz.zones) || []).filter((z) => z.kind === "accel");
     zs.slice(0, 3).forEach((z, n) => add({ id: "hg" + n, short: "HG HEDGE", name: `HG · Vùng Hedge −Γ ${Math.round(z.lo)}–${Math.round(z.hi)}`, side: px > z.hi ? "BUY" : px < z.lo ? "SELL" : "BOTH", on: ofOn("g_hedge"), lo: z.lo, hi: z.hi,
       cond: px >= z.lo && px <= z.hi ? "giá ĐANG TRONG vùng nên CHƯA có điểm vào. Chờ giá ra khỏi vùng rồi quay lại chọc vào: chọc từ dưới lên rồi đóng ngược xuống = SELL; chọc từ trên xuống rồi đóng ngược lên = BUY (hoặc 2 nến đóng liên tiếp trong vùng = đi theo đà)" : px > z.hi ? "giá ở TRÊN vùng: chờ nến chọc xuống vùng rồi đóng ngược lên trên = BUY (trap), hoặc 2 nến đóng liên tiếp trong vùng theo chiều xuống = đi theo đà" : "giá ở DƯỚI vùng: chờ nến chọc lên vùng rồi đóng ngược xuống dưới = SELL (trap), hoặc 2 nến đóng liên tiếp trong vùng theo chiều lên = đi theo đà", sl: `cực trị 3 nến gần nhất ± ${buf}$`, tp1: "mốc OI kế tiếp", tp2: null, cancel: "nến đóng xuyên hẳn vùng" }));
   } catch { /* bỏ qua */ }
+  // TVLB B9b1: "tường gần" của Bộ B (B10b): top 3 OI trong ±2,5% quanh giá. Giá mốc = giá MỞ của ngày giờ VN (xấp xỉ t0, chưa có giờ OI thật). Chỉ HIỂN THỊ, không phát tín hiệu.
+  try {
+    const o = ofX("x_near") ? prim() : null;
+    if (o) {
+      const day = vnDate(c[c.length - 1].time), f0 = c.find((x) => vnDate(x.time) === day), ref = f0 ? f0.open : px, unclear = flip == null || rgp.far;
+      o.strikes.filter((s) => Math.abs(s.chart / ref - 1) <= 0.025).sort((a, b) => (b.call_oi + b.put_oi) - (a.call_oi + a.put_oi)).slice(0, 3).forEach((s, n) => {
+        const lvl = s.chart, up = lvl > px, brk = !unclear && negG, side = brk ? (up ? "BUY" : "SELL") : (up ? "SELL" : "BUY"), oi = s.call_oi + s.put_oi;
+        add({ id: (brk ? "nwb" : "nwa") + n, short: brk ? "9B TƯỜNG GẦN" : "9A TƯỜNG GẦN", name: `${brk ? "9B phá vỡ (Gamma âm)" : "9A bật lại (Gamma dương)"} · tường gần ${ofFm(lvl)} (OI ${fmtK(oi)})`, side, on: true, blocked: unclear, why: "Flip xa > 2,5% (ngày không rõ): B10b đứng ngoài", zone: "tường gần", lo: lvl * 0.999, hi: lvl * 1.001,
+          cond: brk ? "nến M5 đóng vượt tường ≥ 0,15% và thân nến lớn hơn trung bình 10 nến M5 trước, vào ở giá mở nến kế" : "chạm vùng ±0,10% quanh tường, trong 3 nến M5 có 1 nến đóng quay ngược ≥ 0,10% từ tường (chưa đóng xuyên quá 0,10%), vào ở giá mở nến kế · chỉ lần chạm đầu trong phiên",
+          sl: "0,30% từ giá vào", tp1: "0,60% từ giá vào (R:R 1:2)", tp2: null, cancel: "nến đóng xuyên tường quá 0,10% hoặc 12:30 Chicago" });
+      });
+    }
+  } catch { /* bỏ qua */ }
   const avg = c.slice(i - sc.vol_sma, i).reduce((a, x) => a + x.vol, 0) / sc.vol_sma, slope = k.cvd - c[i - sc.cvd_slope_bars].cvd, doi = nearDoi(k.close);
-  return { px, cw, pw, flip, negG, blockG, tol, gates, gatesOk, plans, k, avg, slope, doi, sc };
+  return { px, cw, pw, flip, negG, blockG, rgp, flipFar, tol, gates, gatesOk, plans, k, avg, slope, doi, sc };
 }
 // ── TVLB B9b0: hình minh họa mini cho từng kế hoạch (SVG, không theo tỉ lệ giá) ──
 function ofIllu(p, nocap) {
   const W = 300, H = 108, flip = p.side === "BUY", Y = (y) => (flip ? H - y : y), up = "#26a69a", dn = "#ef5350";
-  const kind = p.id === "ts" || p.id === "tb" ? "trap" : p.id === "bd" || p.id === "sq" ? "break" : "hedge";
+  const kind = p.id === "ts" || p.id === "tb" || /^nwa/.test(p.id) ? "trap" : p.id === "bd" || p.id === "sq" || /^nwb/.test(p.id) ? "break" : "hedge";
   const cd = (x, o, h, l, c) => { const col = Y(c) < Y(o) ? up : dn, t = Math.min(Y(o), Y(c)); return `<line x1="${x}" x2="${x}" y1="${Y(h)}" y2="${Y(l)}" stroke="${col}" stroke-width="1.8"/><rect x="${x - 6}" y="${t}" width="12" height="${Math.max(2, Math.abs(Y(c) - Y(o)))}" fill="${col}"/>`; };
   const ln = (y, col, txt, dash, x2 = 152) => `<line x1="6" x2="${x2}" y1="${Y(y)}" y2="${Y(y)}" stroke="${col}" stroke-width="1" ${dash ? 'stroke-dasharray="4 3"' : ""}/><text x="${x2 + 5}" y="${Y(y) + 3}" font-size="10.5" fill="${col}">${txt}</text>`;
   const wick = flip ? "đáy" : "đỉnh", wallName = p.zone || (p.id === "ts" || p.id === "sq" ? "Call Wall" : "Put Wall"), G = "#9aa4b2";
@@ -929,15 +951,15 @@ function ofRender() {
   if (!M) { T.innerHTML = warnH + '<span class="muted">Chưa đủ dữ liệu (mốc tường hoặc nến).</span>'; return; }
   const live = M.plans.filter((p) => p.on);
   const near = live.filter((p) => p.dist != null && !p.blocked).sort((a, b) => a.dist - b.dist)[0];
-  $("#ofReg").textContent = M.flip == null ? "" : (M.negG ? "GAMMA ÂM" : "GAMMA DƯƠNG") + ` (giá ${M.negG ? "dưới" : "trên"} Flip ${ofFm(M.flip)})`;
+  $("#ofReg").textContent = M.flip == null ? "" : (M.negG ? "GAMMA ÂM" : "GAMMA DƯƠNG") + ` (giá ${M.negG ? "dưới" : "trên"} Flip ${ofFm(M.flip)}, cách ${M.rgp.pctTxt})`;
   const gate = (g) => `<div style="color:${g[0] ? "#26b384" : "#ff6b6b"}">${g[0] ? "✔" : "✘"} ${g[1]}</div>`;
   const nb = $("#ofNear"); if (nb) nb.innerHTML = near ? `Gần nhất: <b style="color:${OF_COL[near.side]}">${near.name}</b> · ${near.dist === 0 ? "giá ĐANG TRONG vùng" : "còn " + near.dist.toFixed(2) + "$ tới vùng"}` : "Chưa có nhóm nào được bật.";
   T.innerHTML = warnH
-    + live.map((p) => `<div style="display:grid;grid-template-columns:96px auto 1fr;gap:6px;align-items:center;margin:3px 0"><b style="color:${OF_COL[p.side]}">${p.short}</b>${ofBadge(p.state)}<span class="muted">${p.blocked ? "Gamma âm: không bắt đáy" : p.past ? "giá đã ở bên kia tường (đã qua)" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng"} · ${p.side}</span></div>`).join("")
+    + live.map((p) => `<div style="display:grid;grid-template-columns:104px auto 1fr;gap:6px;align-items:center;margin:3px 0"><b style="color:${OF_COL[p.side]};font-size:11px;white-space:nowrap">${p.short}</b>${ofBadge(p.state)}<span class="muted">${p.blocked ? (p.why || "Gamma âm: không bắt đáy") : p.past ? "giá đã ở bên kia tường (đã qua)" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng"} · ${p.side}</span></div>`).join("")
     + `<div style="margin-top:8px"><b>Cổng kiểm</b>${M.gates.map(gate).join("")}</div>`;
   const kv = (a, b) => `<div class="muted">${a}</div><div>${b}</div>`, k = M.k, sc = M.sc, dxy = S.state?.macro?.DXY?.chg_n_pct;
   $("#ofC").innerHTML = kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
-    + kv("Gamma", M.flip == null ? "chưa rõ Flip" : `${M.negG ? "ÂM" : "DƯƠNG"} · Flip ${ofFm(M.flip)}` + (M.blockG ? " → BUY bắt đáy bị chặn" : ""))
+    + kv("Gamma", M.flip == null ? "chưa rõ Flip" : `${M.negG ? "ÂM" : "DƯƠNG"} · Flip ${ofFm(M.flip)} · cách ${M.rgp.pctTxt}${M.rgp.far ? " (xa hơn 2,5%: B6 coi là ngày không rõ)" : ""}` + (M.blockG ? " → BUY bắt đáy bị chặn" : ""))
     + kv(`Nến đóng ${vnClock(k.time)}`, `CVD dốc ${M.slope > 0 ? "lên ↑" : M.slope < 0 ? "xuống ↓" : "phẳng"} · Delta ${k.delta > 0 ? "+" : k.delta < 0 ? "−" : ""}${Math.abs(k.delta).toFixed(0)} · Volume ${M.avg > 0 ? (k.vol / M.avg).toFixed(2) : "?"}× SMA${sc.vol_sma} (cần ≥ ${sc.vol_spike_mult}×)`)
     + kv("ΔOI gần nhất", M.doi ? `${M.doi.d_oi} tại strike ${M.doi.chart}` : `không có strike trong ${sc.doi_zone}$`)
     + kv("DXY", dxy == null ? "—" : `${dxy >= 0 ? "+" : ""}${Number(dxy).toFixed(3)}% (ngưỡng ${sc.dxy_thr_pct}%) · chỉ tính khi live`)
@@ -967,9 +989,12 @@ function ofInitUI() {
     <div id="ofWarn" style="display:none;color:#ff6b6b;font-weight:600;margin:4px 0"></div>
     <div class="muted" style="margin:2px 0 4px">Bảng theo dõi nằm ở trang "Vào lệnh OF" bên phải (đứng trước trang "Vào lệnh").</div>
     <div class="muted" style="margin:4px 0">Nhóm tín hiệu</div>${OF_GROUPS.map(([k, t]) => row(k, t, [k])).join("")}
+    <div class="muted" style="margin:6px 0 4px">Bộ lọc theo anh Nam (MẶC ĐỊNH TẮT = như TL1/TL2 cũ; chờ anh Nam xác nhận)</div>${OF_FILTERS.map(([k, t]) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="${k}"${ofX(k) ? " checked" : ""}> ${t}</label>`).join("")}
     <div class="muted" style="margin:6px 0 4px">Số xác nhận tối thiểu: <select id="ofMin" style="font-size:12px">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}"${(Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm) === n ? " selected" : ""}>${n}</option>`).join("")}</select> (mặc định 2; nhớ để các điều kiện bên dưới được tick)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
   d.addEventListener("change", (e) => {
     if (e.target.id === "ofMin") { OFS.minConf = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); return; }
+    const ex = e.target.closest("input[data-ofx]");   // TVLB B9b1
+    if (ex) { if (ex.checked) OFS[ex.dataset.ofx] = true; else delete OFS[ex.dataset.ofx]; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
     const el = e.target.closest("input[data-of]"); if (!el) return;
     for (const k of el.dataset.of.split("|")) { if (el.checked) delete OFS[k]; else OFS[k] = false; }
     try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { /* bỏ qua */ }
@@ -1023,6 +1048,7 @@ function evaluate(i, live) {
   if (!L || L.call_wall == null || L.put_wall == null) return null;
   if (i < Math.max(sc.div_lookback, sc.vol_sma, sc.cvd_slope_bars) + 2) return null;
   if (sc.session_only && ofOn("session") && !inUsSession(k.time)) return null;
+  if (ofX("x_flipfar") && L.gamma_flip != null && regimePct(k.close, L.gamma_flip).far) return null;   // TVLB B9b1: lọc ngày Flip xa (mặc định tắt)
   if ((TF_SEC[S.tf] || 0) < 300) return null;   // Options Flow: chỉ báo trên khung từ M5 trở lên (giống TradingView)
   if (i - S.lastSigIdx <= sc.cooldown_bars) return null;
   const cw = L.call_wall, pw = L.put_wall, tol = sc.touch_tol, d0 = divAt(i), d1 = divAt(i - 1), prev = c[i - 1];
@@ -1038,6 +1064,7 @@ function evaluate(i, live) {
     if (bf) conf = { ...conf, [side === "BUY" ? "Lệnh lớn mua ròng" : "Lệnh lớn bán ròng"]: side === "BUY" ? bf.d > 0 : bf.d < 0 };
     const grp = /Thủng Put Wall|Squeeze/.test(type) ? "g_tl1" : /^HEDGE/.test(type) ? "g_hedge" : "g_trap";
     if (!ofOn(grp)) return null;                                            // nhóm bị tắt
+    if (ofX("x_regime") && L.gamma_flip != null) { const ng = k.close < L.gamma_flip; if ((grp === "g_trap" && ng) || (grp === "g_tl1" && !ng)) return null; }   // TVLB B9b1: lọc theo chế độ Gamma (mặc định tắt)
     for (const kk of Object.keys(conf)) if (!ofOn("c:" + kk)) delete conf[kk]; // điều kiện bị tắt
     const tag = grp === "g_tl1" ? "TL1" : grp === "g_trap" ? "TL1·2" : "HG";
     const score = Object.values(conf).filter(Boolean).length;
@@ -1046,7 +1073,7 @@ function evaluate(i, live) {
   let s = null;
   if (k.close < pw - tol && prev.close >= pw - tol) {
     const tp1 = nextStrike(k.close, false);
-    s = mkSig("Thủng Put Wall – Negative Gamma", "SELL", { "CVD dốc xuống": slope < 0, "Delta nến âm": k.delta < 0, "DXY tăng": dxyUp, "Volume spike": volSpike }, pw + sc.sl_buffer, tp1, tp1 != null ? nextStrike(tp1, false) : null);
+    s = mkSig("Thủng Put Wall", "SELL", { "CVD dốc xuống": slope < 0, "Delta nến âm": k.delta < 0, "DXY tăng": dxyUp, "Volume spike": volSpike }, pw + sc.sl_buffer, tp1, tp1 != null ? nextStrike(tp1, false) : null);
   }
   if (!s && k.close > cw + tol && prev.close <= cw + tol) {
     const tp1 = nextStrike(k.close, true);
