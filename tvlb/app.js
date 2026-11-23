@@ -502,6 +502,31 @@ function drawOverlay() {
     for (const l of labs) { const w = ctx.measureText(l.t).width; ctx.fillStyle = "rgba(10,14,20,.88)"; ctx.fillRect(plotW - 9 - w, l.y - 11, w + 6, 12); ctx.fillStyle = `rgb(${l.col})`; ctx.fillText(l.t, plotW - 6, l.y); }
   }
 
+  // TVLB B9b0: khung đo SL/TP kiểu TradingView + dấu vào lệnh cho các tín hiệu Option Flow hôm nay
+  if (ofOn("rr") && S.ofChk && S.ofChk.checked && S.signals.length) {
+    const tsc = chart.timeScale(), cc = S.candles, P = (v) => candleS.priceToCoordinate(v);
+    ctx.font = "600 10px 'IBM Plex Mono', monospace"; ctx.textBaseline = "middle";
+    for (const g of S.signals.slice(-6)) {
+      const x0 = tsc.timeToCoordinate(g.time + TZ); if (x0 == null || x0 > plotW) continue;
+      const nx = cc[g.i + 1] ? tsc.timeToCoordinate(cc[g.i + 1].time + TZ) : null, bs = nx != null ? Math.max(3, nx - x0) : 8;
+      let hit = null;
+      for (let j = g.i + 1; j < cc.length; j++) { const k2 = cc[j]; if (g.side === "BUY" ? k2.low <= g.sl : k2.high >= g.sl) { hit = { j, t: "chạm SL" }; break; } if (g.tp1 != null && (g.side === "BUY" ? k2.high >= g.tp1 : k2.low <= g.tp1)) { hit = { j, t: "chạm TP1" }; break; } }
+      let x1 = hit ? tsc.timeToCoordinate(cc[hit.j].time + TZ) : null; if (x1 == null) x1 = x0 + 14 * bs;
+      x1 = Math.min(plotW - 2, Math.max(x1, x0 + 6 * bs));
+      const yE = P(g.entry), yS = P(g.sl), yT = g.tp1 != null ? P(g.tp1) : null; if (yE == null || yS == null) continue;
+      const risk = Math.abs(g.entry - g.sl), gain = g.tp1 != null ? Math.abs(g.tp1 - g.entry) : null, w = x1 - x0;
+      if (yT != null) { ctx.fillStyle = "rgba(38,166,154,.20)"; ctx.fillRect(x0, Math.min(yE, yT), w, Math.abs(yT - yE)); }
+      ctx.fillStyle = "rgba(239,83,80,.20)"; ctx.fillRect(x0, Math.min(yE, yS), w, Math.abs(yS - yE));
+      ctx.strokeStyle = "#f0b429"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x0, yE); ctx.lineTo(x1, yE); ctx.stroke();
+      ctx.fillStyle = "#f0b429"; ctx.beginPath(); ctx.moveTo(x0, yE - 5); ctx.lineTo(x0 + 5, yE); ctx.lineTo(x0, yE + 5); ctx.lineTo(x0 - 5, yE); ctx.closePath(); ctx.fill();   // dấu vào lệnh (hình thoi)
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#f0b429"; ctx.fillText(`VÀO ${g.tag || ""} ${g.side} ${g.entry.toFixed(1)}`, x0 + 8, yE + (g.side === "BUY" ? -9 : 9));
+      ctx.fillStyle = "#ef5350"; ctx.fillText(`SL −${risk.toFixed(1)}$`, x0 + 6, yS + (g.side === "BUY" ? -7 : 7));
+      if (yT != null) { ctx.fillStyle = "#26a69a"; ctx.fillText(`TP1 +${gain.toFixed(1)}$ · 1:${(gain / Math.max(risk, 0.01)).toFixed(1)}`, x0 + 6, yT + (g.side === "BUY" ? 7 : -7)); }
+      if (hit) { ctx.textAlign = "right"; ctx.fillStyle = hit.t === "chạm SL" ? "#ef5350" : "#26a69a"; ctx.fillText(hit.t, x1 - 3, yE); }
+    }
+  }
+
   // Đường cong Net GEX theo strike (nguồn chính)
   if (P && $("#lyGex").checked && P.strikes.length > 1) {
     const cx = plotW * 0.78, half = plotW * 0.1;
@@ -673,6 +698,7 @@ const OF_GROUPS = [
   ["g_hedge", "HG · Vùng Hedge −Γ (không có trong TL1/TL2)"],
   ["session", "Chỉ xét phiên Mỹ 19:00-23:00 giờ VN (bỏ tick = xét cả ngày)"],
   ["zones", "Vẽ vùng xem xét TL1·TL2·HG lên chart"],
+  ["rr", "Vẽ khung đo SL/TP kiểu TradingView cho tín hiệu hôm nay"],
 ];
 const OF_CONDS = [
   ["gamma", "Lọc Gamma: Gamma âm thì không BUY bắt đáy (TL1)", ["gamma"]],
@@ -691,7 +717,7 @@ const OF_CONDS = [
 function ofWarnText() {
   const minC = Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm;
   const nC = OF_CONDS.filter(([k]) => k !== "gamma").filter(([, , n]) => ofOn("c:" + n[0])).length;
-  const nG = OF_GROUPS.filter(([k]) => k !== "session" && k !== "zones").filter(([k]) => ofOn(k)).length;
+  const nG = OF_GROUPS.filter(([k]) => k !== "session" && k !== "zones" && k !== "rr").filter(([k]) => ofOn(k)).length;
   if (nG === 0) return "Đã tắt cả 3 nhóm tín hiệu → sẽ không có tín hiệu nào. Hãy tick ít nhất 1 nhóm.";
   if (nC < minC) return `Chỉ đang bật ${nC} điều kiện xác nhận nhưng cần tối thiểu ${minC} → sẽ KHÔNG BAO GIỜ có tín hiệu. Hãy tick thêm điều kiện hoặc hạ "Số xác nhận tối thiểu".`;
   return "";
@@ -729,12 +755,12 @@ function ofModel() {
   return { px, cw, pw, flip, negG, blockG, tol, gates, gatesOk, plans, k, avg, slope, doi, sc };
 }
 // ── TVLB B9b0: hình minh họa mini cho từng kế hoạch (SVG, không theo tỉ lệ giá) ──
-function ofIllu(p) {
+function ofIllu(p, nocap) {
   const W = 290, H = 104, flip = p.side === "BUY", Y = (y) => (flip ? H - y : y), up = "#26a69a", dn = "#ef5350";
   const kind = p.id === "ts" || p.id === "tb" ? "trap" : p.id === "bd" || p.id === "sq" ? "break" : "hedge";
   const cd = (x, o, h, l, c) => { const col = Y(c) < Y(o) ? up : dn, t = Math.min(Y(o), Y(c)); return `<line x1="${x}" x2="${x}" y1="${Y(h)}" y2="${Y(l)}" stroke="${col}" stroke-width="1.4"/><rect x="${x - 5}" y="${t}" width="10" height="${Math.max(2, Math.abs(Y(c) - Y(o)))}" fill="${col}"/>`; };
   const ln = (y, col, txt, dash, x2 = 152) => `<line x1="6" x2="${x2}" y1="${Y(y)}" y2="${Y(y)}" stroke="${col}" stroke-width="1" ${dash ? 'stroke-dasharray="4 3"' : ""}/><text x="${x2 + 5}" y="${Y(y) + 3}" font-size="8.5" fill="${col}">${txt}</text>`;
-  const wick = flip ? "đáy" : "đỉnh", wallName = p.id === "ts" || p.id === "sq" ? "Call Wall" : "Put Wall", G = "#9aa4b2";
+  const wick = flip ? "đáy" : "đỉnh", wallName = p.zone || (p.id === "ts" || p.id === "sq" ? "Call Wall" : "Put Wall"), G = "#9aa4b2";
   let g = "";
   if (kind === "trap") {
     g += ln(30, G, `${wallName} (tường)`) + ln(14, dn, `SL = ${wick} râu + 3$`, true) + ln(50, "#f0b429", "vào lệnh (đóng nến)", true) + ln(74, up, "TP1: mốc OI kế", true) + ln(92, up, "TP2: tường đối diện", true);
@@ -750,7 +776,43 @@ function ofIllu(p) {
     g += cd(30, 86, 82, 88, 84) + cd(50, 84, 78, 86, 80) + cd(70, 80, 72, 82, 74) + cd(90, 70, 50, 78, 76) + cd(110, 76, 74, 90, 88);
     g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="8.5" fill="#cfd6e0">râu chọc vào vùng rồi nến đóng ngược ra</text>`;
   }
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin:4px 0 2px;background:rgba(255,255,255,.03);border-radius:4px" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${g}</svg><div class="muted" style="font-size:10.5px">Hình minh họa tình huống (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin:4px 0 2px;background:rgba(255,255,255,.03);border-radius:4px" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${g}</svg>${nocap ? "" : '<div class="muted" style="font-size:10.5px">Hình minh họa tình huống (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div>'}`;
+}
+// ── TVLB B9b0: thêm hình minh họa vào ghi chú rê chuột (tường) và vào thẻ KH1-KH3 của trang ③ Vào lệnh ──
+function ofIlluPair(fade) {
+  const brk = fade === "SELL" ? "BUY" : "SELL";
+  const box = (t, p) => `<div style="flex:1 1 210px;min-width:200px"><b>${t}</b>${ofIllu(p, true)}</div>`;
+  return `<div data-ofillu="1" style="margin:6px 0 8px"><div style="display:flex;gap:10px;flex-wrap:wrap">`
+    + box(`Kịch bản chính: ${fade} (nến chạm vùng rồi đóng ngược)`, { id: fade === "SELL" ? "ts" : "tb", side: fade, zone: "vùng tường" })
+    + box(`Kịch bản phá: ${brk} (nến đóng xuyên vùng, huỷ ${fade})`, { id: brk === "SELL" ? "bd" : "sq", side: brk, zone: "vùng tường" })
+    + `</div><div class="muted" style="font-size:10.5px">Hình minh họa tình huống (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div></div>`;
+}
+function ofDecorateTip(n) {
+  if (!n || n.nodeType !== 1 || n.closest("[data-ofillu]")) return;
+  if (!/2\. Uy tín tường/.test(n.textContent || "")) return;
+  let h = null;
+  for (const el of [n, ...n.querySelectorAll("*")]) {
+    if (/^\s*2\. Uy tín tường/.test(el.textContent || "") && ![...el.children].some((c) => /^\s*2\. Uy tín tường/.test(c.textContent || ""))) { h = el; break; }
+  }
+  if (!h || (h.previousElementSibling && h.previousElementSibling.dataset && h.previousElementSibling.dataset.ofillu)) return;
+  let root = h; for (let k = 0; k < 5 && root && !/1\. Tình huống/.test(root.textContent || ""); k++) root = root.parentElement;
+  const txt = root ? root.textContent : "", a = txt.indexOf("1. Tình huống"), b = txt.indexOf("2. Uy tín");
+  const m = a >= 0 && b > a ? /canh (BUY|SELL)/.exec(txt.slice(a, b)) : null; if (!m) return;
+  h.insertAdjacentHTML("beforebegin", ofIlluPair(m[1]));
+}
+function ofDecorateKH() {
+  for (const card of document.querySelectorAll("#v3plan .v3c")) {
+    if (card.querySelector("[data-ofillu]")) continue;
+    const kt = card.querySelector(".kt"), t = kt ? kt.textContent : "", m = /(SELL|BUY)/.exec(t); if (!m) continue;
+    const side = m[1], brk = /KH2/.test(t) || /theo hướng phá/.test(t);
+    const id = brk ? (side === "SELL" ? "bd" : "sq") : (side === "SELL" ? "ts" : "tb");
+    card.insertAdjacentHTML("beforeend", `<div data-ofillu="1">${ofIllu({ id, side, zone: "vùng KH" })}</div>`);
+  }
+}
+function ofStartDecor() {
+  let q = false;
+  new MutationObserver((ms) => { if (q) return; q = true; requestAnimationFrame(() => { q = false; for (const m of ms) for (const n of m.addedNodes) ofDecorateTip(n); }); }).observe(document.body, { childList: true, subtree: true });
+  setInterval(ofDecorateKH, 1500);
 }
 const OF_COL = { SELL: "#ef5350", BUY: "#26a69a" };
 function ofBadge(st) {
@@ -814,7 +876,7 @@ function ofInitUI() {
     replaySignals(); ofRender();
   });
   lab.insertAdjacentElement("afterend", d);
-  ofCompactTop();
+  ofCompactTop(); ofStartDecor();
   ofRender(); setInterval(ofRender, 3000);
   setTimeout(ofInitPage, 1500);   // đợi các trang ③④⑤ dựng xong để nút ⑥ nằm sau chúng
 }
@@ -822,10 +884,10 @@ function ofInitUI() {
 function ofCompactTop() {
   if (document.getElementById("ofCompactCss")) return;
   const st = document.createElement("style"); st.id = "ofCompactCss";
-  st.textContent = "#btnCopyTV,#btnRefresh,#btnAI{padding:3px 10px!important;font-size:12px!important;line-height:1.2!important;min-height:0!important}#tfs button{padding:2px 8px!important;font-size:11.5px!important;line-height:1.2!important;min-height:0!important}";
+  st.textContent = "#btnCopyTV,#btnRefresh,#btnAI{padding:3px 10px!important;font-size:12px!important;line-height:1.2!important;min-height:0!important}";
   document.head.appendChild(st);
   const sq = (el) => { if (el) { el.style.setProperty("padding-top", "2px", "important"); el.style.setProperty("padding-bottom", "2px", "important"); el.style.setProperty("margin-top", "0", "important"); el.style.setProperty("margin-bottom", "2px", "important"); el.style.setProperty("min-height", "0", "important"); } };
-  sq($("#btnAI")?.parentElement); sq($("#tfs")?.parentElement);
+  sq($("#btnAI")?.parentElement);   // hàng khung giờ + nhãn FEED/OPTIONS/PHIÊN giữ nguyên chiều cao gốc để không chồng lên hàng nút trang
 }
 let ofPgTry = 0;
 function ofInitPage() {
