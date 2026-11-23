@@ -485,15 +485,19 @@ function drawOverlay() {
 
   // TVLB B9b0: vùng xem xét Option Flow (TL1·TL2·HG), vẽ như KH1-KH3
   if (ofOn("zones") && S.ofChk && S.ofChk.checked && S.ofPlans) {
+    const labs = [];
     for (const p of S.ofPlans) {
       if (!p.on || p.lo == null) continue;
       const y1 = Y(p.hi), y0 = Y(p.lo); if (y1 == null || y0 == null) continue;
       const h = Math.max(6, y0 - y1), top = (y0 + y1) / 2 - h / 2, col = p.side === "SELL" ? "239,83,80" : "38,166,154";
       ctx.fillStyle = `rgba(${col},${p.blocked ? 0.06 : 0.16})`; ctx.fillRect(0, top, plotW, h);
       ctx.strokeStyle = `rgba(${col},.7)`; ctx.setLineDash([4, 3]); ctx.strokeRect(0.5, top, plotW - 1, h); ctx.setLineDash([]);
-      ctx.fillStyle = `rgb(${col})`; ctx.font = "600 10px 'IBM Plex Mono', monospace"; ctx.textAlign = "right"; ctx.textBaseline = "bottom";
-      ctx.fillText(`${p.short} ${p.side} · ${p.state}`, plotW - 6, top - 2);
+      labs.push({ y: top - 2, col, t: `${p.short} ${p.side} · ${p.state}` });
     }
+    labs.sort((u, v) => u.y - v.y);
+    for (let j = 1; j < labs.length; j++) if (labs[j].y - labs[j - 1].y < 12) labs[j].y = labs[j - 1].y + 12;   // nhãn sát nhau thì xếp chồng xuống
+    ctx.font = "600 10px 'IBM Plex Mono', monospace"; ctx.textAlign = "right"; ctx.textBaseline = "bottom";
+    for (const l of labs) { ctx.fillStyle = `rgb(${l.col})`; ctx.fillText(l.t, plotW - 6, l.y); }
   }
 
   // Đường cong Net GEX theo strike (nguồn chính)
@@ -739,19 +743,17 @@ function ofRender() {
   const near = live.filter((p) => p.dist != null && !p.blocked).sort((a, b) => a.dist - b.dist)[0];
   $("#ofReg").textContent = M.flip == null ? "" : (M.negG ? "GAMMA ÂM" : "GAMMA DƯƠNG") + ` (giá ${M.negG ? "dưới" : "trên"} Flip ${ofFm(M.flip)})`;
   const gate = (g) => `<div style="color:${g[0] ? "#26b384" : "#ff6b6b"}">${g[0] ? "✔" : "✘"} ${g[1]}</div>`;
+  const nb = $("#ofNear"); if (nb) nb.innerHTML = near ? `Gần nhất: <b style="color:${OF_COL[near.side]}">${near.name}</b> · ${near.dist === 0 ? "giá ĐANG TRONG vùng" : "còn " + near.dist.toFixed(2) + "$ tới vùng"}` : "Chưa có nhóm nào được bật.";
   T.innerHTML = warnH
-    + (near ? `<div style="border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 8px;margin-bottom:8px">Gần nhất: <b style="color:${OF_COL[near.side]}">${near.name}</b> · ${near.dist === 0 ? "giá ĐANG TRONG vùng" : "còn " + near.dist.toFixed(2) + "$ tới vùng"}</div>` : "")
     + live.map((p) => `<div style="display:grid;grid-template-columns:96px auto 1fr;gap:6px;align-items:center;margin:3px 0"><b style="color:${OF_COL[p.side]}">${p.short}</b>${ofBadge(p.state)}<span class="muted">${p.blocked ? "Gamma âm: không bắt đáy" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng"} · ${p.side}</span></div>`).join("")
     + `<div style="margin-top:8px"><b>Cổng kiểm</b>${M.gates.map(gate).join("")}</div>`;
   const kv = (a, b) => `<div class="muted">${a}</div><div>${b}</div>`, k = M.k, sc = M.sc, dxy = S.state?.macro?.DXY?.chg_n_pct;
-  $("#ofC").innerHTML = `<div style="display:grid;grid-template-columns:92px 1fr;gap:5px 10px;font-size:12.5px;line-height:1.45">`
-    + kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
+  $("#ofC").innerHTML = kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
     + kv("Gamma", M.flip == null ? "chưa rõ Flip" : `${M.negG ? "ÂM" : "DƯƠNG"} · Flip ${ofFm(M.flip)}` + (M.blockG ? " → BUY bắt đáy bị chặn" : ""))
     + kv(`Nến đóng ${vnClock(k.time)}`, `CVD dốc ${M.slope > 0 ? "lên ↑" : M.slope < 0 ? "xuống ↓" : "phẳng"} · Delta ${k.delta > 0 ? "+" : k.delta < 0 ? "−" : ""}${Math.abs(k.delta).toFixed(0)} · Volume ${M.avg > 0 ? (k.vol / M.avg).toFixed(2) : "?"}× SMA${sc.vol_sma} (cần ≥ ${sc.vol_spike_mult}×)`)
     + kv("ΔOI gần nhất", M.doi ? `${M.doi.d_oi} tại strike ${M.doi.chart}` : `không có strike trong ${sc.doi_zone}$`)
-    + kv("DXY", dxy == null ? "—" : `${dxy >= 0 ? "+" : ""}${dxy}% (ngưỡng ${sc.dxy_thr_pct}%) · chỉ tính khi live`)
-    + kv("Cấu hình", `xác nhận tối thiểu ${Number.isInteger(OFS.minConf) ? OFS.minConf : sc.min_confirm} · nghỉ ${sc.cooldown_bars} nến · chạm tường ≤ ${sc.touch_tol}$ · SL ± ${sc.sl_buffer}$`)
-    + `</div>`;
+    + kv("DXY", dxy == null ? "—" : `${dxy >= 0 ? "+" : ""}${Number(dxy).toFixed(3)}% (ngưỡng ${sc.dxy_thr_pct}%) · chỉ tính khi live`)
+    + kv("Cấu hình", `xác nhận tối thiểu ${Number.isInteger(OFS.minConf) ? OFS.minConf : sc.min_confirm} · nghỉ ${sc.cooldown_bars} nến · chạm tường ≤ ${sc.touch_tol}$ · SL ± ${sc.sl_buffer}$`);
   const sg = S.signals.slice().reverse(), c = S.candles;
   const stt = (g) => { for (let j = g.i + 1; j < c.length; j++) { const x = c[j]; if (g.side === "BUY" ? x.low <= g.sl : x.high >= g.sl) return "chạm SL"; if (g.tp1 != null && (g.side === "BUY" ? x.high >= g.tp1 : x.low <= g.tp1)) return "chạm TP1"; } return "đang chạy"; };
   const run = sg.filter((g) => stt(g) === "đang chạy").length;
@@ -800,10 +802,10 @@ function ofInitPage() {
   const btn = document.createElement("button"); btn.type = "button"; btn.dataset.pg = "6"; btn.className = "v3btn"; btn.textContent = "Vào lệnh OF"; btn.title = "Vào lệnh Option Flow (TL1·TL2)";
   if (b3) bar.insertBefore(btn, b3); else bar.appendChild(btn);
   const page = document.createElement("div"); page.className = "page"; page.dataset.pg = "6"; page.hidden = true;
-  page.innerHTML = `<div class="row" data-row="top"><div class="duo">
-      <section class="panel"><header><h2>Theo dõi diễn biến</h2><span class="muted small" id="ofReg"></span></header><div id="ofT" style="font-size:12.5px;line-height:1.5;padding:4px 8px"></div></section>
-      <section class="panel"><header><h2>Kế hoạch giao dịch</h2><span class="muted small" id="ofAct"></span></header><div style="padding:4px 8px"><div id="ofTabs"></div><div id="ofP" style="font-size:12.5px;line-height:1.5"></div></div></section></div></div>
-    <div class="row" data-row="bot"><section class="panel"><header><h2>Bối cảnh thị trường</h2></header><div id="ofC" style="padding:4px 8px"></div></section></div>`;
+  page.innerHTML = `<div class="v3grid">
+    <section class="panel v3track"><header><h2>Theo dõi diễn biến</h2><span class="muted small" id="ofReg"></span></header><div id="ofNear" class="v3box">—</div><div id="ofT"></div></section>
+    <section class="panel v3ctx"><header><h2>Bối cảnh thị trường</h2></header><div class="v3kv" id="ofC"></div></section>
+    <section class="panel v3plan"><header><h2>Kế hoạch giao dịch</h2><span class="muted small" id="ofAct"></span></header><div id="ofTabs"></div><div id="ofP"></div></section></div>`;
   page.addEventListener("click", (e) => { const b = e.target.closest("button[data-oftab]"); if (b) { OFV.tab = b.dataset.oftab; ofRender(); } });
   aside.insertBefore(page, aside.querySelector("#pineOut") || null);
   // tự xử lý đổi trang cho nút này (nút thêm sau khi trang tải xong thì bộ đổi trang có sẵn không biết tới)
@@ -815,7 +817,7 @@ function ofInitPage() {
   bar.addEventListener("click", (e) => { const b = e.target.closest("button[data-pg]"); if (b && b !== btn) { page.hidden = true; btn.classList.remove("on"); } }, true);
   // thu nhỏ hàng nút trang để vừa 1 hàng, còn chỗ cho 1-2 nút nữa
   const st = document.createElement("style");
-  st.textContent = "#pgbar{display:flex!important;flex-wrap:nowrap!important;gap:4px!important;overflow-x:auto}#pgbar button{padding:3px 7px!important;font-size:11.5px!important;white-space:nowrap!important;flex:0 0 auto}";
+  st.textContent = "#pgbar{display:flex!important;flex-wrap:nowrap!important;gap:4px!important;overflow:visible!important;height:auto!important}#pgbar button{padding:4px 7px!important;font-size:11.5px!important;line-height:1.3!important;white-space:nowrap!important;flex:0 1 auto;min-width:0;overflow:visible!important}";
   document.head.appendChild(st);
   ofRender();
 }
