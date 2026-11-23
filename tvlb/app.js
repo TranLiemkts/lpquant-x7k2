@@ -734,8 +734,9 @@ function ofModel() {
   const gates = [[tfOk, "Khung nến ≥ M5 (đang " + S.tf + ")"], [!sessOn || inS, sessOn ? (inS ? "Trong phiên Mỹ 19:00-23:00 VN" : "Ngoài phiên Mỹ 19:00-23:00 VN") : "Không lọc phiên"], [cdOk, cdOk ? "Hết nghỉ sau tín hiệu trước" : "Đang nghỉ " + (sc.cooldown_bars - since + 1) + " nến sau tín hiệu trước"]];
   const plans = [];
   const add = (o) => {
-    o.dist = o.hi == null ? null : px < o.lo ? o.lo - px : px > o.hi ? px - o.hi : 0;
-    o.state = !o.on ? "TẮT" : o.blocked ? "CHẶN Γ" : !gatesOk ? "NGOÀI CỔNG" : o.dist <= tol ? (o.side === "BOTH" ? "TRONG VÙNG" : "SẴN SÀNG") : o.dist <= 6 ? "GẦN" : "CHỜ";
+    o.past = (o.id === "bd" && px < o.lo) || (o.id === "sq" && px > o.hi); // giá đã ở phía bên kia tường: không còn "chờ tới vùng"
+    o.dist = o.hi == null || o.past ? null : px < o.lo ? o.lo - px : px > o.hi ? px - o.hi : 0;
+    o.state = !o.on ? "TẮT" : o.blocked ? "CHẶN Γ" : !gatesOk ? "NGOÀI CỔNG" : o.past ? "ĐÃ QUA" : o.dist <= tol ? (o.side === "BOTH" ? "TRONG VÙNG" : "SẴN SÀNG") : o.dist <= 6 ? "GẦN" : "CHỜ";
     plans.push(o);
   };
   add({ id: "ts", short: "TL1·2 BẪY", name: "TL1·2 · Bẫy SELL tại Call Wall", side: "SELL", on: ofOn("g_trap"), lo: cw - tol, hi: cw + tol,
@@ -781,14 +782,85 @@ function ofIllu(p, nocap) {
 // ── TVLB B9b0: thêm hình minh họa vào ghi chú rê chuột (tường) và vào thẻ KH1-KH3 của trang ③ Vào lệnh ──
 function ofIlluPair(fade) {
   const brk = fade === "SELL" ? "BUY" : "SELL";
-  const box = (t, p) => `<div><b>${t}</b>${ofIllu(p, true)}</div>`;
-  return `<div data-ofillu="1" style="margin:6px 0 8px"><div style="display:flex;flex-direction:column;gap:8px">`
-    + box(`Kịch bản chính: ${fade} (nến chạm vùng rồi đóng ngược)`, { id: fade === "SELL" ? "ts" : "tb", side: fade, zone: "vùng tường" })
-    + box(`Kịch bản phá: ${brk} (nến đóng xuyên vùng, huỷ ${fade})`, { id: brk === "SELL" ? "bd" : "sq", side: brk, zone: "vùng tường" })
-    + `</div><div class="muted" style="font-size:10.5px">Hình minh họa tình huống (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div></div>`;
+  const small = (h) => h.replace("max-width:460px", "max-width:100%").replace("margin:4px 0 2px", "margin:2px 0 0");
+  const box = (t, p) => `<div style="flex:1 1 220px;min-width:0"><b style="font-size:11px">${t}</b>${small(ofIllu(p, true))}</div>`;
+  return `<div data-ofillu="1" style="margin:4px 0 6px"><div style="display:flex;flex-wrap:wrap;gap:8px">`
+    + box(`Chính: ${fade} (chạm rồi đóng ngược)`, { id: fade === "SELL" ? "ts" : "tb", side: fade, zone: "vùng tường" })
+    + box(`Phá: ${brk} (đóng xuyên vùng, huỷ ${fade})`, { id: brk === "SELL" ? "bd" : "sq", side: brk, zone: "vùng tường" })
+    + `</div><div class="muted" style="font-size:10px">Hình minh họa (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div></div>`;
 }
 const ofNorm = (t) => String(t || "").normalize("NFC").replace(/ /g, " ");
+// Hình minh họa cho ghi chú "Vùng HEDGE −Γ": giá đi vào vùng thì dealer phải hedge CÙNG chiều giá → đẩy giá chạy nhanh hơn
+function ofIlluHedgeTip() {
+  const W = 300, H = 108, up = "#26a69a", dn = "#ef5350", gold = "#f0b429";
+  const cd = (x, o, h, l, c) => { const col = c < o ? up : dn, t = Math.min(o, c); return `<line x1="${x}" x2="${x}" y1="${h}" y2="${l}" stroke="${col}" stroke-width="1.8"/><rect x="${x - 6}" y="${t}" width="12" height="${Math.max(3, Math.abs(c - o))}" fill="${col}"/>`; };
+  const fig = (dir) => {
+    const upc = dir === "up", X = [18, 36, 54, 72, 90, 108];
+    let g = `<rect x="6" y="40" width="114" height="28" fill="rgba(240,180,41,.14)" stroke="rgba(240,180,41,.55)" stroke-dasharray="3 3"/>`;
+    const tx = (y, col, t) => `<text x="130" y="${y}" font-size="10.5" fill="${col}">${t}</text>`;
+    if (upc) {
+      const c = [[94, 90, 98, 90], [88, 82, 92, 84], [82, 70, 86, 72], [70, 52, 74, 54], [54, 36, 58, 38], [38, 18, 42, 22]];
+      c.forEach((v, i) => { g += cd(X[i], ...v); });
+      g += tx(26, gold, "vùng Hedge −Γ") + tx(46, up, "giá đi LÊN vào vùng") + tx(66, gold, "dealer phải MUA đuổi theo") + tx(86, "#cfd6e0", "→ giá chạy lên nhanh hơn");
+    } else {
+      const c = [[14, 10, 20, 18], [20, 16, 30, 28], [28, 24, 44, 40], [40, 36, 62, 58], [58, 54, 80, 76], [76, 72, 96, 92]];
+      c.forEach((v, i) => { g += cd(X[i], ...v); });
+      g += tx(26, gold, "vùng Hedge −Γ") + tx(46, dn, "giá đi XUỐNG vào vùng") + tx(66, gold, "dealer phải BÁN đuổi theo") + tx(86, "#cfd6e0", "→ giá rơi xuống nhanh hơn");
+    }
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:100%;display:block;margin:2px 0 0;background:rgba(255,255,255,.03);border-radius:4px" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${g}</svg>`;
+  };
+  return `<div data-ofillu="1" style="margin:4px 0 6px"><b style="font-size:11px">Hình minh họa: vì sao vùng này làm giá chạy nhanh</b>`
+    + `<div style="display:flex;flex-wrap:wrap;gap:8px"><div style="flex:1 1 220px;min-width:0">${fig("up")}</div><div style="flex:1 1 220px;min-width:0">${fig("down")}</div></div>`
+    + `<div class="muted" style="font-size:10px">Minh họa ý tưởng (không theo tỉ lệ giá, không phải dòng lệnh thật).</div></div>`;
+}
+// tìm khung ghi chú nổi (position fixed/absolute) chứa phần tử el
+function ofTipRoot(el) {
+  for (let n = el; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+    const ps = getComputedStyle(n).position;
+    if (ps === "fixed" || ps === "absolute") return n;
+  }
+  return null;
+}
+const OF_TIPS = new Set();
+// kẹp ghi chú nằm gọn trong màn hình: cao quá thì thu nhỏ, tràn đáy/phải thì đẩy lên/trái
+function ofFitTip(el) {
+  if (!el || !el.isConnected) { OF_TIPS.delete(el); return; }
+  const cs = getComputedStyle(el); if (cs.display === "none" || cs.visibility === "hidden") return;
+  el.style.setProperty("pointer-events", "none");
+  el.style.removeProperty("translate"); el.style.removeProperty("zoom");
+  let r = el.getBoundingClientRect(); const vh = window.innerHeight, vw = window.innerWidth, M = 6;
+  if (r.width > vw * 0.75) { OF_TIPS.delete(el); return; }
+  let z = 1; if (r.height > vh - 2 * M) { z = Math.max(0.5, (vh - 2 * M) / r.height); el.style.setProperty("zoom", String(z)); r = el.getBoundingClientRect(); }
+  let dy = 0, dx = 0;
+  if (r.bottom > vh - M) dy = vh - M - r.bottom;
+  if (r.top + dy < M) dy = M - r.top;
+  if (r.right > vw - M) dx = vw - M - r.right;
+  if (r.left + dx < M) dx = M - r.left;
+  if (dx || dy) el.style.setProperty("translate", `${dx / z}px ${dy / z}px`);
+}
+function ofFitAll() { OF_TIPS.forEach(ofFitTip); }
+// bỏ số tròn ①②③… đứng đầu tên các nút menu trang (và cột chữ dọc bên phải)
+const OF_NUMRE = /^[\s①-⑳⓪⓵-⓾❶-➓㉑-㉟]+|^\s*\(?\d{1,2}[.)]\s+/;
+function ofStripNums() {
+  for (const b of document.querySelectorAll('#pgbar button, .wrail button')) {
+    for (const n of b.childNodes) if (n.nodeType === 3 && OF_NUMRE.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(OF_NUMRE, "");
+    if (b.title && OF_NUMRE.test(b.title)) b.title = b.title.replace(OF_NUMRE, "");
+  }
+}
 function ofScanTip() {
+  // ghi chú vùng HEDGE: chưa có hình → chèn hình trước dòng "Lưu ý"
+  const wh = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (/^\s*Vùng HEDGE/.test(ofNorm(t.nodeValue)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
+  let hn;
+  while ((hn = wh.nextNode())) {
+    const root = ofTipRoot(hn.parentElement); if (!root) continue;
+    OF_TIPS.add(root);
+    if (root.querySelector("[data-ofillu]")) continue;
+    let note = null;
+    for (const el of root.querySelectorAll("div,p,span,b")) if (/^\s*Lưu ý/.test(ofNorm(el.textContent)) && el.children.length < 3 && !el.querySelector("div")) { note = el; break; }
+    // nếu "Lưu ý" nằm trong khối riêng, chèn trước khối đó
+    if (note) { let t = note; while (t.parentElement && t.parentElement !== root && t.parentElement.children.length === 1) t = t.parentElement; t.insertAdjacentHTML("beforebegin", ofIlluHedgeTip()); }
+    else root.insertAdjacentHTML("beforeend", ofIlluHedgeTip());
+  }
   const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (/Uy tín tường/.test(ofNorm(t.nodeValue)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
   let tn;
   while ((tn = w.nextNode())) {
@@ -801,6 +873,8 @@ function ofScanTip() {
     const m = a >= 0 && b > a ? /canh (BUY|SELL)/.exec(txt.slice(a, b)) : null; if (!m) continue;
     h.insertAdjacentHTML("beforebegin", ofIlluPair(m[1]));
   }
+  for (const e of document.querySelectorAll("[data-ofillu]")) { const r = ofTipRoot(e); if (r && !r.closest("#v3plan, .right")) OF_TIPS.add(r); }
+  ofFitAll(); ofStripNums();
 }
 function ofDecorateKH() {
   for (const card of document.querySelectorAll("#v3plan .v3c")) {
@@ -837,6 +911,7 @@ function ofStartDecor() {
   // ghi chú rê chuột: quét nhanh, chuẩn hoá Unicode
   let scT = 0; new MutationObserver(() => { if (scT) return; scT = setTimeout(() => { scT = 0; ofScanTip(); }, 80); }).observe(document.body, { childList: true, subtree: true });
   setInterval(ofScanTip, 500);
+  let fT = 0; document.addEventListener("mousemove", () => { if (fT || !OF_TIPS.size) return; fT = requestAnimationFrame(() => { fT = 0; ofFitAll(); }); }, true);
   [1500, 4000, 9000].forEach((ms) => setTimeout(ofShrinkTop, ms));
 }
 const OF_COL = { SELL: "#ef5350", BUY: "#26a69a", BOTH: "#f0b429" };
@@ -858,7 +933,7 @@ function ofRender() {
   const gate = (g) => `<div style="color:${g[0] ? "#26b384" : "#ff6b6b"}">${g[0] ? "✔" : "✘"} ${g[1]}</div>`;
   const nb = $("#ofNear"); if (nb) nb.innerHTML = near ? `Gần nhất: <b style="color:${OF_COL[near.side]}">${near.name}</b> · ${near.dist === 0 ? "giá ĐANG TRONG vùng" : "còn " + near.dist.toFixed(2) + "$ tới vùng"}` : "Chưa có nhóm nào được bật.";
   T.innerHTML = warnH
-    + live.map((p) => `<div style="display:grid;grid-template-columns:96px auto 1fr;gap:6px;align-items:center;margin:3px 0"><b style="color:${OF_COL[p.side]}">${p.short}</b>${ofBadge(p.state)}<span class="muted">${p.blocked ? "Gamma âm: không bắt đáy" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng"} · ${p.side}</span></div>`).join("")
+    + live.map((p) => `<div style="display:grid;grid-template-columns:96px auto 1fr;gap:6px;align-items:center;margin:3px 0"><b style="color:${OF_COL[p.side]}">${p.short}</b>${ofBadge(p.state)}<span class="muted">${p.blocked ? "Gamma âm: không bắt đáy" : p.past ? "giá đã ở bên kia tường (đã qua)" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng"} · ${p.side}</span></div>`).join("")
     + `<div style="margin-top:8px"><b>Cổng kiểm</b>${M.gates.map(gate).join("")}</div>`;
   const kv = (a, b) => `<div class="muted">${a}</div><div>${b}</div>`, k = M.k, sc = M.sc, dxy = S.state?.macro?.DXY?.chg_n_pct;
   $("#ofC").innerHTML = kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
@@ -875,7 +950,7 @@ function ofRender() {
     + `<button type="button" data-oftab="run" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "run" ? "#f0b429" : "transparent"};color:${OFV.tab === "run" ? "#1b1407" : "inherit"};cursor:pointer">Lệnh hôm nay (${sg.length}${run ? " · " + run + " đang chạy" : ""})</button>`;
   $("#ofP").innerHTML = OFV.tab === "new"
     ? live.map((p) => `<div style="border-left:3px solid ${OF_COL[p.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[p.side]}">${p.name}</b> ${ofBadge(p.state)}</div>`
-      + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.dist ? " · cách " + (p.px != null ? "" : "") + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div>${p.side === "BOTH" ? `<div class="muted" style="margin-top:4px">Hai kịch bản sau khi giá ra khỏi vùng rồi quay lại:</div>` + ofIllu({ id: "hg0", side: "SELL" }, true) + ofIllu({ id: "hg0", side: "BUY" }) : ofIllu(p)}`
+      + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.past ? " · giá ĐÃ QUA tường (chờ giá quay lại rồi mới tính)" : p.dist ? " · cách " + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div>${p.side === "BOTH" ? `<div class="muted" style="margin-top:4px">Hai kịch bản sau khi giá ra khỏi vùng rồi quay lại:</div>` + ofIllu({ id: "hg0", side: "SELL" }, true) + ofIllu({ id: "hg0", side: "BUY" }) : ofIllu(p)}`
       + `<div>SL ${p.sl} · TP1 <b>${typeof p.tp1 === "number" ? ofFm(p.tp1) : p.tp1 || "—"}</b>${p.tp2 != null ? " · TP2 " + ofFm(p.tp2) : ""}</div><div class="muted">Huỷ khi: ${p.cancel}</div></div>`).join("") || '<span class="muted">Chưa có nhóm nào được bật.</span>'
     : sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side} ${g.score}/${g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type.replace("[Options Flow] ", "")}</div></div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>';
 }
@@ -890,7 +965,7 @@ function ofInitUI() {
   const row = (k, t, names) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-of="${names.join("|")}"${ofOn(names[0]) ? " checked" : ""}> ${t}</label>`;
   d.innerHTML = `<summary style="cursor:pointer;font-weight:600">Bật/tắt điều kiện (TL1 · TL2 · HG)</summary>
     <div id="ofWarn" style="display:none;color:#ff6b6b;font-weight:600;margin:4px 0"></div>
-    <div class="muted" style="margin:2px 0 4px">Bảng theo dõi nằm ở trang "Vào lệnh Option Flow" bên phải (trước trang ③ Vào lệnh).</div>
+    <div class="muted" style="margin:2px 0 4px">Bảng theo dõi nằm ở trang "Vào lệnh OF" bên phải (đứng trước trang "Vào lệnh").</div>
     <div class="muted" style="margin:4px 0">Nhóm tín hiệu</div>${OF_GROUPS.map(([k, t]) => row(k, t, [k])).join("")}
     <div class="muted" style="margin:6px 0 4px">Số xác nhận tối thiểu: <select id="ofMin" style="font-size:12px">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}"${(Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm) === n ? " selected" : ""}>${n}</option>`).join("")}</select> (mặc định 2; nhớ để các điều kiện bên dưới được tick)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
   d.addEventListener("change", (e) => {
