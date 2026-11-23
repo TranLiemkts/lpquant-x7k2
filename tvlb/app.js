@@ -973,7 +973,7 @@ function ofChip(p) {
   const h = p.chk; if (!h) return "";
   if (!h.tot) return `<span title="${h.note || ""}" style="font:700 10.5px/1 monospace;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:#9aa4b2">—</span>`;
   const col = h.ok === h.tot ? "#26b384" : h.ok * 2 >= h.tot ? "#f0b429" : "#9aa4b2";
-  return `<span title="Điều kiện đạt (hình thái nến + số xác nhận tối thiểu + cổng), tính trên nến vừa đóng" style="font:700 10.5px/1 monospace;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:${col};border:1px solid ${col}55">${h.ok}/${h.tot}</span>`;
+  return `<span title="Điều kiện đạt (hình thái nến + số xác nhận tối thiểu + cổng), tính trên nến vừa đóng" style="font:700 8px/1 monospace;white-space:nowrap;padding:2px 2px;border-radius:4px;background:rgba(255,255,255,.08);color:${col};border:1px solid ${col}55">${h.ok}/${h.tot}</span>`;
 }
 function ofChkHtml(p) {
   const h = p.chk; if (!h) return "";
@@ -987,7 +987,7 @@ function ofChkHtml(p) {
 }
 function ofBadge(st) {
   const col = st === "SẴN SÀNG" ? "#26b384" : st === "GẦN" || st === "TRONG VÙNG" ? "#f0b429" : st === "CHẶN Γ" || st === "NGOÀI CỔNG" ? "#ff6b6b" : "#9aa4b2";
-  return `<span style="font:700 10.5px/1 monospace;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.08);color:${col};border:1px solid ${col}55">${st}</span>`;
+  return `<span style="display:inline-block;white-space:nowrap;font:700 8px/1 monospace;padding:2px 2px;border-radius:3px;background:rgba(255,255,255,.08);color:${col};border:1px solid ${col}55">${st}</span>`;
 }
 function ofRender() {
   const wn = $("#ofWarn"), T = $("#ofT"); let w = ""; try { w = ofWarnText(); } catch { /* chưa có cấu hình */ }
@@ -1003,7 +1003,9 @@ function ofRender() {
   const gate = (g) => `<div style="color:${g[0] ? "#26b384" : "#ff6b6b"}">${g[0] ? "✔" : "✘"} ${g[1]}</div>`;
   const nb = $("#ofNear"); if (nb) nb.innerHTML = near ? `Gần nhất: <b style="color:${OF_COL[near.side]}">${near.name}</b> · ${near.dist === 0 ? "giá ĐANG TRONG vùng" : "còn " + near.dist.toFixed(2) + "$ tới vùng"}` : "Chưa có nhóm nào được bật.";
   T.innerHTML = warnH
-    + live.map((p) => `<div style="display:grid;grid-template-columns:104px auto 1fr;gap:6px;align-items:center;margin:3px 0"><b style="color:${OF_COL[p.side]};font-size:11px;white-space:nowrap">${p.short}</b>${ofBadge(p.state)}<span class="muted">${ofChip(p)} ${p.blocked ? (p.why || "Gamma âm: không bắt đáy") : p.past ? "giá đã ở bên kia tường (đã qua)" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng"} · ${p.side}</span></div>`).join("")
+    + live.map((p) => { const full = p.blocked ? (p.why || "Gamma âm: không bắt đáy") : p.past ? "giá đã ở bên kia tường (đã qua)" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng";
+      const sh = p.blocked ? (/Flip xa/.test(full) ? "Flip xa > 2,5%: ngày không rõ, đứng ngoài" : full.replace(/^Gamma /, "Gamma ")) : p.past ? "giá đã qua tường" : p.dist === 0 ? "giá đang trong vùng" : "còn " + p.dist.toFixed(1) + "$ tới vùng";
+      return `<div title="${full.replace(/"/g, "&quot;")}" style="display:grid;grid-template-columns:66px 52px 24px 30px 1fr;gap:3px;align-items:start;margin:3px 0;font-size:9px;line-height:1.25"><b style="color:${OF_COL[p.side]};font-size:9px;white-space:nowrap">${p.short}</b><span style="text-align:center">${ofBadge(p.state)}</span><span style="text-align:center">${ofChip(p)}</span><span style="color:${OF_COL[p.side]};font-weight:700;font-size:9px">${p.side}</span><span class="muted" style="font-size:9px">${sh}</span></div>`; }).join("")
     + `<div style="margin-top:8px"><b>Cổng kiểm</b>${M.gates.map(gate).join("")}</div>`;
   const kv = (a, b) => `<div class="muted">${a}</div><div>${b}</div>`, k = M.k, sc = M.sc, dxy = S.state?.macro?.DXY?.chg_n_pct;
   $("#ofC").innerHTML = kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
@@ -1073,7 +1075,7 @@ function ofInitPage() {
   if (b3) bar.insertBefore(btn, b3); else bar.appendChild(btn);
   const page = document.createElement("div"); page.className = "page"; page.dataset.pg = "6"; page.hidden = true;
   page.innerHTML = `<div class="v3grid">
-    <section class="panel v3track"><header><h2>Theo dõi diễn biến</h2><span class="muted small" id="ofReg"></span></header><div id="ofNear" class="v3box">—</div><div id="ofT"></div></section>
+    <section class="panel v3track" style="overflow:visible;max-height:none"><header><h2>Theo dõi diễn biến</h2><span class="muted small" id="ofReg"></span></header><div id="ofNear" class="v3box">—</div><div id="ofT"></div></section>
     <section class="panel v3ctx"><header><h2>Bối cảnh thị trường</h2></header><div class="v3kv" id="ofC"></div></section>
     <section class="panel v3plan"><header><h2>Kế hoạch giao dịch</h2><span class="muted small" id="ofAct"></span></header><div id="ofTabs"></div><div id="ofP"></div></section></div>`;
   page.addEventListener("click", (e) => { const b = e.target.closest("button[data-oftab]"); if (b) { OFV.tab = b.dataset.oftab; ofRender(); } });
