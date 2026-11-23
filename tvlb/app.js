@@ -756,49 +756,51 @@ function ofModel() {
 }
 // ── TVLB B9b0: hình minh họa mini cho từng kế hoạch (SVG, không theo tỉ lệ giá) ──
 function ofIllu(p, nocap) {
-  const W = 290, H = 104, flip = p.side === "BUY", Y = (y) => (flip ? H - y : y), up = "#26a69a", dn = "#ef5350";
+  const W = 300, H = 108, flip = p.side === "BUY", Y = (y) => (flip ? H - y : y), up = "#26a69a", dn = "#ef5350";
   const kind = p.id === "ts" || p.id === "tb" ? "trap" : p.id === "bd" || p.id === "sq" ? "break" : "hedge";
-  const cd = (x, o, h, l, c) => { const col = Y(c) < Y(o) ? up : dn, t = Math.min(Y(o), Y(c)); return `<line x1="${x}" x2="${x}" y1="${Y(h)}" y2="${Y(l)}" stroke="${col}" stroke-width="1.4"/><rect x="${x - 5}" y="${t}" width="10" height="${Math.max(2, Math.abs(Y(c) - Y(o)))}" fill="${col}"/>`; };
-  const ln = (y, col, txt, dash, x2 = 152) => `<line x1="6" x2="${x2}" y1="${Y(y)}" y2="${Y(y)}" stroke="${col}" stroke-width="1" ${dash ? 'stroke-dasharray="4 3"' : ""}/><text x="${x2 + 5}" y="${Y(y) + 3}" font-size="8.5" fill="${col}">${txt}</text>`;
+  const cd = (x, o, h, l, c) => { const col = Y(c) < Y(o) ? up : dn, t = Math.min(Y(o), Y(c)); return `<line x1="${x}" x2="${x}" y1="${Y(h)}" y2="${Y(l)}" stroke="${col}" stroke-width="1.8"/><rect x="${x - 6}" y="${t}" width="12" height="${Math.max(2, Math.abs(Y(c) - Y(o)))}" fill="${col}"/>`; };
+  const ln = (y, col, txt, dash, x2 = 152) => `<line x1="6" x2="${x2}" y1="${Y(y)}" y2="${Y(y)}" stroke="${col}" stroke-width="1" ${dash ? 'stroke-dasharray="4 3"' : ""}/><text x="${x2 + 5}" y="${Y(y) + 3}" font-size="10.5" fill="${col}">${txt}</text>`;
   const wick = flip ? "đáy" : "đỉnh", wallName = p.zone || (p.id === "ts" || p.id === "sq" ? "Call Wall" : "Put Wall"), G = "#9aa4b2";
   let g = "";
   if (kind === "trap") {
     g += ln(30, G, `${wallName} (tường)`) + ln(14, dn, `SL = ${wick} râu + 3$`, true) + ln(50, "#f0b429", "vào lệnh (đóng nến)", true) + ln(74, up, "TP1: mốc OI kế", true) + ln(92, up, "TP2: tường đối diện", true);
     g += cd(30, 66, 62, 68, 60) + cd(50, 60, 52, 62, 54) + cd(70, 54, 42, 56, 44) + cd(90, 36, 20, 52, 50) + cd(110, 50, 48, 62, 60) + cd(130, 60, 58, 74, 72) + cd(150, 72, 70, 84, 82);
-    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="8.5" fill="#cfd6e0">râu chọc qua tường rồi nến đóng ngược lại</text>`;
+    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="10.5" fill="#cfd6e0">râu chọc qua tường</text>`;
   } else if (kind === "break") {
     g += ln(54, G, `${wallName} (tường)`) + ln(42, dn, "SL = tường + 3$", true) + ln(70, "#f0b429", "vào lệnh (đóng nến)", true) + ln(90, up, "TP1: mốc OI kế", true);
     g += cd(30, 28, 24, 34, 32) + cd(50, 32, 30, 42, 40) + cd(70, 40, 38, 54, 50) + cd(90, 48, 46, 74, 70) + cd(110, 70, 68, 84, 82) + cd(130, 82, 80, 90, 88);
-    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="8.5" fill="#cfd6e0">nến ĐÓNG xuyên qua tường</text>`;
+    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="10.5" fill="#cfd6e0">nến ĐÓNG xuyên tường</text>`;
   } else {
-    g += `<rect x="6" y="${Math.min(Y(48), Y(66))}" width="146" height="18" fill="rgba(240,180,41,.14)" stroke="rgba(240,180,41,.5)" stroke-dasharray="3 3"/><text x="157" y="${Y(57) + 3}" font-size="8.5" fill="#f0b429">vùng Hedge −Γ</text>`;
+    g += `<rect x="6" y="${Math.min(Y(48), Y(66))}" width="146" height="18" fill="rgba(240,180,41,.14)" stroke="rgba(240,180,41,.5)" stroke-dasharray="3 3"/><text x="157" y="${Y(57) + 3}" font-size="10.5" fill="#f0b429">vùng Hedge −Γ</text>`;
     g += ln(34, dn, "SL = cực trị 3 nến ± 3$", true) + ln(78, "#f0b429", "vào lệnh (đóng nến)", true) + ln(96, up, "TP1: mốc OI kế", true);
     g += cd(30, 86, 82, 88, 84) + cd(50, 84, 78, 86, 80) + cd(70, 80, 72, 82, 74) + cd(90, 70, 50, 78, 76) + cd(110, 76, 74, 90, 88);
-    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="8.5" fill="#cfd6e0">râu chọc vào vùng rồi nến đóng ngược ra</text>`;
+    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="10.5" fill="#cfd6e0">râu chọc vào vùng</text>`;
   }
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin:4px 0 2px;background:rgba(255,255,255,.03);border-radius:4px" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${g}</svg>${nocap ? "" : '<div class="muted" style="font-size:10.5px">Hình minh họa tình huống (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div>'}`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:460px;display:block;margin:4px 0 2px;background:rgba(255,255,255,.03);border-radius:4px" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${g}</svg>${nocap ? "" : '<div class="muted" style="font-size:10.5px">Hình minh họa tình huống (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div>'}`;
 }
 // ── TVLB B9b0: thêm hình minh họa vào ghi chú rê chuột (tường) và vào thẻ KH1-KH3 của trang ③ Vào lệnh ──
 function ofIlluPair(fade) {
   const brk = fade === "SELL" ? "BUY" : "SELL";
-  const box = (t, p) => `<div style="flex:1 1 210px;min-width:200px"><b>${t}</b>${ofIllu(p, true)}</div>`;
-  return `<div data-ofillu="1" style="margin:6px 0 8px"><div style="display:flex;gap:10px;flex-wrap:wrap">`
+  const box = (t, p) => `<div><b>${t}</b>${ofIllu(p, true)}</div>`;
+  return `<div data-ofillu="1" style="margin:6px 0 8px"><div style="display:flex;flex-direction:column;gap:8px">`
     + box(`Kịch bản chính: ${fade} (nến chạm vùng rồi đóng ngược)`, { id: fade === "SELL" ? "ts" : "tb", side: fade, zone: "vùng tường" })
     + box(`Kịch bản phá: ${brk} (nến đóng xuyên vùng, huỷ ${fade})`, { id: brk === "SELL" ? "bd" : "sq", side: brk, zone: "vùng tường" })
     + `</div><div class="muted" style="font-size:10.5px">Hình minh họa tình huống (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div></div>`;
 }
-function ofDecorateTip(n) {
-  if (!n || n.nodeType !== 1 || n.closest("[data-ofillu]")) return;
-  if (!/2\. Uy tín tường/.test(n.textContent || "")) return;
-  let h = null;
-  for (const el of [n, ...n.querySelectorAll("*")]) {
-    if (/^\s*2\. Uy tín tường/.test(el.textContent || "") && ![...el.children].some((c) => /^\s*2\. Uy tín tường/.test(c.textContent || ""))) { h = el; break; }
+const ofNorm = (t) => String(t || "").normalize("NFC").replace(/ /g, " ");
+function ofScanTip() {
+  const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (/Uy tín tường/.test(ofNorm(t.nodeValue)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
+  let tn;
+  while ((tn = w.nextNode())) {
+    let h = tn.parentElement; if (!h || h.closest("[data-ofillu]")) continue;
+    while (h.parentElement && /^\s*2\.\s*Uy tín tường/.test(ofNorm(h.parentElement.textContent))) h = h.parentElement;
+    if (!/^\s*2\.\s*Uy tín tường/.test(ofNorm(h.textContent))) continue;
+    if (h.previousElementSibling && h.previousElementSibling.dataset && h.previousElementSibling.dataset.ofillu) continue;
+    let root = h; for (let k = 0; k < 6 && root && !/1\.\s*Tình huống/.test(ofNorm(root.textContent)); k++) root = root.parentElement;
+    const txt = ofNorm(root ? root.textContent : ""), a = txt.search(/1\.\s*Tình huống/), b = txt.search(/2\.\s*Uy tín/);
+    const m = a >= 0 && b > a ? /canh (BUY|SELL)/.exec(txt.slice(a, b)) : null; if (!m) continue;
+    h.insertAdjacentHTML("beforebegin", ofIlluPair(m[1]));
   }
-  if (!h || (h.previousElementSibling && h.previousElementSibling.dataset && h.previousElementSibling.dataset.ofillu)) return;
-  let root = h; for (let k = 0; k < 5 && root && !/1\. Tình huống/.test(root.textContent || ""); k++) root = root.parentElement;
-  const txt = root ? root.textContent : "", a = txt.indexOf("1. Tình huống"), b = txt.indexOf("2. Uy tín");
-  const m = a >= 0 && b > a ? /canh (BUY|SELL)/.exec(txt.slice(a, b)) : null; if (!m) return;
-  h.insertAdjacentHTML("beforebegin", ofIlluPair(m[1]));
 }
 function ofDecorateKH() {
   for (const card of document.querySelectorAll("#v3plan .v3c")) {
@@ -809,10 +811,33 @@ function ofDecorateKH() {
     card.insertAdjacentHTML("beforeend", `<div data-ofillu="1">${ofIllu({ id, side, zone: "vùng KH" })}</div>`);
   }
 }
+// Thu gọn cụm menu trên cùng: chữ nhỏ lại + bỏ khoảng trống thừa (chạy lặp vì một số phần tử dựng muộn)
+function ofShrinkTop() {
+  const z = (el, f) => { if (el) el.style.setProperty("zoom", f, "important"); };
+  const ai = $("#btnAI"), tfs = $("#tfs"); if (!ai || !tfs) return;
+  const hdr = ai.closest("header") || ai.parentElement;
+  if (!hdr.dataset.ofz) { hdr.dataset.ofz = "1"; z(hdr, 0.88); hdr.style.setProperty("padding-top", "2px", "important"); hdr.style.setProperty("padding-bottom", "2px", "important"); }
+  const bar2 = tfs.parentElement; if (!bar2.dataset.ofz) { bar2.dataset.ofz = "1"; z(bar2, 0.9); bar2.style.setProperty("margin", "0", "important"); bar2.style.setProperty("padding-top", "1px", "important"); bar2.style.setProperty("padding-bottom", "1px", "important"); }
+  const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (/^\s*GC: CME|^\s*GC:/.test(ofNorm(t.nodeValue)) && t.parentElement && t.parentElement.getBoundingClientRect().top < 260 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT) });
+  const tn = w.nextNode(), info = tn && tn.parentElement;
+  if (info && !info.dataset.ofz) { info.dataset.ofz = "1"; z(info, 0.9); info.style.setProperty("margin-top", "0", "important"); info.style.setProperty("margin-bottom", "0", "important"); info.style.setProperty("padding-top", "1px", "important"); info.style.setProperty("padding-bottom", "1px", "important"); }
+  // các phần tử rỗng nằm giữa dòng thông báo và hàng khung giờ: bỏ chiều cao thừa
+  let P = info || bar2; while (P && !(P.contains(bar2) && P.contains(info || bar2))) P = P.parentElement;
+  if (P && info) {
+    let a = info; while (a.parentElement && a.parentElement !== P) a = a.parentElement;
+    let b = bar2; while (b.parentElement && b.parentElement !== P) b = b.parentElement;
+    for (let el = a.nextElementSibling; el && el !== b; el = el.nextElementSibling) if (!ofNorm(el.textContent).trim()) { el.style.setProperty("min-height", "0", "important"); el.style.setProperty("padding", "0", "important"); el.style.setProperty("margin", "0", "important"); el.style.setProperty("height", "auto", "important"); }
+    for (const el of [a, b]) if (el !== P) { el.style.setProperty("margin-top", "0", "important"); el.style.setProperty("margin-bottom", "0", "important"); }
+  }
+}
 function ofStartDecor() {
-  let q = false;
-  new MutationObserver((ms) => { if (q) return; q = true; requestAnimationFrame(() => { q = false; for (const m of ms) for (const n of m.addedNodes) ofDecorateTip(n); }); }).observe(document.body, { childList: true, subtree: true });
-  setInterval(ofDecorateKH, 1500);
+  // thẻ KH trang ③: chèn hình NGAY trong lúc trang vẽ lại (trước khi trình duyệt tô màu) nên không còn nháy
+  const hook = () => { const el = document.getElementById("v3plan"); if (!el || el.dataset.ofobs) return !!el; el.dataset.ofobs = "1"; new MutationObserver(() => ofDecorateKH()).observe(el, { childList: true, subtree: true }); ofDecorateKH(); return true; };
+  const t0 = setInterval(() => { if (hook()) clearInterval(t0); }, 700);
+  // ghi chú rê chuột: quét nhanh, chuẩn hoá Unicode
+  let scT = 0; new MutationObserver(() => { if (scT) return; scT = setTimeout(() => { scT = 0; ofScanTip(); }, 80); }).observe(document.body, { childList: true, subtree: true });
+  setInterval(ofScanTip, 500);
+  [1500, 4000, 9000].forEach((ms) => setTimeout(ofShrinkTop, ms));
 }
 const OF_COL = { SELL: "#ef5350", BUY: "#26a69a" };
 function ofBadge(st) {
