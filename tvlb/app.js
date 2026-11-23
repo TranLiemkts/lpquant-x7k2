@@ -489,7 +489,7 @@ function drawOverlay() {
     for (const p of S.ofPlans) {
       if (!p.on || p.lo == null) continue;
       const y1 = Y(p.hi), y0 = Y(p.lo); if (y1 == null || y0 == null) continue;
-      const h = Math.max(6, y0 - y1), top = (y0 + y1) / 2 - h / 2, col = p.side === "SELL" ? "239,83,80" : "38,166,154";
+      const h = Math.max(6, y0 - y1), top = (y0 + y1) / 2 - h / 2, col = p.side === "SELL" ? "239,83,80" : p.side === "BOTH" ? "240,180,41" : "38,166,154";
       const x0 = Math.round(plotW * 0.54);   // vùng ngắn, chỉ nằm ở nửa phải như KH1-KH3 (không kéo ngang cả chart)
       ctx.fillStyle = `rgba(${col},${p.blocked ? 0.05 : 0.11})`; ctx.fillRect(x0, top, plotW - x0, h);
       ctx.strokeStyle = `rgba(${col},.35)`; ctx.lineWidth = 0.6; ctx.setLineDash([3, 3]); ctx.strokeRect(x0 + 0.5, top, plotW - x0 - 1, h); ctx.setLineDash([]); ctx.lineWidth = 1;
@@ -735,7 +735,7 @@ function ofModel() {
   const plans = [];
   const add = (o) => {
     o.dist = o.hi == null ? null : px < o.lo ? o.lo - px : px > o.hi ? px - o.hi : 0;
-    o.state = !o.on ? "TẮT" : o.blocked ? "CHẶN Γ" : !gatesOk ? "NGOÀI CỔNG" : o.dist <= tol ? "SẴN SÀNG" : o.dist <= 6 ? "GẦN" : "CHỜ";
+    o.state = !o.on ? "TẮT" : o.blocked ? "CHẶN Γ" : !gatesOk ? "NGOÀI CỔNG" : o.dist <= tol ? (o.side === "BOTH" ? "TRONG VÙNG" : "SẴN SÀNG") : o.dist <= 6 ? "GẦN" : "CHỜ";
     plans.push(o);
   };
   add({ id: "ts", short: "TL1·2 BẪY", name: "TL1·2 · Bẫy SELL tại Call Wall", side: "SELL", on: ofOn("g_trap"), lo: cw - tol, hi: cw + tol,
@@ -748,8 +748,8 @@ function ofModel() {
     cond: `nến đóng TRÊN ${ofFm(cw + tol)} (nến trước còn ở dưới), đủ xác nhận`, sl: `${ofFm(cw - buf)} (tường − ${buf}$)`, tp1: nextStrike(cw + tol, true), tp2: null, cancel: `giá quay lại dưới ${ofFm(cw)}` });
   try {
     const hz = hedgeSt(), zs = ((hz && hz.zones) || []).filter((z) => z.kind === "accel");
-    zs.slice(0, 3).forEach((z, n) => add({ id: "hg" + n, short: "HG HEDGE", name: `HG · Vùng Hedge −Γ ${Math.round(z.lo)}–${Math.round(z.hi)}`, side: px > (z.lo + z.hi) / 2 ? "BUY" : "SELL", on: ofOn("g_hedge"), lo: z.lo, hi: z.hi,
-      cond: "nến chọc vào vùng rồi đóng ngược ra (trap), hoặc 2 nến đóng liên tiếp trong vùng (đi theo đà)", sl: `cực trị 3 nến gần nhất ± ${buf}$`, tp1: "mốc OI kế tiếp", tp2: null, cancel: "nến đóng xuyên hẳn vùng" }));
+    zs.slice(0, 3).forEach((z, n) => add({ id: "hg" + n, short: "HG HEDGE", name: `HG · Vùng Hedge −Γ ${Math.round(z.lo)}–${Math.round(z.hi)}`, side: px > z.hi ? "BUY" : px < z.lo ? "SELL" : "BOTH", on: ofOn("g_hedge"), lo: z.lo, hi: z.hi,
+      cond: px >= z.lo && px <= z.hi ? "giá ĐANG TRONG vùng nên CHƯA có điểm vào. Chờ giá ra khỏi vùng rồi quay lại chọc vào: chọc từ dưới lên rồi đóng ngược xuống = SELL; chọc từ trên xuống rồi đóng ngược lên = BUY (hoặc 2 nến đóng liên tiếp trong vùng = đi theo đà)" : px > z.hi ? "giá ở TRÊN vùng: chờ nến chọc xuống vùng rồi đóng ngược lên trên = BUY (trap), hoặc 2 nến đóng liên tiếp trong vùng theo chiều xuống = đi theo đà" : "giá ở DƯỚI vùng: chờ nến chọc lên vùng rồi đóng ngược xuống dưới = SELL (trap), hoặc 2 nến đóng liên tiếp trong vùng theo chiều lên = đi theo đà", sl: `cực trị 3 nến gần nhất ± ${buf}$`, tp1: "mốc OI kế tiếp", tp2: null, cancel: "nến đóng xuyên hẳn vùng" }));
   } catch { /* bỏ qua */ }
   const avg = c.slice(i - sc.vol_sma, i).reduce((a, x) => a + x.vol, 0) / sc.vol_sma, slope = k.cvd - c[i - sc.cvd_slope_bars].cvd, doi = nearDoi(k.close);
   return { px, cw, pw, flip, negG, blockG, tol, gates, gatesOk, plans, k, avg, slope, doi, sc };
@@ -839,9 +839,9 @@ function ofStartDecor() {
   setInterval(ofScanTip, 500);
   [1500, 4000, 9000].forEach((ms) => setTimeout(ofShrinkTop, ms));
 }
-const OF_COL = { SELL: "#ef5350", BUY: "#26a69a" };
+const OF_COL = { SELL: "#ef5350", BUY: "#26a69a", BOTH: "#f0b429" };
 function ofBadge(st) {
-  const col = st === "SẴN SÀNG" ? "#26b384" : st === "GẦN" ? "#f0b429" : st === "CHẶN Γ" || st === "NGOÀI CỔNG" ? "#ff6b6b" : "#9aa4b2";
+  const col = st === "SẴN SÀNG" ? "#26b384" : st === "GẦN" || st === "TRONG VÙNG" ? "#f0b429" : st === "CHẶN Γ" || st === "NGOÀI CỔNG" ? "#ff6b6b" : "#9aa4b2";
   return `<span style="font:700 10.5px/1 monospace;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.08);color:${col};border:1px solid ${col}55">${st}</span>`;
 }
 function ofRender() {
@@ -875,7 +875,7 @@ function ofRender() {
     + `<button type="button" data-oftab="run" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "run" ? "#f0b429" : "transparent"};color:${OFV.tab === "run" ? "#1b1407" : "inherit"};cursor:pointer">Lệnh hôm nay (${sg.length}${run ? " · " + run + " đang chạy" : ""})</button>`;
   $("#ofP").innerHTML = OFV.tab === "new"
     ? live.map((p) => `<div style="border-left:3px solid ${OF_COL[p.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[p.side]}">${p.name}</b> ${ofBadge(p.state)}</div>`
-      + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.dist ? " · cách " + (p.px != null ? "" : "") + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div>${ofIllu(p)}`
+      + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.dist ? " · cách " + (p.px != null ? "" : "") + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div>${p.side === "BOTH" ? `<div class="muted" style="margin-top:4px">Hai kịch bản sau khi giá ra khỏi vùng rồi quay lại:</div>` + ofIllu({ id: "hg0", side: "SELL" }, true) + ofIllu({ id: "hg0", side: "BUY" }) : ofIllu(p)}`
       + `<div>SL ${p.sl} · TP1 <b>${typeof p.tp1 === "number" ? ofFm(p.tp1) : p.tp1 || "—"}</b>${p.tp2 != null ? " · TP2 " + ofFm(p.tp2) : ""}</div><div class="muted">Huỷ khi: ${p.cancel}</div></div>`).join("") || '<span class="muted">Chưa có nhóm nào được bật.</span>'
     : sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side} ${g.score}/${g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type.replace("[Options Flow] ", "")}</div></div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>';
 }
