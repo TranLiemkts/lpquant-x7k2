@@ -990,16 +990,19 @@ function ofChip(p) {
 function ofChkHtml(p) {
   const h = p.chk; if (!h) return "";
   if (!h.tot) return `<div class="muted" style="font-size:11px;margin:3px 0">${h.note || ""}</div>`;
-  const li = (a) => a.map(([ok, t]) => `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`).join("");
-  const cnt = (a) => a.filter((x) => x[0]).length;
-  return `<div style="font-size:11px;margin:4px 0 4px 6px;padding-left:8px;border-left:2px solid rgba(255,255,255,.12)"><div>Đạt <b>${h.ok}/${h.tot}</b> <span class="muted">(theo nến ${S.tf} vừa đóng; xác nhận chỉ tính tối thiểu ${h.need})</span></div>`
-    + (h.shape.length ? `<div class="muted" style="margin-top:3px">Hình thái nến ${cnt(h.shape)}/${h.shape.length}</div>${li(h.shape)}` : "")
-    + (h.conf.length ? `<div class="muted" style="margin-top:3px">Xác nhận ${h.cOk}/${h.conf.length} (cần ≥ ${h.need})</div>${li(h.conf)}` : "")
-    + (h.gate.length ? `<div class="muted" style="margin-top:3px">Cổng ${cnt(h.gate)}/${h.gate.length}</div>${li(h.gate)}` : "") + `</div>`;
+  const li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join("");
+  const cnt = (a) => a.filter((x) => x[0]).length, open = !!(OFV.chk && OFV.chk[p.id]);
+  return `<div style="font-size:11px;margin:4px 0 4px 6px"><div data-ofchk="${p.id}" style="cursor:pointer;user-select:none;color:#f0b429" title="Bấm để sổ xuống / thu gọn danh sách điều kiện">${open ? "▾" : "▸"} Đạt <b>${h.ok}/${h.tot}</b> điều kiện <span class="muted">${open ? "(bấm để thu gọn)" : "(bấm để xem chi tiết)"}</span></div>`
+    + (open ? `<div style="padding-left:8px;margin-top:3px;border-left:2px solid rgba(255,255,255,.12)"><div class="muted">Tính theo nến ${S.tf} vừa đóng; xác nhận chỉ tính tối thiểu ${h.need}</div>`
+      + (h.shape.length ? `<div class="muted" style="margin-top:3px">Hình thái nến ${cnt(h.shape)}/${h.shape.length}</div>${li(h.shape)}` : "")
+      + (h.conf.length ? `<div class="muted" style="margin-top:3px">Xác nhận ${h.cOk}/${h.conf.length} (cần ≥ ${h.need})</div>${li(h.conf, true)}` : "")
+      + (h.gate.length ? `<div class="muted" style="margin-top:3px">Cổng ${cnt(h.gate)}/${h.gate.length}</div>${li(h.gate)}` : "") + `</div>` : "") + `</div>`;
 }
-function ofBadge(st) {
-  const col = st === "SẴN SÀNG" ? "#26b384" : st === "GẦN" || st === "TRONG VÙNG" ? "#f0b429" : st === "CHẶN Γ" || st === "NGOÀI CỔNG" ? "#ff6b6b" : "#9aa4b2";
-  return `<span style="display:inline-block;white-space:nowrap;font:700 8px/1 monospace;padding:2px 2px;border-radius:3px;background:rgba(255,255,255,.08);color:${col};border:1px solid ${col}55">${st}</span>`;
+document.addEventListener("click", (e) => { const t = e.target.closest && e.target.closest("[data-ofchk]"); if (!t) return; OFV.chk = OFV.chk || {}; OFV.chk[t.dataset.ofchk] = !OFV.chk[t.dataset.ofchk]; try { ofRender(); } catch (x) { /* bỏ qua */ } });
+function ofBadge(st, side) {
+  // xám = chưa thoả / bị chặn; sáng lên theo màu BUY (xanh) / SELL (đỏ) / BOTH (vàng) khi kế hoạch đang hoạt động
+  const live = st === "SẴN SÀNG" || st === "GẦN" || st === "TRONG VÙNG" || st === "XÁC NHẬN", col = live ? (OF_COL[side] || "#f0b429") : "#7d8796";
+  return `<span style="display:inline-block;white-space:nowrap;font:700 8px/1 monospace;padding:2px 2px;border-radius:3px;color:${col};background:${live ? col + "22" : "transparent"};border:1px solid ${col}${live ? "" : "66"}">${st}</span>`;
 }
 function ofRender() {
   const wn = $("#ofWarn"), T = $("#ofT"); let w = ""; try { w = ofWarnText(); } catch { /* chưa có cấu hình */ }
@@ -1017,7 +1020,7 @@ function ofRender() {
   T.innerHTML = warnH
     + live.map((p) => { const full = p.blocked ? (p.why || "Gamma âm: không bắt đáy") : p.past ? "giá đã ở bên kia tường (đã qua)" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng";
       const sh = p.blocked ? (/Flip xa/.test(full) ? "Flip xa > 2,5%: ngày không rõ, đứng ngoài" : full.replace(/^Gamma /, "Gamma ")) : p.past ? "giá đã qua tường" : p.dist === 0 ? "giá đang trong vùng" : "còn " + p.dist.toFixed(1) + "$ tới vùng";
-      return `<div title="${full.replace(/"/g, "&quot;")}" style="display:grid;grid-template-columns:66px 52px 24px 30px 1fr;gap:3px;align-items:start;margin:3px 0;font-size:9px;line-height:1.25"><b style="color:${OF_COL[p.side]};font-size:9px;white-space:nowrap">${p.short}</b><span style="text-align:center">${ofBadge(p.state)}</span><span style="text-align:center">${ofChip(p)}</span><span style="color:${OF_COL[p.side]};font-weight:700;font-size:9px">${p.side}</span><span class="muted" style="font-size:9px">${sh}</span></div>`; }).join("")
+      return `<div title="${full.replace(/"/g, "&quot;")}" style="display:grid;grid-template-columns:66px 52px 24px 30px 1fr;gap:3px;align-items:start;margin:3px 0;font-size:9px;line-height:1.25"><b style="color:${OF_COL[p.side]};font-size:9px;white-space:nowrap">${p.short}</b><span style="text-align:center">${ofBadge(p.state, p.side)}</span><span style="text-align:center">${ofChip(p)}</span><span style="color:${OF_COL[p.side]};font-weight:700;font-size:9px">${p.side}</span><span class="muted" style="font-size:9px">${sh}</span></div>`; }).join("")
     + `<div style="margin-top:8px"><b>Cổng kiểm</b>${M.gates.map(gate).join("")}</div>`;
   const kv = (a, b) => `<div class="muted">${a}</div><div>${b}</div>`, k = M.k, sc = M.sc, dxy = S.state?.macro?.DXY?.chg_n_pct;
   $("#ofC").innerHTML = kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
@@ -1033,7 +1036,7 @@ function ofRender() {
   $("#ofTabs").innerHTML = `<button type="button" data-oftab="new" class="${OFV.tab === "new" ? "on" : ""}" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "new" ? "#f0b429" : "transparent"};color:${OFV.tab === "new" ? "#1b1407" : "inherit"};cursor:pointer">Kế hoạch mới</button>`
     + `<button type="button" data-oftab="run" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "run" ? "#f0b429" : "transparent"};color:${OFV.tab === "run" ? "#1b1407" : "inherit"};cursor:pointer">Lệnh hôm nay (${sg.length}${run ? " · " + run + " đang chạy" : ""})</button>`;
   $("#ofP").innerHTML = OFV.tab === "new"
-    ? live.map((p) => `<div style="border-left:3px solid ${OF_COL[p.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[p.side]}">${p.name}</b> ${ofBadge(p.state)}</div>`
+    ? live.map((p) => `<div style="border-left:3px solid ${OF_COL[p.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[p.side]}">${p.name}</b> ${ofBadge(p.state, p.side)}</div>`
       + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.past ? " · giá ĐÃ QUA tường (chờ giá quay lại rồi mới tính)" : p.dist ? " · cách " + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div>${ofChkHtml(p)}${p.side === "BOTH" ? `<div class="muted" style="margin-top:4px">Hai kịch bản sau khi giá ra khỏi vùng rồi quay lại:</div>` + ofIllu({ id: "hg0", side: "SELL" }, true) + ofIllu({ id: "hg0", side: "BUY" }) : ofIllu(p)}`
       + `<div>SL ${p.sl} · TP1 <b>${typeof p.tp1 === "number" ? ofFm(p.tp1) : p.tp1 || "—"}</b>${p.tp2 != null ? " · TP2 " + ofFm(p.tp2) : ""}</div><div class="muted">Huỷ khi: ${p.cancel}</div></div>`).join("") || '<span class="muted">Chưa có nhóm nào được bật.</span>'
     : sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side} ${g.score}/${g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type.replace("[Options Flow] ", "")}</div></div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>';

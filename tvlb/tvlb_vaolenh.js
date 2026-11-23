@@ -276,6 +276,7 @@
     if (t.dataset.ow) { if (t.checked) delete WATCH.off[t.dataset.ow]; else WATCH.off[t.dataset.ow] = 1; st_.set("watch", WATCH); render(); return; }
     if (t.dataset.og) { WATCH.grp[t.dataset.og] = WATCH.grp[t.dataset.og] === false; st_.set("watch", WATCH); render(); return; }
     if (t.dataset.odrop) { const r = TRK.find((x) => x.code === t.dataset.odrop); if (r) { r.drop = 1; st_.set("trk", TRK); } render(); return; }
+    { const xo = t.closest && t.closest("[data-xo]"); if (xo) { xOpen[xo.dataset.xo] = !xOpen[xo.dataset.xo]; st_.set("xopen", xOpen); render(); return; } }
     if (t.dataset.pv) { PLANVIEW = t.dataset.pv; st_.set("planview", PLANVIEW); render(); return; }
     if (t.dataset.tv) { TRKVIEW = t.dataset.tv; render(); }
   });
@@ -288,7 +289,10 @@
         <br>Điều kiện: ${p.trig}${xList(p)}SL <b>${f2(p.sl)}</b> · TP <b>${f2(p.tp)}</b> <span class="muted">(${p.tpNm})</span> · R:R 1:${p.rr.toFixed(1)}<br><span class="muted">Huỷ khi: ${p.inval}</span></div>`; }).join("");
   }
   const xChip = (p) => { if (!p.xc) return ""; const t = p.xc.length, col = p.xo === t ? "#26b384" : p.xo * 2 >= t ? "#f0b429" : "#9aa4b2"; return `<span title="Điều kiện đạt trên nến vừa đóng" style="font:700 10px/1 monospace;padding:2px 4px;border-radius:4px;background:rgba(255,255,255,.08);color:${col};border:1px solid ${col}55">${p.xo}/${t}</span>`; };
-  const xList = (p) => p.xc ? `<div style="font-size:11px;margin:3px 0 3px 6px;padding-left:8px;border-left:2px solid rgba(255,255,255,.12)">${p.xc.map(([ok, t]) => `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`).join("")}</div>` : "";
+  const xOpen = st_.get("xopen", {});
+  const xList = (p) => { if (!p.xc) return ""; const o = !!xOpen[p.id], t = p.xc.length;
+    return `<div style="font-size:11px;margin:3px 0 3px 6px"><div data-xo="${p.id}" style="cursor:pointer;user-select:none;color:#f0b429" title="Bấm để sổ xuống / thu gọn danh sách điều kiện">${o ? "▾" : "▸"} Đạt <b>${p.xo}/${t}</b> điều kiện <span style="color:#7d8796">${o ? "(bấm để thu gọn)" : "(bấm để xem chi tiết)"}</span></div>`
+      + (o ? `<div style="padding-left:8px;margin-top:3px;border-left:2px solid rgba(255,255,255,.12)">${p.xc.map(([ok, x]) => `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${x}</div>`).join("")}</div>` : "") + `</div>`; };
   function ordCard(o, compact) {
     const a = ordAdvice(o), w = isWatched(o), c = o.d < 0 ? "#ef5350" : "#26a69a";
     return `<div class="v3c" style="border-left-color:${c}${w ? "" : ";opacity:.45"}"><label style="cursor:pointer"><input type="checkbox" data-ow="${o.code}" ${w ? "checked" : ""}> <b>${o.code}</b></label> <b style="color:${c}">${o.d < 0 ? "SELL" : "BUY"} ${f2(o.e)}</b> <span class="muted">${o.src}</span>
