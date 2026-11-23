@@ -666,6 +666,58 @@ const OF_CONDS = [
   ["Quét", "Nến quét thanh khoản (chỉ nhóm HG)", ["Nến quét thanh khoản"]],
   ["Lệnh lớn", "Lệnh lớn ròng cùng chiều (chỉ live)", ["Lệnh lớn mua ròng", "Lệnh lớn bán ròng"]],
 ];
+
+// ── TVLB B9b0: bảng theo dõi Option Flow (cảnh báo cấu hình + đang chờ gì + tín hiệu hôm nay) ──
+function ofWarnText() {
+  const minC = Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm;
+  const nC = OF_CONDS.filter(([k]) => k !== "gamma").filter(([, , n]) => ofOn("c:" + n[0])).length;
+  const nG = OF_GROUPS.filter(([k]) => k !== "session").filter(([k]) => ofOn(k)).length;
+  if (nG === 0) return "Đã tắt cả 3 nhóm tín hiệu → sẽ không có tín hiệu nào. Hãy tick ít nhất 1 nhóm.";
+  if (nC < minC) return `Chỉ đang bật ${nC} điều kiện xác nhận nhưng cần tối thiểu ${minC} → sẽ KHÔNG BAO GIỜ có tín hiệu. Hãy tick thêm điều kiện hoặc hạ "Số xác nhận tối thiểu".`;
+  return "";
+}
+function ofLiveHtml() {
+  const c = S.candles, sc = S.cfg.signals, L = primaryLevels(), esc = (x) => String(x);
+  const w = ofWarnText(), out = [];
+  if (w) out.push(`<div style="color:#ff6b6b;font-weight:600;margin-bottom:4px">⚠ ${w}</div>`);
+  if (!L || L.call_wall == null || L.put_wall == null || c.length < 30) return [out.join("") + '<div class="muted">Chưa đủ dữ liệu (mốc tường hoặc nến).</div>', ""];
+  const i = c.length - 2, k = c[i], px = c[c.length - 1].close, tol = sc.touch_tol;
+  const cw = L.call_wall, pw = L.put_wall, flip = L.gamma_flip, negG = ofOn("gamma") && flip != null && px < flip;
+  const tfOk = (TF_SEC[S.tf] || 0) >= 300, sessOn = sc.session_only && ofOn("session"), inS = inUsSession(c[c.length - 1].time);
+  const since = i - S.lastSigIdx, cdOk = since > sc.cooldown_bars;
+  const gate = (ok, t) => `<span style="color:${ok ? "#26b384" : "#ff6b6b"}">${ok ? "✔" : "✘"} ${t}</span>`;
+  out.push(`<div style="margin:2px 0"><b>Cổng kiểm</b><br>${gate(tfOk, "Khung nến ≥ M5 (đang " + S.tf + ")")}<br>${gate(!sessOn || inS, sessOn ? (inS ? "Đang trong phiên Mỹ 19:00-23:00 VN" : "Ngoài phiên Mỹ 19:00-23:00 VN (bỏ tick 'Chỉ xét phiên' để xét cả ngày)") : "Không lọc phiên")}<br>${gate(cdOk, cdOk ? "Hết nghỉ sau tín hiệu trước" : "Đang nghỉ " + (sc.cooldown_bars - since + 1) + " nến sau tín hiệu trước")}</div>`);
+  const d = (a) => Math.abs(a - px).toFixed(1);
+  const wait = [];
+  wait.push(`Giá ${px.toFixed(2)} · Call Wall ${cw} (cách ${d(cw)}$) · Put Wall ${pw} (cách ${d(pw)}$) · Flip ${flip == null ? "?" : flip} → ${flip == null ? "chưa rõ Gamma" : px < flip ? "Gamma ÂM" : "Gamma DƯƠNG"}`);
+  if (ofOn("g_trap")) {
+    wait.push(`TL1·2 Bẫy SELL: chờ nến chạm Call Wall ≤ ${tol}$ rồi đóng dưới tường, nến giảm (còn ${Math.max(0, Math.abs(cw - px) - tol).toFixed(1)}$)`);
+    wait.push(negG ? `TL1·2 Bẫy BUY: <span style="color:#ff6b6b">đang bị chặn vì Gamma âm</span> (tắt 'Lọc Gamma' để cho phép)` : `TL1·2 Bẫy BUY: chờ nến chạm Put Wall ≤ ${tol}$ rồi đóng trên tường, nến tăng (còn ${Math.max(0, Math.abs(pw - px) - tol).toFixed(1)}$)`);
+  }
+  if (ofOn("g_tl1")) {
+    wait.push(`TL1 Thủng Put Wall SELL: chờ nến đóng dưới ${(pw - tol).toFixed(1)} (còn ${Math.max(0, px - (pw - tol)).toFixed(1)}$)`);
+    wait.push(`TL1 Squeeze Call Wall BUY: chờ nến đóng trên ${(cw + tol).toFixed(1)} (còn ${Math.max(0, (cw + tol) - px).toFixed(1)}$)`);
+  }
+  if (ofOn("g_hedge")) {
+    try { const hz = hedgeSt(), zs = ((hz && hz.zones) || []).filter((z) => z.kind === "accel");
+      if (zs.length) { const z = zs.reduce((a, b) => (Math.min(Math.abs(a.lo - px), Math.abs(a.hi - px)) <= Math.min(Math.abs(b.lo - px), Math.abs(b.hi - px)) ? a : b));
+        const inZ = px >= z.lo && px <= z.hi; wait.push(`HG Vùng Hedge −Γ gần nhất ${Math.round(z.lo)}–${Math.round(z.hi)}: ${inZ ? "giá ĐANG TRONG vùng, chờ nến chọc vào rồi đóng ngược ra" : "cách " + Math.min(Math.abs(z.lo - px), Math.abs(z.hi - px)).toFixed(1) + "$"}`); }
+      else wait.push("HG: chưa có vùng Hedge −Γ"); } catch { /* bỏ qua */ }
+  }
+  out.push(`<div style="margin:4px 0"><b>Đang chờ</b><br>${wait.map((t) => "• " + t).join("<br>")}</div>`);
+  const avg = c.slice(i - sc.vol_sma, i).reduce((a, x) => a + x.vol, 0) / sc.vol_sma, slope = k.cvd - c[i - sc.cvd_slope_bars].cvd, doi = nearDoi(k.close);
+  out.push(`<div style="margin:4px 0"><b>Xác nhận ở nến vừa đóng</b> (${vnClock(k.time)})<br>CVD dốc ${slope > 0 ? "lên ↑" : slope < 0 ? "xuống ↓" : "phẳng"} · Delta nến ${k.delta > 0 ? "+" : k.delta < 0 ? "−" : "0"} · Volume ${avg > 0 ? (k.vol / avg).toFixed(2) : "?"}× SMA${sc.vol_sma} (cần ≥ ${sc.vol_spike_mult}×) · ΔOI gần nhất ${doi ? doi.d_oi : "không có strike trong " + sc.doi_zone + "$"}</div>`);
+  const stHtml = out.join(""); out.length = 0;
+  const sg = S.signals.slice(-8).reverse();
+  const stt = (g) => { for (let j = g.i + 1; j < c.length; j++) { const x = c[j]; if (g.side === "BUY" ? x.low <= g.sl : x.high >= g.sl) return "chạm SL"; if (g.tp1 != null && (g.side === "BUY" ? x.high >= g.tp1 : x.low <= g.tp1)) return "chạm TP1"; } return "đang chạy"; };
+  out.push(`<div style="margin:4px 0"><b>Tín hiệu hôm nay</b> (${S.signals.length})<br>${sg.length ? sg.map((g) => `${vnClock(g.time)} ${g.tag || ""} ${g.side} ${g.score}/${g.max} · vào ${g.entry.toFixed(1)} · SL ${g.sl.toFixed(1)} · TP1 ${g.tp1 == null ? "—" : g.tp1} · <b>${stt(g)}</b><br><span class="muted">${esc(g.type.replace("[Options Flow] ", ""))}</span>`).join("<br>") : '<span class="muted">chưa có</span>'}</div>`);
+  return [stHtml, out.join("")];
+}
+function ofRender() {
+  const el = $("#ofS"), el2 = $("#ofG"), wn = $("#ofWarn");
+  if (el) { try { const [a, b] = ofLiveHtml(); el.innerHTML = a; if (el2) el2.innerHTML = b; } catch (e) { el.textContent = "Lỗi bảng theo dõi: " + e.message; } }
+  try { if (wn) { const w = ofWarnText(); wn.textContent = w ? "⚠ " + w : ""; wn.style.display = w ? "block" : "none"; } } catch { /* chưa có cấu hình */ }
+}
 let ofTry = 0;
 function ofInitUI() {
   if ($("#ofOpts")) return;
@@ -676,16 +728,37 @@ function ofInitUI() {
   const d = document.createElement("details"); d.id = "ofOpts"; d.style.cssText = "font-size:12px;margin:4px 0 8px 4px";
   const row = (k, t, names) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-of="${names.join("|")}"${ofOn(names[0]) ? " checked" : ""}> ${t}</label>`;
   d.innerHTML = `<summary style="cursor:pointer;font-weight:600">Bật/tắt điều kiện (TL1 · TL2 · HG)</summary>
+    <div id="ofWarn" style="display:none;color:#ff6b6b;font-weight:600;margin:4px 0"></div>
+    <div class="muted" style="margin:2px 0 4px">Bảng theo dõi nằm ở trang "Vào lệnh Option Flow" bên phải (trước trang ③ Vào lệnh).</div>
     <div class="muted" style="margin:4px 0">Nhóm tín hiệu</div>${OF_GROUPS.map(([k, t]) => row(k, t, [k])).join("")}
     <div class="muted" style="margin:6px 0 4px">Số xác nhận tối thiểu: <select id="ofMin" style="font-size:12px">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}"${(Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm) === n ? " selected" : ""}>${n}</option>`).join("")}</select> (mặc định 2; nhớ để các điều kiện bên dưới được tick)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
   d.addEventListener("change", (e) => {
-    if (e.target.id === "ofMin") { OFS.minConf = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); return; }
+    if (e.target.id === "ofMin") { OFS.minConf = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); return; }
     const el = e.target.closest("input[data-of]"); if (!el) return;
     for (const k of el.dataset.of.split("|")) { if (el.checked) delete OFS[k]; else OFS[k] = false; }
     try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { /* bỏ qua */ }
-    replaySignals();
+    replaySignals(); ofRender();
   });
   lab.insertAdjacentElement("afterend", d);
+  ofRender(); setInterval(ofRender, 3000);
+  setTimeout(ofInitPage, 1500);   // đợi các trang ③④⑤ dựng xong để nút ⑥ nằm sau chúng
+}
+// Trang ⑥ bên phải: theo dõi TL1·TL2 (trang ③ Vào lệnh vẫn giữ KH1-KH3)
+let ofPgTry = 0;
+function ofInitPage() {
+  const bar = document.querySelector("#pgbar"), aside = document.querySelector(".right");
+  if (!bar || !aside) { if (++ofPgTry < 20) setTimeout(ofInitPage, 500); return; }
+  if (bar.querySelector('[data-pg="6"]')) return;
+  const b3 = bar.querySelector('button[data-pg="3"]');
+  if (!b3 && ++ofPgTry < 20) { setTimeout(ofInitPage, 500); return; }   // đợi nút ③ dựng xong để đặt ⑥ ngay TRƯỚC nó
+  const btn = document.createElement("button"); btn.type = "button"; btn.dataset.pg = "6"; btn.className = "v3btn"; btn.textContent = "Vào lệnh Option Flow";
+  if (b3) bar.insertBefore(btn, b3); else bar.appendChild(btn);
+  const page = document.createElement("div"); page.className = "page"; page.dataset.pg = "6"; page.hidden = true;
+  page.innerHTML = `<div class="v3grid" style="grid-template-columns:1fr 1fr;gap:10px">
+    <section class="panel"><header><h2>Theo dõi TL1 · TL2 · HG</h2><span class="muted small">cổng kiểm · đang chờ · xác nhận</span></header><div id="ofS" style="font-size:12.5px;line-height:1.5;padding:4px 8px"></div></section>
+    <section class="panel"><header><h2>Lệnh / tín hiệu hôm nay</h2><span class="muted small">chỉ ngày hôm nay</span></header><div id="ofG" style="font-size:12.5px;line-height:1.5;padding:4px 8px"></div></section></div>`;
+  aside.insertBefore(page, aside.querySelector("#pineOut") || null);
+  ofRender();
 }
 function evaluate(i, live) {
   const sc = S.cfg.signals, c = S.candles, k = c[i], L = primaryLevels();
