@@ -490,14 +490,16 @@ function drawOverlay() {
       if (!p.on || p.lo == null) continue;
       const y1 = Y(p.hi), y0 = Y(p.lo); if (y1 == null || y0 == null) continue;
       const h = Math.max(6, y0 - y1), top = (y0 + y1) / 2 - h / 2, col = p.side === "SELL" ? "239,83,80" : "38,166,154";
-      ctx.fillStyle = `rgba(${col},${p.blocked ? 0.06 : 0.16})`; ctx.fillRect(0, top, plotW, h);
-      ctx.strokeStyle = `rgba(${col},.7)`; ctx.setLineDash([4, 3]); ctx.strokeRect(0.5, top, plotW - 1, h); ctx.setLineDash([]);
-      labs.push({ y: top - 2, col, t: `${p.short} ${p.side} · ${p.state}` });
+      const x0 = Math.round(plotW * 0.54);   // vùng ngắn, chỉ nằm ở nửa phải như KH1-KH3 (không kéo ngang cả chart)
+      ctx.fillStyle = `rgba(${col},${p.blocked ? 0.05 : 0.11})`; ctx.fillRect(x0, top, plotW - x0, h);
+      ctx.strokeStyle = `rgba(${col},.35)`; ctx.lineWidth = 0.6; ctx.setLineDash([3, 3]); ctx.strokeRect(x0 + 0.5, top, plotW - x0 - 1, h); ctx.setLineDash([]); ctx.lineWidth = 1;
+      labs.push({ sell: p.side === "SELL", y: p.side === "SELL" ? top - 2 : top + h + 12, col, t: `${p.short} ${p.side} · ${p.state}` });   // SELL: nhãn nằm TRÊN vùng · BUY: nhãn nằm DƯỚI vùng
     }
-    labs.sort((u, v) => u.y - v.y);
-    for (let j = 1; j < labs.length; j++) if (labs[j].y - labs[j - 1].y < 12) labs[j].y = labs[j - 1].y + 12;   // nhãn sát nhau thì xếp chồng xuống
+    const up = labs.filter((l) => l.sell).sort((u, v) => v.y - u.y), dn = labs.filter((l) => !l.sell).sort((u, v) => u.y - v.y);
+    for (let j = 1; j < up.length; j++) if (up[j - 1].y - up[j].y < 13) up[j].y = up[j - 1].y - 13;   // nhãn SELL sát nhau: xếp chồng lên trên
+    for (let j = 1; j < dn.length; j++) if (dn[j].y - dn[j - 1].y < 13) dn[j].y = dn[j - 1].y + 13;   // nhãn BUY sát nhau: xếp chồng xuống dưới
     ctx.font = "600 10px 'IBM Plex Mono', monospace"; ctx.textAlign = "right"; ctx.textBaseline = "bottom";
-    for (const l of labs) { ctx.fillStyle = `rgb(${l.col})`; ctx.fillText(l.t, plotW - 6, l.y); }
+    for (const l of labs) { const w = ctx.measureText(l.t).width; ctx.fillStyle = "rgba(10,14,20,.88)"; ctx.fillRect(plotW - 9 - w, l.y - 11, w + 6, 12); ctx.fillStyle = `rgb(${l.col})`; ctx.fillText(l.t, plotW - 6, l.y); }
   }
 
   // Đường cong Net GEX theo strike (nguồn chính)
@@ -788,10 +790,19 @@ function ofInitUI() {
     replaySignals(); ofRender();
   });
   lab.insertAdjacentElement("afterend", d);
+  ofCompactTop();
   ofRender(); setInterval(ofRender, 3000);
   setTimeout(ofInitPage, 1500);   // đợi các trang ③④⑤ dựng xong để nút ⑥ nằm sau chúng
 }
 // Trang ⑥ bên phải: theo dõi TL1·TL2 (trang ③ Vào lệnh vẫn giữ KH1-KH3)
+function ofCompactTop() {
+  if (document.getElementById("ofCompactCss")) return;
+  const st = document.createElement("style"); st.id = "ofCompactCss";
+  st.textContent = "#btnCopyTV,#btnRefresh,#btnAI{padding:3px 10px!important;font-size:12px!important;line-height:1.2!important;min-height:0!important}#tfs button{padding:2px 8px!important;font-size:11.5px!important;line-height:1.2!important;min-height:0!important}";
+  document.head.appendChild(st);
+  const sq = (el) => { if (el) { el.style.setProperty("padding-top", "2px", "important"); el.style.setProperty("padding-bottom", "2px", "important"); el.style.setProperty("margin-top", "0", "important"); el.style.setProperty("margin-bottom", "2px", "important"); el.style.setProperty("min-height", "0", "important"); } };
+  sq($("#btnAI")?.parentElement); sq($("#tfs")?.parentElement);
+}
 let ofPgTry = 0;
 function ofInitPage() {
   const bar = document.querySelector("#pgbar"), aside = document.querySelector(".right");
