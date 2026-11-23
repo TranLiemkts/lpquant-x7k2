@@ -470,13 +470,17 @@ function drawOverlay() {
   // Volume profile phiên
   const vp = S.state?.volume_profile;
   if (vp && $("#lyVP").checked) {
+    // TVLB B9b0: nhãn VAH/POC/VAL đặt ở giữa biểu đồ (không đè nhãn tường ở mép trái), và dãn ra nếu 2 nhãn sát nhau
+    const vpl = [];
     for (const [k, lab] of [["poc", "POC"], ["vah", "VAH"], ["val", "VAL"]]) {
       const y = Y(vp[k]); if (y == null) continue;
       hline(ctx, y, 0, plotW, C.vp, k === "poc" ? 1.5 : 1, k === "poc" ? [] : [3, 3], 0.8);
-      ctx.fillStyle = C.vp; ctx.font = "10px 'IBM Plex Mono', monospace"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-      if (window.TVLB_COMPACT) { ctx.font = "9.5px 'IBM Plex Mono', monospace"; ctx.fillText(`${lab} ${Math.round(vp[k])}`, Math.round(plotW * 0.36), y - 2); }   // 7o số 141: chế độ gọn — chữ VAL/POC/VAH dời vào giữa (tránh nhãn tường ở mép trái), bỏ phần thập phân
-      else ctx.fillText(`${lab} ${fmt(vp[k])}`, 6, y - 2);
+      vpl.push({ y, t: `${lab} ${Math.round(vp[k])}` });
     }
+    vpl.sort((u, v) => u.y - v.y);
+    for (let j = 1; j < vpl.length; j++) if (vpl[j].y - vpl[j - 1].y < 12) vpl[j].y = vpl[j - 1].y + 12;
+    ctx.fillStyle = C.vp; ctx.font = "9.5px 'IBM Plex Mono', monospace"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+    for (const it of vpl) ctx.fillText(it.t, Math.round(plotW * 0.36), it.y - 2);
   }
 
   // Đường cong Net GEX theo strike (nguồn chính)
@@ -648,6 +652,7 @@ const OF_GROUPS = [
   ["g_tl1", "TL1 · Thủng Put Wall / Squeeze Call Wall (đi theo xu hướng)"],
   ["g_trap", "TL1+TL2 · Bẫy tại Call/Put Wall (đánh ngược)"],
   ["g_hedge", "HG · Vùng Hedge −Γ (không có trong TL1/TL2)"],
+  ["session", "Chỉ xét phiên Mỹ 19:00-23:00 giờ VN (bỏ tick = xét cả ngày)"],
 ];
 const OF_CONDS = [
   ["gamma", "Lọc Gamma: Gamma âm thì không BUY bắt đáy (TL1)", ["gamma"]],
@@ -672,8 +677,9 @@ function ofInitUI() {
   const row = (k, t, names) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-of="${names.join("|")}"${ofOn(names[0]) ? " checked" : ""}> ${t}</label>`;
   d.innerHTML = `<summary style="cursor:pointer;font-weight:600">Bật/tắt điều kiện (TL1 · TL2 · HG)</summary>
     <div class="muted" style="margin:4px 0">Nhóm tín hiệu</div>${OF_GROUPS.map(([k, t]) => row(k, t, [k])).join("")}
-    <div class="muted" style="margin:6px 0 4px">Điều kiện xác nhận (cần đạt ≥ 2)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
+    <div class="muted" style="margin:6px 0 4px">Số xác nhận tối thiểu: <select id="ofMin" style="font-size:12px">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}"${(Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm) === n ? " selected" : ""}>${n}</option>`).join("")}</select> (mặc định 2; nhớ để các điều kiện bên dưới được tick)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
   d.addEventListener("change", (e) => {
+    if (e.target.id === "ofMin") { OFS.minConf = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); return; }
     const el = e.target.closest("input[data-of]"); if (!el) return;
     for (const k of el.dataset.of.split("|")) { if (el.checked) delete OFS[k]; else OFS[k] = false; }
     try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { /* bỏ qua */ }
@@ -685,7 +691,7 @@ function evaluate(i, live) {
   const sc = S.cfg.signals, c = S.candles, k = c[i], L = primaryLevels();
   if (!L || L.call_wall == null || L.put_wall == null) return null;
   if (i < Math.max(sc.div_lookback, sc.vol_sma, sc.cvd_slope_bars) + 2) return null;
-  if (sc.session_only && !inUsSession(k.time)) return null;
+  if (sc.session_only && ofOn("session") && !inUsSession(k.time)) return null;
   if ((TF_SEC[S.tf] || 0) < 300) return null;   // Options Flow: chỉ báo trên khung từ M5 trở lên (giống TradingView)
   if (i - S.lastSigIdx <= sc.cooldown_bars) return null;
   const cw = L.call_wall, pw = L.put_wall, tol = sc.touch_tol, d0 = divAt(i), d1 = divAt(i - 1), prev = c[i - 1];
@@ -704,7 +710,7 @@ function evaluate(i, live) {
     for (const kk of Object.keys(conf)) if (!ofOn("c:" + kk)) delete conf[kk]; // điều kiện bị tắt
     const tag = grp === "g_tl1" ? "TL1" : grp === "g_trap" ? "TL1·2" : "HG";
     const score = Object.values(conf).filter(Boolean).length;
-    return score >= sc.min_confirm ? { i, time: k.time, type: "[Options Flow] " + type, side, conf, score, max: Object.keys(conf).length, entry: k.close, sl, tp1, tp2, live, tag } : null;
+    return score >= (Number.isInteger(OFS.minConf) ? OFS.minConf : sc.min_confirm) ? { i, time: k.time, type: "[Options Flow] " + type, side, conf, score, max: Object.keys(conf).length, entry: k.close, sl, tp1, tp2, live, tag } : null;
   };
   let s = null;
   if (k.close < pw - tol && prev.close >= pw - tol) {
