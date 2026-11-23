@@ -728,6 +728,30 @@ function ofModel() {
   const avg = c.slice(i - sc.vol_sma, i).reduce((a, x) => a + x.vol, 0) / sc.vol_sma, slope = k.cvd - c[i - sc.cvd_slope_bars].cvd, doi = nearDoi(k.close);
   return { px, cw, pw, flip, negG, blockG, tol, gates, gatesOk, plans, k, avg, slope, doi, sc };
 }
+// ── TVLB B9b0: hình minh họa mini cho từng kế hoạch (SVG, không theo tỉ lệ giá) ──
+function ofIllu(p) {
+  const W = 290, H = 104, flip = p.side === "BUY", Y = (y) => (flip ? H - y : y), up = "#26a69a", dn = "#ef5350";
+  const kind = p.id === "ts" || p.id === "tb" ? "trap" : p.id === "bd" || p.id === "sq" ? "break" : "hedge";
+  const cd = (x, o, h, l, c) => { const col = Y(c) < Y(o) ? up : dn, t = Math.min(Y(o), Y(c)); return `<line x1="${x}" x2="${x}" y1="${Y(h)}" y2="${Y(l)}" stroke="${col}" stroke-width="1.4"/><rect x="${x - 5}" y="${t}" width="10" height="${Math.max(2, Math.abs(Y(c) - Y(o)))}" fill="${col}"/>`; };
+  const ln = (y, col, txt, dash, x2 = 152) => `<line x1="6" x2="${x2}" y1="${Y(y)}" y2="${Y(y)}" stroke="${col}" stroke-width="1" ${dash ? 'stroke-dasharray="4 3"' : ""}/><text x="${x2 + 5}" y="${Y(y) + 3}" font-size="8.5" fill="${col}">${txt}</text>`;
+  const wick = flip ? "đáy" : "đỉnh", wallName = p.id === "ts" || p.id === "sq" ? "Call Wall" : "Put Wall", G = "#9aa4b2";
+  let g = "";
+  if (kind === "trap") {
+    g += ln(30, G, `${wallName} (tường)`) + ln(14, dn, `SL = ${wick} râu + 3$`, true) + ln(50, "#f0b429", "vào lệnh (đóng nến)", true) + ln(74, up, "TP1: mốc OI kế", true) + ln(92, up, "TP2: tường đối diện", true);
+    g += cd(30, 66, 62, 68, 60) + cd(50, 60, 52, 62, 54) + cd(70, 54, 42, 56, 44) + cd(90, 36, 20, 52, 50) + cd(110, 50, 48, 62, 60) + cd(130, 60, 58, 74, 72) + cd(150, 72, 70, 84, 82);
+    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="8.5" fill="#cfd6e0">râu chọc qua tường rồi nến đóng ngược lại</text>`;
+  } else if (kind === "break") {
+    g += ln(54, G, `${wallName} (tường)`) + ln(42, dn, "SL = tường + 3$", true) + ln(70, "#f0b429", "vào lệnh (đóng nến)", true) + ln(90, up, "TP1: mốc OI kế", true);
+    g += cd(30, 28, 24, 34, 32) + cd(50, 32, 30, 42, 40) + cd(70, 40, 38, 54, 50) + cd(90, 48, 46, 74, 70) + cd(110, 70, 68, 84, 82) + cd(130, 82, 80, 90, 88);
+    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="8.5" fill="#cfd6e0">nến ĐÓNG xuyên qua tường</text>`;
+  } else {
+    g += `<rect x="6" y="${Math.min(Y(48), Y(66))}" width="146" height="18" fill="rgba(240,180,41,.14)" stroke="rgba(240,180,41,.5)" stroke-dasharray="3 3"/><text x="157" y="${Y(57) + 3}" font-size="8.5" fill="#f0b429">vùng Hedge −Γ</text>`;
+    g += ln(34, dn, "SL = cực trị 3 nến ± 3$", true) + ln(78, "#f0b429", "vào lệnh (đóng nến)", true) + ln(96, up, "TP1: mốc OI kế", true);
+    g += cd(30, 86, 82, 88, 84) + cd(50, 84, 78, 86, 80) + cd(70, 80, 72, 82, 74) + cd(90, 70, 50, 78, 76) + cd(110, 76, 74, 90, 88);
+    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="8.5" fill="#cfd6e0">râu chọc vào vùng rồi nến đóng ngược ra</text>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;margin:4px 0 2px;background:rgba(255,255,255,.03);border-radius:4px" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${g}</svg><div class="muted" style="font-size:10.5px">Hình minh họa tình huống (không theo tỉ lệ giá). Xanh = nến tăng, đỏ = nến giảm.</div>`;
+}
 const OF_COL = { SELL: "#ef5350", BUY: "#26a69a" };
 function ofBadge(st) {
   const col = st === "SẴN SÀNG" ? "#26b384" : st === "GẦN" ? "#f0b429" : st === "CHẶN Γ" || st === "NGOÀI CỔNG" ? "#ff6b6b" : "#9aa4b2";
@@ -764,7 +788,7 @@ function ofRender() {
     + `<button type="button" data-oftab="run" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "run" ? "#f0b429" : "transparent"};color:${OFV.tab === "run" ? "#1b1407" : "inherit"};cursor:pointer">Lệnh hôm nay (${sg.length}${run ? " · " + run + " đang chạy" : ""})</button>`;
   $("#ofP").innerHTML = OFV.tab === "new"
     ? live.map((p) => `<div style="border-left:3px solid ${OF_COL[p.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[p.side]}">${p.name}</b> ${ofBadge(p.state)}</div>`
-      + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.dist ? " · cách " + (p.px != null ? "" : "") + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div>`
+      + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.dist ? " · cách " + (p.px != null ? "" : "") + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div>${ofIllu(p)}`
       + `<div>SL ${p.sl} · TP1 <b>${typeof p.tp1 === "number" ? ofFm(p.tp1) : p.tp1 || "—"}</b>${p.tp2 != null ? " · TP2 " + ofFm(p.tp2) : ""}</div><div class="muted">Huỷ khi: ${p.cancel}</div></div>`).join("") || '<span class="muted">Chưa có nhóm nào được bật.</span>'
     : sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;background:rgba(255,255,255,.03);border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side} ${g.score}/${g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type.replace("[Options Flow] ", "")}</div></div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>';
 }
