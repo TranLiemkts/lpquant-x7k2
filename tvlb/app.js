@@ -751,13 +751,24 @@ function ofInitPage() {
   if (bar.querySelector('[data-pg="6"]')) return;
   const b3 = bar.querySelector('button[data-pg="3"]');
   if (!b3 && ++ofPgTry < 20) { setTimeout(ofInitPage, 500); return; }   // đợi nút ③ dựng xong để đặt ⑥ ngay TRƯỚC nó
-  const btn = document.createElement("button"); btn.type = "button"; btn.dataset.pg = "6"; btn.className = "v3btn"; btn.textContent = "Vào lệnh Option Flow";
+  const btn = document.createElement("button"); btn.type = "button"; btn.dataset.pg = "6"; btn.className = "v3btn"; btn.textContent = "Vào lệnh OF"; btn.title = "Vào lệnh Option Flow (TL1·TL2)";
   if (b3) bar.insertBefore(btn, b3); else bar.appendChild(btn);
   const page = document.createElement("div"); page.className = "page"; page.dataset.pg = "6"; page.hidden = true;
   page.innerHTML = `<div class="v3grid" style="grid-template-columns:1fr 1fr;gap:10px">
     <section class="panel"><header><h2>Theo dõi TL1 · TL2 · HG</h2><span class="muted small">cổng kiểm · đang chờ · xác nhận</span></header><div id="ofS" style="font-size:12.5px;line-height:1.5;padding:4px 8px"></div></section>
     <section class="panel"><header><h2>Lệnh / tín hiệu hôm nay</h2><span class="muted small">chỉ ngày hôm nay</span></header><div id="ofG" style="font-size:12.5px;line-height:1.5;padding:4px 8px"></div></section></div>`;
   aside.insertBefore(page, aside.querySelector("#pineOut") || null);
+  // tự xử lý đổi trang cho nút này (nút thêm sau khi trang tải xong thì bộ đổi trang có sẵn không biết tới)
+  btn.addEventListener("click", () => {
+    aside.querySelectorAll(":scope > .page").forEach((pg) => { pg.hidden = pg !== page; });
+    bar.querySelectorAll("button[data-pg]").forEach((b) => b.classList.toggle("on", b === btn));
+    ofRender();
+  });
+  bar.addEventListener("click", (e) => { const b = e.target.closest("button[data-pg]"); if (b && b !== btn) { page.hidden = true; btn.classList.remove("on"); } }, true);
+  // thu nhỏ hàng nút trang để vừa 1 hàng, còn chỗ cho 1-2 nút nữa
+  const st = document.createElement("style");
+  st.textContent = "#pgbar{display:flex!important;flex-wrap:nowrap!important;gap:4px!important;overflow-x:auto}#pgbar button{padding:3px 7px!important;font-size:11.5px!important;white-space:nowrap!important;flex:0 0 auto}";
+  document.head.appendChild(st);
   ofRender();
 }
 function evaluate(i, live) {
