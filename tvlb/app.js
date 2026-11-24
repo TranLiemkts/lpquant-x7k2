@@ -1210,9 +1210,7 @@ function ofChkHtml(p) {
   const head = lv ? `Chưa chạm vùng hôm nay · nến vừa đóng ${vnClock(h.time)}` : `<b>${ofSimple(h)}</b> · nến ${vnClock(h.time)} · ${stCol ? `<b style="color:${stCol}">${ofStatTxt(h)}</b>` : ofStatTxt(h)}`;
   return `<div style="font-size:11px;margin:4px 0 4px 6px"><div data-ofchk="${p.id}" data-ofdef="${def ? 1 : 0}" style="cursor:pointer;user-select:none;color:#f0b429" title="Bấm để sổ xuống / thu gọn danh sách điều kiện">${open ? "▾" : "▸"} ${head} <span class="muted">${open ? "(bấm để thu gọn)" : "(bấm để xem điều kiện)"}</span></div>`
     + (open ? `<div style="padding-left:8px;margin-top:3px;border-left:2px solid rgba(255,255,255,.12)"><div class="muted">${lv ? `Chưa có nến nào chạm vùng này hôm nay nên chưa có x/y. Dưới đây là nến ${S.tf} vừa đóng lúc ${vnClock(h.time)}, chỉ để tham khảo.` : `Lần chạm gần nhất hôm nay: nến ${S.tf} ${vnClock(h.time)} (nến có ký hiệu trên chart). <b>${ofSum(h)}</b> (H hình thái · X xác nhận · C cổng). Vào lệnh khi đủ cả 3 nhóm.`}</div>`
-      + (h.shape.length ? `<div class="muted" style="margin-top:3px">H · Hình thái nến ${cnt(h.shape)}/${h.shape.length}</div>${li(h.shape)}` : "")
-      + (h.conf.length || h.need > 0 ? `<div class="muted" style="margin-top:3px">X · Xác nhận (menu): ${ofXNote(h)}</div>${li(h.conf, true)}` : "")
-      + (h.gate.length ? `<div class="muted" style="margin-top:3px">C · Cổng ${cnt(h.gate)}/${h.gate.length}${h.gOk < h.gate.length ? " (cổng chưa qua → đứng ngoài, dù nến đã thỏa)" : ""}</div>${li(h.gate)}` : "") + `</div>` : "") + `</div>`;
+      + ofChkGroups(h) + `</div>` : "") + `</div>`;
 }
 document.addEventListener("click", (e) => { const t = e.target.closest && e.target.closest("[data-ofchk]"); if (!t) return; OFV.chk = OFV.chk || {}; { const id = t.dataset.ofchk, cur = OFV.chk[id] !== undefined ? !!OFV.chk[id] : t.dataset.ofdef === "1"; OFV.chk[id] = !cur; } try { ofRender(); } catch (x) { /* bỏ qua */ } });
 function ofBadge(st, side) {
@@ -1419,7 +1417,16 @@ function ofDrawWatch() {
 }
 function drawOverlay() { try { const ws = `${window.TVLB_TOPN}|${window.TVLB_MINOR}|${window.TVLB_WALLSTYLE}|${$("#lyKey")?.checked}|${$("#lyGLD")?.checked}`; if (S._wallSig !== undefined && S._wallSig !== ws) { S._wallSig = ws; replaySignals(); } S._wallSig = ws; } catch (e) { }   // v23am: đổi menu tường → tính lại tín hiệu
   try { ofSyncChk(S.ofPlans); S.of9Sig = ofEntries(); } catch (e) { S.of9Sig = []; } try { ofRefresh(); } catch (e) { /* khung đo vẫn vẽ theo luật tự nhiên */ } drawOverlayBase(); try { ofDrawWatch(); } catch (e) { S.watchErr = String(e && e.message || e); } }
-const ofChkLines = (h) => { const li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join(""); return li(h.shape) + li(h.conf, true) + li(h.gate); };
+// 9b-5b: danh sách điều kiện chia 3 NHÓM có khung riêng: ① Hình thái nến (bắt buộc đủ hết) · ② Xác nhận theo menu (đủ số tối thiểu là được) · ③ Cổng (bắt buộc). Viền xanh = nhóm đã đạt, cam = chưa.
+function ofChkGroups(h) {
+  const li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join("");
+  const box = (ok, title, body) => `<div style="border-left:3px solid ${ok ? "#26b384" : "#f0b429"};background:rgba(255,255,255,.03);padding:3px 6px;margin:4px 0;border-radius:3px"><div style="font-weight:700;color:${ok ? "#26b384" : "#f0b429"};font-size:10.5px">${title}</div>${body}</div>`;
+  const shOk = h.shOk === h.shape.length, xOk = h.cOk >= h.need, gOk = h.gOk === h.gate.length;
+  return (h.shape.length ? box(shOk, `① HÌNH THÁI NẾN · bắt buộc đủ TẤT CẢ · ${h.shOk}/${h.shape.length} ${shOk ? "✔" : "(chưa đủ)"}`, li(h.shape)) : "")
+    + (h.conf.length || h.need > 0 ? box(xOk, `② XÁC NHẬN theo menu · cần ≥ ${h.need} ô · đang đạt ${h.cOk}/${h.conf.length} ô đang tick ${xOk ? "✔" : "(chưa đủ)"}`, li(h.conf, true) + (h.conf.length < h.need ? '<div style="color:#ff8a65">Số ô đang tick ít hơn số cần → nhóm này KHÔNG BAO GIỜ đủ: tick thêm ô hoặc hạ «xác nhận tối thiểu».</div>' : "")) : "")
+    + (h.gate.length ? box(gOk, `③ CỔNG · bắt buộc · ${h.gOk}/${h.gate.length} ${gOk ? "✔" : "(chưa qua → đứng ngoài)"}`, li(h.gate)) : "");
+}
+const ofChkLines = (h) => ofChkGroups(h);
 function ofRender() {
   const wn = $("#ofWarn"), T = $("#ofT"); let w = ""; try { w = ofWarnText(); } catch { /* chưa có cấu hình */ }
   if (wn) { wn.textContent = w ? "⚠ " + w : ""; wn.style.display = w ? "block" : "none"; }
@@ -1438,7 +1445,8 @@ function ofRender() {
   const lgMin = Number.isInteger(OFS.minConf) ? OFS.minConf : M.sc.min_confirm;
   T.innerHTML = warnH
     + `<div class="muted" style="font-size:9.5px;line-height:1.35;margin:2px 0 5px">x/y = điều kiện đạt / cần (hình thái nến + xác nhận theo menu, tối thiểu ${lgMin}) của <b>lần chạm gần nhất hôm nay</b>: cùng một con số ở nhãn vùng, danh sách, thẻ và ký hiệu trên nến đó. ⛔ = cổng chưa qua · ✔ = đủ. "–" = hôm nay chưa chạm. <b>ĐỨNG NGOÀI</b> = bị bộ lọc ở menu trái loại, không vào lệnh cả 2 hướng; rê chuột vào nhãn để xem lý do.</div>`
-    + live.map((p) => { const full = p.blocked ? (p.why || "Gamma âm: không bắt đáy") : p.past ? "giá đã ở bên kia tường (đã qua)" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng";
+    + (() => { const dn = live.filter((p) => p.state === "ĐÃ VÀO"); return dn.length ? `<div class="muted" style="font-size:9.5px;margin:2px 0 4px">Đã vào hôm nay (ẩn khỏi danh sách, xem tab «Lệnh hôm nay»): ${dn.map((p) => `<span data-ofgo="${p.id}" style="cursor:pointer;color:${OF_COL[p.side]}">${p.short} ${p.side} ${ofFm((p.lo + p.hi) / 2)}</span>`).join(" · ")}</div>` : ""; })()   // 9b-5b: «Theo dõi diễn biến» chỉ giữ kế hoạch CHƯA vào lệnh
+    + live.filter((p) => p.state !== "ĐÃ VÀO").map((p) => { const full = p.blocked ? (p.why || "Gamma âm: không bắt đáy") : p.past ? "giá đã ở bên kia tường (đã qua)" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng";
       const sh = p.blocked ? (p.why || full) : p.past ? "giá đã qua tường" : p.dist === 0 ? "giá đang trong vùng" : "còn " + p.dist.toFixed(1) + "$ tới vùng";
       return `<div data-ofgo="${p.id}" title="Bấm để mở kế hoạch này ở tab «Kế hoạch mới». ${(ofStateTip(p) ? ofStateTip(p).replace(/<\/?(div|b|br)[^>]*>/g, " ").replace(/\s+/g, " ").trim() : full).replace(/"/g, "&quot;")}" style="display:grid;grid-template-columns:62px 60px 42px 26px 1fr;gap:3px;align-items:start;margin:3px 0;font-size:9px;line-height:1.25;cursor:pointer${OFV.focus === p.id ? ";outline:1px solid #f0b429;border-radius:3px" : ""}"><b style="color:${OF_COL[p.side]};font-size:9px;white-space:nowrap">${p.short}</b><span style="text-align:center">${ofBadge(p.state, p.side)}</span><span style="text-align:center">${ofChip(p)}</span><span style="color:${OF_COL[p.side]};font-weight:700;font-size:9px">${p.side}</span><span class="muted" style="font-size:9px">${sh}</span></div>`; }).join("")
     + `<div style="margin-top:8px"><b>Cổng kiểm</b>${M.gates.map(gate).join("")}</div>` + ofCondHtml(M);
@@ -2825,3 +2833,21 @@ async function boot() {
   setInterval(() => { renderMacro(); renderEngineChip(); renderAgent(); }, 30000);
 }
 boot();
+
+// ═══════ 9b-5b: TIÊU ĐỀ CÁC KHUNG BÊN PHẢI ĐỨNG YÊN KHI CUỘN (chỉ phần nội dung cuộn). Áp cho mọi <section class="panel"> trong cột phải (mọi trang),
+// và hàng nút tab của «Kế hoạch giao dịch» (#ofTabs) dính ngay dưới tiêu đề. Nền tiêu đề lấy đúng màu nền khung (để chữ cuộn bên dưới không lộ qua). Chỉ đổi cách hiển thị.
+(function () {
+  try {
+    const st = document.createElement("style");
+    st.textContent = ".right section.panel > header{position:sticky;top:0;z-index:4}";
+    document.head.appendChild(st);
+    const opaque = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c || ""); if (!m) return false; const v = m[1].split(",").map((x) => parseFloat(x)); return v.length < 4 || v[3] >= 0.95; };
+    const bgOf = (el) => { for (let e = el; e && e !== document.documentElement; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (opaque(c)) return c; } return "#0b0e12"; };
+    const fix = () => {
+      document.querySelectorAll(".right section.panel > header").forEach((h) => { if (h.dataset.stk) return; h.dataset.stk = "1"; const bg = bgOf(h); h.style.backgroundColor = bg; h.style.boxShadow = `0 -12px 0 0 ${bg}, 0 4px 6px -4px rgba(0,0,0,.6)`; });
+      const t = document.getElementById("ofTabs"), h = t && t.parentElement ? t.parentElement.querySelector(":scope > header") : null;
+      if (t && h) { const top = h.offsetHeight + "px"; if (t.style.top !== top) { t.style.position = "sticky"; t.style.top = top; t.style.zIndex = "3"; t.style.backgroundColor = h.style.backgroundColor || bgOf(t); t.style.paddingTop = "2px"; } }
+    };
+    fix(); setInterval(fix, 2000);
+  } catch (e) { /* chỉ là hiển thị */ }
+})();
