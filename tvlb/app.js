@@ -396,7 +396,7 @@ function hline(ctx, y, x0, x1, color, width, dash, alpha) {
   ctx.beginPath(); ctx.moveTo(x0, Math.round(y) + 0.5); ctx.lineTo(x1, Math.round(y) + 0.5); ctx.stroke(); ctx.restore();
 }
 
-function drawOverlay() {
+function drawOverlayBase() {
   if (!ov.ctx || !candleS) return;
   const ctx = ov.ctx, dpr = ov.dpr;
   const W = ov.cv.width / dpr, H = ov.cv.height / dpr;
@@ -506,7 +506,7 @@ function drawOverlay() {
         ctx.fillStyle = `rgba(${col},${p.blocked ? 0.05 : 0.11})`; ctx.fillRect(x0, top, plotW - x0, h);
         ctx.strokeStyle = `rgba(${col},.35)`; ctx.lineWidth = 0.6; ctx.setLineDash([3, 3]); ctx.strokeRect(x0 + 0.5, top, plotW - x0 - 1, h); ctx.setLineDash([]); ctx.lineWidth = 1;
       }
-      labs.push({ sell: p.side === "SELL", y: p.side === "SELL" ? top - 2 : top + h + 12, col, t: `${p.short} ${p.side} · ${p.state}${p.chk && p.chk.tot ? " · " + p.chk.ok + "/" + p.chk.tot : ""}` });   // SELL: nhãn nằm TRÊN vùng · BUY: nhãn nằm DƯỚI vùng
+      labs.push({ sell: p.side === "SELL", y: p.side === "SELL" ? top - 2 : top + h + 12, col, t: `${p.short} ${p.side} · ${p.state}${p.chk && p.chk.tot ? " · " + ofSym(p.chk) + " " + ofSum(p.chk) : ""}` });   // SELL: nhãn nằm TRÊN vùng · BUY: nhãn nằm DƯỚI vùng
     }
     const up = labs.filter((l) => l.sell).sort((u, v) => v.y - u.y), dn = labs.filter((l) => !l.sell).sort((u, v) => u.y - v.y);
     for (let j = 1; j < up.length; j++) if (up[j - 1].y - up[j].y < 13) up[j].y = up[j - 1].y - 13;   // nhãn SELL sát nhau: xếp chồng lên trên
@@ -778,7 +778,7 @@ function ofModel() {
   try {
     const o = ofX("x_near") ? prim() : null;
     if (o) {
-      const day = vnDate(c[c.length - 1].time), f0 = c.find((x) => vnDate(x.time) === day), ref = f0 ? f0.open : px, unclear = flip == null || rgp.far;
+      const day = vnDate(c[c.length - 1].time), f0 = c.find((x) => vnDate(x.time) === day), ref = f0 ? f0.open : px, unclear = flip == null || flipFar;   // v23u: "ngày không rõ" theo Ô TICK "Ngày Flip xa" (trước đây bỏ qua ô tick)
       o.strikes.filter((s) => Math.abs(s.chart / ref - 1) <= 0.025).sort((a, b) => (b.call_oi + b.put_oi) - (a.call_oi + a.put_oi)).slice(0, 3).forEach((s, n) => {
         const lvl = s.chart, up = lvl > px, brk = !unclear && negG, side = brk ? (up ? "BUY" : "SELL") : (up ? "SELL" : "BUY"), oi = s.call_oi + s.put_oi;
         add({ id: (brk ? "nwb" : "nwa") + n, short: brk ? "9B TƯỜNG GẦN" : "9A TƯỜNG GẦN", name: `${brk ? "9B phá vỡ (Gamma âm)" : "9A bật lại (Gamma dương)"} · tường gần ${ofFm(lvl)} (OI ${fmtK(oi)})`, side, on: true, blocked: unclear, why: "Flip xa > 2,5% (ngày không rõ): B10b đứng ngoài", zone: "tường gần", lo: lvl * 0.999, hi: lvl * 1.001,
@@ -834,9 +834,12 @@ function ofModel() {
       const gate = [];
       gate.push([tfOk, "Khung nến ≥ M5"]); if (sessOn) gate.push([inS, "Trong phiên Mỹ 19:00-23:00 VN"]); if (!nw) gate.push([cdOk, "Hết nghỉ sau tín hiệu trước"]);   // v23s
       if (ofX("x_flipfar")) gate.push([!flipFar, "Flip không xa quá 2,5%"]);
-      if (typeof p.blocked === "boolean") gate.push([!p.blocked, "Chế độ Gamma cho phép"]);
-      const cOk = conf.filter((x) => x[1]).length, need = Math.min(minC, conf.length);
-      return { shape, conf, gate, need, cOk, ok: shape.filter((x) => x[0]).length + Math.min(cOk, need) + gate.filter((x) => x[0]).length, tot: shape.length + need + gate.length };
+      if (typeof p.blocked === "boolean" && !nw) gate.push([!p.blocked, "Chế độ Gamma cho phép"]);   // v23u: 9A/9B bị chặn vì Flip xa đã có dòng cổng Flip riêng, không lặp lại
+      if (nw && flip == null) gate.push([false, "Có mốc Gamma Flip"]);
+      const cOk = conf.filter((x) => x[1]).length, need = minC;   // v23v: đúng như engine (score >= minConf): ít ô tick hơn mức tối thiểu thì KHÔNG BAO GIỜ đủ
+      // v23t: số x/y hiển thị bên ngoài = các ô XÁC NHẬN đang tick trong menu (không cộng hình thái + cổng như v23s). Hình thái và cổng vẫn bắt buộc: "full" = đủ cả ba.
+      const shOk = shape.filter((x) => x[0]).length, gOk = gate.filter((x) => x[0]).length, xOk = Math.min(cOk, need), full = shOk === shape.length && cOk >= need && gOk === gate.length;
+      return { shape, conf, gate, need, cOk, xOk, shOk, gOk, full, time: k.time, ok: shOk + xOk + gOk, tot: shape.length + need + gate.length };   // v23v: ok/tot chỉ để biết có dữ liệu; hiển thị luôn dùng ofSum(h)
     };
     plans.forEach((p) => { p.chk = chkFor(p, mkCtx(i, false)); });
     watchAt = (j) => { const X = mkCtx(j, true); return plans.map((p) => ({ p, chk: chkFor(p, X) })); };
@@ -1004,22 +1007,28 @@ function ofStartDecor() {
 }
 const OF_COL = { SELL: "#ef5350", BUY: "#26a69a", BOTH: "#f0b429" };
 // TVLB B9b1: chip "x/y" và danh sách điều kiện của một kế hoạch
+// v23v: MỘT cách hiển thị duy nhất cho mọi nơi (nhãn vùng, danh sách, nhãn nến, thẻ, chú giải, tab): H = hình thái nến (quy tắc kế hoạch) · X = xác nhận (ô tick trong menu, cần ≥ "Số xác nhận tối thiểu") · C = cổng (M5, Flip xa, Gamma, phiên…).
+// ✔ = đủ cả ba (đủ điều kiện) · ◉ = đang theo dõi · ⛔ = có cổng chưa qua (đứng ngoài).
+const ofSym = (h) => (h.full ? "✔" : h.gOk < h.gate.length ? "⛔" : "◉");
+const ofSum = (h) => (h && h.tot ? `H${h.shOk}/${h.shape.length} ${h.need > 0 ? "X" + h.xOk + "/" + h.need : "X–"} ${h.gate.length ? "C" + h.gOk + "/" + h.gate.length : "C–"}` : "");
+const ofColH = (h) => (h.full ? "#26b384" : h.gOk < h.gate.length ? "#9aa4b2" : "#f0b429");
+const ofXNote = (h) => `đang tick ${h.conf.length} ô, đạt ${h.cOk}, cần ≥ ${h.need}${h.conf.length < h.need ? " → tick thêm ô hoặc hạ số tối thiểu (hiện KHÔNG BAO GIỜ đủ)" : ""}`;
 function ofChip(p) {
   const h = p.chk; if (!h) return "";
   if (!h.tot) return `<span title="${h.note || ""}" style="font:700 10.5px/1 monospace;padding:2px 5px;border-radius:4px;background:rgba(255,255,255,.08);color:#9aa4b2">—</span>`;
-  const col = h.ok === h.tot ? "#26b384" : h.ok * 2 >= h.tot ? "#f0b429" : "#9aa4b2";
-  return `<span title="Điều kiện đạt (hình thái nến + số xác nhận tối thiểu + cổng), tính trên nến vừa đóng" style="font:700 8px/1 monospace;white-space:nowrap;padding:2px 2px;border-radius:4px;background:rgba(255,255,255,.08);color:${col};border:1px solid ${col}55">${h.ok}/${h.tot}</span>`;
+  const col = ofColH(h);
+  return `<span title="H = hình thái nến · X = xác nhận (ô tick trong menu) · C = cổng. Tính trên nến vừa đóng. ✔ đủ · ◉ đang theo dõi · ⛔ cổng chưa qua" style="font:700 8px/1 monospace;white-space:nowrap;padding:2px 3px;border-radius:4px;background:rgba(255,255,255,.08);color:${col};border:1px solid ${col}55">${ofSym(h)} ${ofSum(h)}</span>`;
 }
 function ofChkHtml(p) {
   const h = p.chk; if (!h) return "";
   if (!h.tot) return `<div class="muted" style="font-size:11px;margin:3px 0">${h.note || ""}</div>`;
   const li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join("");
   const cnt = (a) => a.filter((x) => x[0]).length, open = !!(OFV.chk && OFV.chk[p.id]);
-  return `<div style="font-size:11px;margin:4px 0 4px 6px"><div data-ofchk="${p.id}" style="cursor:pointer;user-select:none;color:#f0b429" title="Bấm để sổ xuống / thu gọn danh sách điều kiện">${open ? "▾" : "▸"} Đạt <b>${h.ok}/${h.tot}</b> điều kiện <span class="muted">${open ? "(bấm để thu gọn)" : "(bấm để xem chi tiết)"}</span></div>`
-    + (open ? `<div style="padding-left:8px;margin-top:3px;border-left:2px solid rgba(255,255,255,.12)"><div class="muted">Tính theo nến ${S.tf} vừa đóng; xác nhận chỉ tính tối thiểu ${h.need}</div>`
-      + (h.shape.length ? `<div class="muted" style="margin-top:3px">Hình thái nến ${cnt(h.shape)}/${h.shape.length}</div>${li(h.shape)}` : "")
-      + (h.conf.length ? `<div class="muted" style="margin-top:3px">Xác nhận ${h.cOk}/${h.conf.length} (cần ≥ ${h.need})</div>${li(h.conf, true)}` : "")
-      + (h.gate.length ? `<div class="muted" style="margin-top:3px">Cổng ${cnt(h.gate)}/${h.gate.length}</div>${li(h.gate)}` : "") + `</div>` : "") + `</div>`;
+  return `<div style="font-size:11px;margin:4px 0 4px 6px"><div data-ofchk="${p.id}" style="cursor:pointer;user-select:none;color:#f0b429" title="Bấm để sổ xuống / thu gọn danh sách điều kiện">${open ? "▾" : "▸"} ${ofSym(h)} <b>${ofSum(h)}</b> · ${h.full ? '<b style="color:#26b384">ĐỦ ĐIỀU KIỆN</b>' : "chưa đủ"} <span class="muted">${open ? "(bấm để thu gọn)" : "(bấm để xem chi tiết)"}</span></div>`
+    + (open ? `<div style="padding-left:8px;margin-top:3px;border-left:2px solid rgba(255,255,255,.12)"><div class="muted">Tính theo nến ${S.tf} đóng lúc ${vnClock(h.time)}. Vào lệnh khi đủ cả 3 nhóm H, X, C.</div>`
+      + (h.shape.length ? `<div class="muted" style="margin-top:3px">H · Hình thái nến ${cnt(h.shape)}/${h.shape.length}</div>${li(h.shape)}` : "")
+      + (h.conf.length || h.need > 0 ? `<div class="muted" style="margin-top:3px">X · Xác nhận (menu): ${ofXNote(h)}</div>${li(h.conf, true)}` : "")
+      + (h.gate.length ? `<div class="muted" style="margin-top:3px">C · Cổng ${cnt(h.gate)}/${h.gate.length}</div>${li(h.gate)}` : "") + `</div>` : "") + `</div>`;
 }
 document.addEventListener("click", (e) => { const t = e.target.closest && e.target.closest("[data-ofchk]"); if (!t) return; OFV.chk = OFV.chk || {}; OFV.chk[t.dataset.ofchk] = !OFV.chk[t.dataset.ofchk]; try { ofRender(); } catch (x) { /* bỏ qua */ } });
 function ofBadge(st, side) {
@@ -1045,23 +1054,54 @@ function ofWatchList(M0) {
   }
   return out;
 }
-function ofWatchMarks() {
-  let W = []; try { W = ofWatchList(); } catch (e) { S.watchN = null; S.watchErr = String(e && e.message || e); return []; }
-  S.watchErr = null; S.watchN = W.filter((w) => w.first).length;
-  const per = {}, out = [];
-  for (const w of W) { const n = per[w.time] = (per[w.time] || 0) + 1; if (n > 3) continue;
-    const full = w.chk.ok === w.chk.tot;   // v23s: đủ điều kiện theo menu → ✔ màu theo hướng; chưa đủ → ◉ vàng
-    out.push({ time: w.time + TZ, position: w.p.side === "SELL" ? "aboveBar" : "belowBar", color: full ? (w.p.side === "SELL" ? "#ef5350" : "#26a69a") : "#f0b429", shape: "circle", size: w.first ? (full ? 1.2 : 0.9) : 0.5,
-      text: w.first ? `${full ? "✔" : "◉"} ${w.p.short.replace(" TƯỜNG GẦN", "")} ${w.chk.ok}/${w.chk.tot}${w.p.blocked ? " ⛔" : ""}` : "" }); }
-  return out;
+// v23t: ký hiệu NẾN QUAN SÁT vẽ trên lớp overlay (cùng lớp với nhãn VAH/POC/VAL, vùng HG), không dùng setMarkers của biểu đồ.
+// ◉ vàng = nến chạm vùng, kèm x/y = số ô XÁC NHẬN (tick trong menu) đạt / số ô đang tick · ✔ = đủ hình thái + xác nhận tối thiểu + cổng. Chỉ hiển thị, không phải lệnh.
+function ofWatchCached() {
+  const c = S.candles; if (!c || c.length < 30) return [];
+  const key = [c.length, c[c.length - 1].time, c[c.length - 1].close, S.tf, JSON.stringify(OFS)].join("|"), now = Date.now();
+  if (S.watchC && S.watchC.key === key && now - S.watchC.t < 5000) return S.watchC.list;
+  let list = []; try { list = ofWatchList(ofModel()); S.watchErr = null; } catch (e) { S.watchErr = String(e && e.message || e); }
+  S.watchC = { key, t: now, list }; S.watchN = list.filter((w) => w.first).length; return list;
 }
+function ofWatchTip(w) {
+  const h = w.chk, col = w.chk.full ? (w.p.side === "SELL" ? "#ef5350" : "#26a69a") : ofColH(w.chk), li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#7be0b0" : "#9aa4b2"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join("");
+  const sec = (t, body) => body ? `<div style="margin-top:5px;padding-top:4px;border-top:1px solid #2b3440"><b style="color:#f3d38c">${t}</b>${body}</div>` : "";
+  return `<div style="font-weight:700;color:${col};margin-bottom:3px">${ofSym(h)} ${h.full ? "ĐỦ ĐIỀU KIỆN" : "Đang theo dõi"} · ${w.p.short} ${w.p.side} · nến ${vnClock(w.time)}</div>`
+    + `<div><b>${ofSum(h)}</b></div>`
+    + sec(`H · Hình thái ${h.shOk}/${h.shape.length}`, li(h.shape)) + sec(`X · Xác nhận (menu): ${ofXNote(h)}`, li(h.conf, true)) + sec(`C · Cổng ${h.gOk}/${h.gate.length}`, li(h.gate))
+    + `<div style="margin-top:5px;color:#9aa4b2">Tính theo mốc tường và chế độ Gamma HIỆN TẠI. Chỉ để quan sát, không phải lệnh. Vào lệnh khi đủ cả 3 nhóm.</div>`;
+}
+function ofDrawWatch() {
+  const ctx = ov.ctx; if (!ctx || !candleS) return;
+  const badge = (() => { let b = document.getElementById("tvWatchN"); if (!b) { const s = document.getElementById("sigCount"); if (!s || !s.parentNode) return null; b = document.createElement("span"); b.id = "tvWatchN"; b.style.cssText = "margin-left:8px;color:#f0b429"; s.parentNode.insertBefore(b, s.nextSibling); } return b; })();
+  if (!ofOn("watch")) { if (badge) badge.textContent = ""; return; }
+  const W = ofWatchCached(); if (badge) badge.textContent = S.watchErr ? `· lỗi nến quan sát: ${S.watchErr}` : `· ◉ ${S.watchN} nến quan sát`;
+  const c = S.candles, tsc = chart.timeScale(), dpr = ov.dpr, Wd = ov.cv.width / dpr, Hd = ov.cv.height / dpr, psW = chart.priceScale("right").width() || 70, plotW = Wd - psW, plotH = Hd - 28, per = {};
+  ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = "600 10px 'IBM Plex Mono', monospace"; ctx.textBaseline = "middle"; ctx.textAlign = "center";
+  for (const w of W) {
+    const k = c[w.j]; if (!k) continue; const x = tsc.timeToCoordinate(w.time + TZ); if (x == null || x < 0 || x > plotW) continue;
+    const sell = w.p.side === "SELL", ye = candleS.priceToCoordinate(sell ? k.high : k.low); if (ye == null) continue;
+    const n = per[w.j] = (per[w.j] || 0) + 1; if (n > 3) continue;
+    const col = w.chk.full ? (sell ? "#ef5350" : "#26a69a") : ofColH(w.chk), off = 7 + (n - 1) * 15;
+    if (!w.first) { const y = ye + (sell ? -off : off); ctx.fillStyle = col; ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, 7); ctx.fill(); ctx.globalAlpha = 1; continue; }
+    const t = `${ofSym(w.chk)} ${w.p.short.replace(" TƯỜNG GẦN", "")} ${ofSum(w.chk)}`, tw = ctx.measureText(t).width + 8, y = ye + (sell ? -off - 7 : off + 7);
+    if (y < 8 || y > plotH - 8) continue;
+    ctx.strokeStyle = col; ctx.globalAlpha = 0.6; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, ye + (sell ? -2 : 2)); ctx.lineTo(x, y + (sell ? 7 : -7)); ctx.stroke(); ctx.globalAlpha = 1;
+    const bx = Math.max(2, Math.min(plotW - tw - 2, x - tw / 2));
+    ctx.fillStyle = "rgba(10,14,20,.92)"; ctx.fillRect(bx, y - 7, tw, 14); ctx.strokeStyle = col; ctx.lineWidth = w.chk.full ? 1.6 : 1; ctx.strokeRect(bx + 0.5, y - 6.5, tw - 1, 13);
+    ctx.fillStyle = col; ctx.fillText(t, bx + tw / 2, y + 0.5);
+    ov.tags.push({ x0: bx, x1: bx + tw, y0: y - 8, y1: y + 8, k: "watch", tip: ofWatchTip(w) });
+  }
+  ctx.restore();
+}
+function drawOverlay() { drawOverlayBase(); try { ofDrawWatch(); } catch (e) { S.watchErr = String(e && e.message || e); } }
 const ofChkLines = (h) => { const li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join(""); return li(h.shape) + li(h.conf, true) + li(h.gate); };
 function ofRender() {
   const wn = $("#ofWarn"), T = $("#ofT"); let w = ""; try { w = ofWarnText(); } catch { /* chưa có cấu hình */ }
   if (wn) { wn.textContent = w ? "⚠ " + w : ""; wn.style.display = w ? "block" : "none"; }
   if (!T) return;
   let M = null; try { M = ofModel(); } catch (e) { T.textContent = "Lỗi: " + e.message; return; }
-  S.ofPlans = M ? M.plans : [];
+  S.ofPlans = M ? M.plans : []; S.ofM = M;
   const warnH = w ? `<div style="color:#ff6b6b;font-weight:600;margin-bottom:6px">⚠ ${w}</div>` : "";
   if (!M) { T.innerHTML = warnH + '<span class="muted">Chưa đủ dữ liệu (mốc tường hoặc nến).</span>'; return; }
   const live = M.plans.filter((p) => p.on);
@@ -1069,10 +1109,12 @@ function ofRender() {
   $("#ofReg").textContent = M.flip == null ? "" : (M.negG ? "GAMMA ÂM" : "GAMMA DƯƠNG") + ` (giá ${M.negG ? "dưới" : "trên"} Flip ${ofFm(M.flip)}, cách ${M.rgp.pctTxt})`;
   const gate = (g) => `<div style="color:${g[0] ? "#26b384" : "#ff6b6b"}">${g[0] ? "✔" : "✘"} ${g[1]}</div>`;
   const nb = $("#ofNear"); if (nb) nb.innerHTML = near ? `Gần nhất: <b style="color:${OF_COL[near.side]}">${near.name}</b> · ${near.dist === 0 ? "giá ĐANG TRONG vùng" : "còn " + near.dist.toFixed(2) + "$ tới vùng"}` : "Chưa có nhóm nào được bật.";
+  const lgMin = Number.isInteger(OFS.minConf) ? OFS.minConf : M.sc.min_confirm;
   T.innerHTML = warnH
+    + `<div class="muted" style="font-size:9.5px;line-height:1.35;margin:2px 0 5px"><b>H</b> hình thái nến · <b>X</b> xác nhận (ô tick trong menu, cần ≥ ${lgMin}) · <b>C</b> cổng · ✔ đủ · ◉ đang theo dõi · ⛔ cổng chưa qua. Tính trên nến ${S.tf} vừa đóng${M.k ? " lúc " + vnClock(M.k.time) : ""}; ký hiệu trên nến thì tính trên chính nến đó.</div>`
     + live.map((p) => { const full = p.blocked ? (p.why || "Gamma âm: không bắt đáy") : p.past ? "giá đã ở bên kia tường (đã qua)" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng";
       const sh = p.blocked ? (/Flip xa/.test(full) ? "Flip xa > 2,5%: ngày không rõ, đứng ngoài" : full.replace(/^Gamma /, "Gamma ")) : p.past ? "giá đã qua tường" : p.dist === 0 ? "giá đang trong vùng" : "còn " + p.dist.toFixed(1) + "$ tới vùng";
-      return `<div title="${full.replace(/"/g, "&quot;")}" style="display:grid;grid-template-columns:66px 52px 24px 30px 1fr;gap:3px;align-items:start;margin:3px 0;font-size:9px;line-height:1.25"><b style="color:${OF_COL[p.side]};font-size:9px;white-space:nowrap">${p.short}</b><span style="text-align:center">${ofBadge(p.state, p.side)}</span><span style="text-align:center">${ofChip(p)}</span><span style="color:${OF_COL[p.side]};font-weight:700;font-size:9px">${p.side}</span><span class="muted" style="font-size:9px">${sh}</span></div>`; }).join("")
+      return `<div title="${full.replace(/"/g, "&quot;")}" style="display:grid;grid-template-columns:62px 50px 88px 26px 1fr;gap:3px;align-items:start;margin:3px 0;font-size:9px;line-height:1.25"><b style="color:${OF_COL[p.side]};font-size:9px;white-space:nowrap">${p.short}</b><span style="text-align:center">${ofBadge(p.state, p.side)}</span><span style="text-align:center">${ofChip(p)}</span><span style="color:${OF_COL[p.side]};font-weight:700;font-size:9px">${p.side}</span><span class="muted" style="font-size:9px">${sh}</span></div>`; }).join("")
     + `<div style="margin-top:8px"><b>Cổng kiểm</b>${M.gates.map(gate).join("")}</div>`;
   const kv = (a, b) => `<div class="muted">${a}</div><div>${b}</div>`, k = M.k, sc = M.sc, dxy = S.state?.macro?.DXY?.chg_n_pct;
   $("#ofC").innerHTML = kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
@@ -1089,8 +1131,8 @@ function ofRender() {
   $("#ofTabs").innerHTML = `<button type="button" data-oftab="new" class="${OFV.tab === "new" ? "on" : ""}" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "new" ? "#f0b429" : "transparent"};color:${OFV.tab === "new" ? "#1b1407" : "inherit"};cursor:pointer">Kế hoạch mới</button>`
     + `<button type="button" data-oftab="run" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "run" ? "#f0b429" : "transparent"};color:${OFV.tab === "run" ? "#1b1407" : "inherit"};cursor:pointer">Lệnh hôm nay (${sg.length}${run ? " · " + run + " đang chạy" : ""})</button>`
     + `<button type="button" data-oftab="watch" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "watch" ? "#f0b429" : "transparent"};color:${OFV.tab === "watch" ? "#1b1407" : "inherit"};cursor:pointer">Nến quan sát (${W.length})</button>`;
-  const watchHtml = `<div class="muted" style="font-size:10.5px;margin-bottom:6px">◉ trên chart = nến chạm vùng / đóng xuyên tường của một kế hoạch. Số x/y tính trên chính nến đó, theo mốc tường và chế độ Gamma HIỆN TẠI. Chỉ để quan sát, chưa kiểm định.</div>`
-    + (W.slice().reverse().map((w) => `<div style="border-left:3px solid ${OF_COL[w.p.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[w.p.side]}">${vnClock(w.time)} ${w.p.short} ${w.p.side}</b> · đạt <b>${w.chk.ok}/${w.chk.tot}</b>${w.p.blocked ? ` · <span class="muted">bị chặn: ${w.p.why || ""}</span>` : ""}</div><div style="font-size:11px;margin-left:6px">${ofChkLines(w.chk)}</div></div>`).join("") || '<span class="muted">Hôm nay chưa có nến nào chạm vùng / đóng xuyên tường của kế hoạch nào.</span>');
+  const watchHtml = `<div class="muted" style="font-size:10.5px;margin-bottom:6px">◉ trên chart = nến chạm vùng / đóng xuyên tường của một kế hoạch. H = hình thái nến · X = xác nhận (ô tick trong menu) · C = cổng, tính trên chính nến đó, theo mốc tường và chế độ Gamma HIỆN TẠI. Chỉ để quan sát, chưa kiểm định.</div>`
+    + (W.slice().reverse().map((w) => `<div style="border-left:3px solid ${OF_COL[w.p.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[w.p.side]}">${vnClock(w.time)} ${w.p.short} ${w.p.side}</b> · ${ofSym(w.chk)} <b>${ofSum(w.chk)}</b>${w.chk.full ? " · <b style=\"color:#26b384\">ĐỦ</b>" : ""}${w.p.blocked ? ` · <span class="muted">bị chặn: ${w.p.why || ""}</span>` : ""}</div><div style="font-size:11px;margin-left:6px">${ofChkLines(w.chk)}</div></div>`).join("") || '<span class="muted">Hôm nay chưa có nến nào chạm vùng / đóng xuyên tường của kế hoạch nào.</span>');
   $("#ofP").innerHTML = OFV.tab === "new"
     ? live.map((p) => `<div style="border-left:3px solid ${OF_COL[p.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[p.side]}">${p.name}</b> ${ofBadge(p.state, p.side)}</div>`
       + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.past ? " · giá ĐÃ QUA tường (chờ giá quay lại rồi mới tính)" : p.dist ? " · cách " + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div>${ofChkHtml(p)}${p.side === "BOTH" ? `<div class="muted" style="margin-top:4px">Hai kịch bản sau khi giá ra khỏi vùng rồi quay lại:</div>` + ofIllu({ id: "hg0", side: "SELL" }, true) + ofIllu({ id: "hg0", side: "BUY" }) : ofIllu(p)}`
@@ -1292,11 +1334,10 @@ function setMarkers() {
     }
     if (show) for (const s of smcFilled()) mk.push({ time: s.time + TZ, position: s.side === "SELL" ? "aboveBar" : "belowBar", color: s.side === "SELL" ? C.down : C.up, shape: s.side === "SELL" ? "arrowDown" : "arrowUp", size: 1.4, text: `${s.name} ${s.side}${s.status === "tp1" ? " ✓" : s.status === "sl" ? " ✗" : ""}` });
   }
-  try { for (const m of ofWatchMarks()) mk.push(m); } catch (e) { /* bỏ qua */ }   // v23p: nến đang quan sát; chỉ phụ thuộc ô "watch" trong hộp Bật/tắt điều kiện (không phụ thuộc nút Markers, không phụ thuộc lớp SMC)
   mk.sort((a, b) => a.time - b.time);
   candleS.setMarkers(mk);
   const nS = smcOn ? smcFilled().filter((s) => vnDate(s.time) === vnDate(nowSec())).length : 0;
-  $("#sigCount").textContent = `${S.signals.length} tín hiệu Options · ${nS} SMC hôm nay` + (S.watchErr ? ` · lỗi nến quan sát: ${S.watchErr}` : S.watchN != null ? ` · ${S.watchN} nến quan sát` : "");
+  $("#sigCount").textContent = `${S.signals.length} tín hiệu Options · ${nS} SMC hôm nay`;
 }
 function planFor(s) {
   const r = S.cfg.risk, risk = r.account_size_usd * r.risk_pct / 100, dist = Math.abs(s.entry - s.sl);
