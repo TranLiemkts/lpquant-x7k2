@@ -534,15 +534,16 @@ function drawOverlayBase() {
       ctx.globalAlpha = 0.45; ctx.strokeStyle = "#f0b429"; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x0, yE); ctx.lineTo(x1, yE); ctx.stroke(); ctx.globalAlpha = 1;
       ctx.fillStyle = "#f0b429"; ctx.beginPath(); ctx.moveTo(x0, yE - 3); ctx.lineTo(x0 + 3, yE); ctx.lineTo(x0, yE + 3); ctx.lineTo(x0 - 3, yE); ctx.closePath(); ctx.fill();   // dấu vào lệnh (hình thoi)
       const pr = ++rrN;   // v23am-2: nhãn xếp hàng, vẽ sau cùng (tín hiệu mới nhất ưu tiên, nhãn chạm nhau thì bỏ)
-      rrLab.push({ t: `${g.tag || ""} ${g.side} ${g.entry.toFixed(1)}`, c: "#f0b429", x: x0 + 6, y: yE + (g.side === "BUY" ? -7 : 7), al: "left", pr, o: 0 });
-      if (yT != null) rrLab.push({ t: `TP ${gain.toFixed(0)} · 1:${(gain / Math.max(risk, 0.01)).toFixed(1)}`, c: "#26a69a", x: x0 + 4, y: yT + (g.side === "BUY" ? 6 : -6), al: "left", pr, o: 1 });
-      rrLab.push({ t: `SL ${risk.toFixed(0)}`, c: "#ef5350", x: x0 + 4, y: yS + (g.side === "BUY" ? -6 : 6), al: "left", pr, o: 2 });
+      // v23am-4: bỏ nhãn điểm vào lệnh (khung SL/TP đã nằm đúng chỗ vào lệnh; hướng BUY/SELL đã có mũi tên trên nến tín hiệu)
+      // v23am-6: TP ở cạnh TP, SL ở cạnh SL, mỗi nhãn căn giữa bề rộng khung đo
+      if (yT != null) rrLab.push({ t: `TP ${gain.toFixed(0)} · 1:${(gain / Math.max(risk, 0.01)).toFixed(1)}`, c: "#26a69a", x: x0 + w / 2, y: yT + (g.side === "BUY" ? 6 : -6), al: "center", pr, o: 1 });
+      rrLab.push({ t: `SL ${risk.toFixed(0)}`, c: "#ef5350", x: x0 + w / 2, y: yS + (g.side === "BUY" ? -6 : 6), al: "center", pr, o: 2 });
       if (hit) rrLab.push({ t: hit.t === "chạm SL" ? "SL✕" : "TP✓", c: hit.t === "chạm SL" ? "#ef5350" : "#26a69a", x: x1 - 3, y: yE, al: "right", pr, o: 3 });
     }
     rrLab.sort((a, b) => b.pr - a.pr || a.o - b.o);
     const rrBox = [];
     for (const l of rrLab) {
-      const w = ctx.measureText(l.t).width, bx0 = l.al === "left" ? l.x : l.x - w, bx1 = bx0 + w, by0 = l.y - 5, by1 = l.y + 5;
+      const w = ctx.measureText(l.t).width, bx0 = l.al === "left" ? l.x : l.al === "center" ? l.x - w / 2 : l.x - w, bx1 = bx0 + w, by0 = l.y - 5, by1 = l.y + 5;
       if (by1 < 0 || by0 > plotH) continue;
       if (rrBox.some((r) => bx0 < r.x1 + 2 && bx1 > r.x0 - 2 && by0 < r.y1 && by1 > r.y0)) continue;   // chạm nhãn đã đặt → bỏ nhãn này (xem số trong bảng Vào lệnh)
       rrBox.push({ x0: bx0, x1: bx1, y0: by0, y1: by1 });
@@ -1502,7 +1503,7 @@ function setMarkers() {
   const show = $("#lyMk").checked, smcOn = $("#lySMC")?.checked && S.smc;
   const mk = show ? S.signals.map((s) => ({
     time: s.time + TZ, position: s.side === "SELL" ? "aboveBar" : "belowBar", color: s.side === "SELL" ? C.down : C.up,
-    shape: s.side === "SELL" ? "arrowDown" : "arrowUp", text: `${s.tag ? s.tag + " " : ""}${s.side} ${s.score}/${s.max}`,
+    shape: s.side === "SELL" ? "arrowDown" : "arrowUp", size: 0.7, text: `${s.tag ? s.tag + " " : ""}${s.score}/${s.max}`,   // v23am-7: mũi tên nhỏ, chữ gọn (bỏ chữ BUY/SELL — hướng đã có ở mũi tên và màu)
   })) : [];
   if (smcOn) {
     const c = S.candles;
