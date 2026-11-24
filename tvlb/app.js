@@ -800,6 +800,10 @@ const ofOn = (k) => OFS[k] !== false;
 // TVLB B9b1: bộ lọc theo anh Nam, MẶC ĐỊNH TẮT (= hành vi TL1/TL2 cũ). Chỉ bật khi bạn tick ở hộp "Bật/tắt điều kiện". Chờ anh Nam xác nhận câu 4, 5 (bản 3.3).
 const ofX = (k) => OFS[k] === true;
 const ofFlipNear = () => (Number.isFinite(OFS.flipNear) && OFS.flipNear > 0 ? OFS.flipNear : 20);   // v23ab: ngưỡng $ cho ô "Flip GẦN giá" (giả thuyết, chọn theo ý bạn 10-20$)
+// 9b-4: ô chọn «Cách dùng Flip» thay 3 ô tick. Đọc từ 3 cờ cũ (x_noflip thắng 2 cờ kia, đúng như code chạy trước đây); logic tín hiệu KHÔNG đổi.
+const OF_FLIP_OPTS = [["off", "Không lọc: chọn 9A/9B theo dấu Gamma, Flip xa mấy cũng được"], ["far", "Flip xa (> 2,5%) thì đứng ngoài (theo B6)"], ["near", "Flip gần giá (≤ ngưỡng $) thì đứng ngoài"], ["both", "Flip xa HOẶC gần thì đứng ngoài"], ["noflip", "Bỏ hẳn Flip: luôn xét 9A (TRÁI B10b, chỉ để thử)"]];
+function ofFlipMode() { if (ofX("x_noflip")) return "noflip"; const f = ofX("x_flipfar"), n = ofX("x_flipnear"); return f && n ? "both" : f ? "far" : n ? "near" : "off"; }
+const ofFlipTxt = () => (OF_FLIP_OPTS.find((o) => o[0] === ofFlipMode()) || ["", "?"])[1].split(":")[0].replace(/ \(.*$/, "");
 const OF_FILTERS = [
   ["x_noflip", "BỎ HẲN FLIP: không dùng Flip để chọn 9A/9B và không chặn theo Flip; tường gần luôn xét kiểu 9A (bật lại: tường trên giá = SELL, dưới giá = BUY). TRÁI với bản nháp B10b (Gamma âm = 9B); chỉ để THỬ, chưa kiểm định"],
   ["x_flipnear", "Flip GẦN giá (cách ≤ ngưỡng $ ở dòng dưới) thì ĐỨNG NGOÀI: giá đang ở vùng chuyển Gamma, chưa rõ dương hay âm (theo lời anh Nam; GIẢ THUYẾT, chưa kiểm định)"],
@@ -848,14 +852,14 @@ function ofModel() {
   const rgp = regimePct(px, flip), noFlip = ofX("x_noflip"), flipFar = !noFlip && ofX("x_flipfar") && flip != null && rgp.far, flipNear = !noFlip && ofX("x_flipnear") && flip != null && Math.abs(px - flip) <= ofFlipNear(), flipOut = flipFar || flipNear, regX = ofX("x_regime") && flip != null;   // TVLB B9b1
   const tfOk = (TF_SEC[S.tf] || 0) >= 300, sessOn = sc.session_only && ofOn("session"), inS = inUsSession(c[c.length - 1].time);
   const since = i - S.lastSigIdx, cdOk = since > sc.cooldown_bars, gatesOk = tfOk && (!sessOn || inS) && !flipOut;
-  const gates = [[tfOk, "Khung nến ≥ M5 (đang " + S.tf + ")"], [!sessOn || inS, sessOn ? (inS ? "Trong phiên Mỹ 19:00-23:00 VN" : "Ngoài phiên Mỹ 19:00-23:00 VN") : "Không lọc phiên"], [!flipOut, flipNear ? `Flip chỉ cách giá ${Math.abs(px - flip).toFixed(1).replace(".", ",")}$ (≤ ${ofFlipNear()}$): vùng chuyển Gamma, đứng ngoài (ô «Flip GẦN giá» đang bật)` : flipFar ? `Flip cách giá ${rgp.pctTxt}: ngày "không rõ", đứng ngoài (bộ lọc B6 đang bật)` : "Không lọc theo khoảng cách Flip"], [cdOk, cdOk ? "Hết nghỉ sau tín hiệu trước" : "Đang nghỉ " + (sc.cooldown_bars - since + 1) + " nến sau tín hiệu trước"]];
+  const gates = [[tfOk, "Khung nến ≥ M5 (đang " + S.tf + ")"], [!sessOn || inS, sessOn ? (inS ? "Trong phiên Mỹ 19:00-23:00 VN" : "Ngoài phiên Mỹ 19:00-23:00 VN") : "Không lọc phiên"], [!flipOut, flipNear ? `Flip chỉ cách giá ${Math.abs(px - flip).toFixed(1).replace(".", ",")}$ (≤ ${ofFlipNear()}$): vùng chuyển Gamma, đứng ngoài («Cách dùng Flip» đang lọc Flip gần)` : flipFar ? `Flip cách giá ${rgp.pctTxt}: ngày "không rõ", đứng ngoài («Cách dùng Flip» đang lọc Flip xa, B6)` : "Không lọc theo khoảng cách Flip"], [cdOk, cdOk ? "Hết nghỉ sau tín hiệu trước" : "Đang nghỉ " + (sc.cooldown_bars - since + 1) + " nến sau tín hiệu trước"]];
   const plans = [];
   const add = (o) => {
     o.past = (o.id === "bd" && px < o.lo) || (o.id === "sq" && px > o.hi); // giá đã ở phía bên kia tường: không còn "chờ tới vùng"
     o.dist = o.hi == null || o.past ? null : px < o.lo ? o.lo - px : px > o.hi ? px - o.hi : 0;
     o.state = !o.on ? "TẮT" : o.blocked ? "ĐỨNG NGOÀI" : !gatesOk ? "NGOÀI CỔNG" : o.past ? "ĐÃ QUA" : o.dist <= tol ? (o.side === "BOTH" ? "TRONG VÙNG" : "SẴN SÀNG") : o.dist <= 6 ? "GẦN" : "CHỜ";
     // v23z: lý do đứng ngoài + ô menu trái điều khiển nó (để giải thích khi rê chuột / trong thẻ)
-    if (o.tick === undefined) o.tick = /^nw/.test(o.id) ? (flip == null ? "" : flipNear ? "Flip GẦN giá" : "Ngày Flip xa") : o.id === "tb" && blockG ? "Lọc Gamma" : "Bẫy chỉ khi Gamma DƯƠNG, Thủng/Squeeze chỉ khi Gamma ÂM";
+    if (o.tick === undefined) o.tick = /^nw/.test(o.id) ? (flip == null ? "" : "Cách dùng Flip") : o.id === "tb" && blockG ? "Lọc Gamma" : "Bẫy chỉ khi Gamma DƯƠNG, Thủng/Squeeze chỉ khi Gamma ÂM";
     plans.push(o);
   };
   add({ id: "ts", short: "TL1·2 BẪY", name: "TL1·2 · Bẫy SELL tại Call Wall", side: "SELL", on: ofOn("g_trap"), blocked: regX && negG, why: "Gamma âm: bộ lọc B1 chặn bẫy", lo: cw - tol, hi: cw + tol,
@@ -1138,12 +1142,12 @@ function ofCondHtml(M) {
   return `<div style="margin-top:8px"><b>Xác nhận theo menu</b> <span class="muted">(nến ${S.tf} ${vnClock(M.k.time)})</span>`
     + `<div style="font-size:11px;margin:2px 0;color:${bad ? "#ff6b6b" : "#f0b429"}">Đang tick <b>${on.length}</b> ô · cần ≥ <b>${minC}</b> · hiện đạt: SELL <b>${sOk}</b> · BUY <b>${bOk}</b>${bad ? " → không bao giờ đủ" : ""}</div>`
     + R.map((r) => `<div style="font-size:11px;${r.on ? "" : "opacity:.4;"}">${ck(r.on)} ${r.lb} ${r.on ? `· SELL ${mk(r.s)} BUY ${mk(r.b)}` : '<span class="muted">· không tính</span>'}${r.rd ? ` <span class="muted">${r.rd}</span>` : ""}</div>`).join("")
-    + `<div class="muted" style="font-size:10.5px;margin-top:4px">${S.wFrz ? `Tỉ lệ quy đổi: khóa ${S.wFrz.r0.toFixed(5)} · hiện ${S.wFrz.now.toFixed(5)} (lệch ${((S.wFrz.now / S.wFrz.r0 - 1) * 3600).toFixed(1).replace(".", ",")}$ ở giá 3.600)<br>` : ""}Bộ lọc: Bỏ Flip ${ck(ofX("x_noflip"))} · Flip xa ${ck(ofX("x_flipfar"))} · Flip gần ${ck(ofX("x_flipnear"))} · Tường gần ${ck(ofX("x_near"))} · Gamma B1 ${ck(ofX("x_regime"))} · Lọc Gamma TL1 ${ck(ofOn("gamma"))} · Phiên Mỹ ${ck(sessOn)}${ofOn("session") && !sc.session_only ? " (cấu hình server chưa bật session_only nên chưa có tác dụng)" : ""}<br>Nhóm: TL1 ${ck(ofOn("g_tl1"))} · Bẫy ${ck(ofOn("g_trap"))} · HG ${ck(ofOn("g_hedge"))}</div></div>`;
+    + `<div class="muted" style="font-size:10.5px;margin-top:4px">${S.wFrz ? `Tỉ lệ quy đổi: khóa ${S.wFrz.r0.toFixed(5)} · hiện ${S.wFrz.now.toFixed(5)} (lệch ${((S.wFrz.now / S.wFrz.r0 - 1) * 3600).toFixed(1).replace(".", ",")}$ ở giá 3.600)<br>` : ""}Bộ lọc: Cách dùng Flip <b>${ofFlipTxt()}</b> · Tường gần ${ck(ofX("x_near"))} · Gamma B1 ${ck(ofX("x_regime"))} · Lọc Gamma TL1 ${ck(ofOn("gamma"))} · Phiên Mỹ ${ck(sessOn)}${ofOn("session") && !sc.session_only ? " (cấu hình server chưa bật session_only nên chưa có tác dụng)" : ""}<br>Nhóm: TL1 ${ck(ofOn("g_tl1"))} · Bẫy ${ck(ofOn("g_trap"))} · HG ${ck(ofOn("g_hedge"))}</div></div>`;
 }
 // v23z: giải thích trạng thái + hướng của kế hoạch (rê chuột vào nhãn vùng, vào dòng danh sách, và dòng trạng thái trong thẻ)
 function ofStateWhy(p) {
   const M = S.ofM;
-  if (p.state === "ĐỨNG NGOÀI") return `${p.why || "bị bộ lọc ở menu trái loại"}. Hôm nay kế hoạch này KHÔNG vào lệnh, cả SELL lẫn BUY (không phải "chỉ SELL" hay "chỉ BUY").${p.tick ? ` Muốn bỏ bộ lọc này: bỏ tick «${p.tick}» ở menu trái.` : ""}`;
+  if (p.state === "ĐỨNG NGOÀI") return `${p.why || "bị bộ lọc ở menu trái loại"}. Hôm nay kế hoạch này KHÔNG vào lệnh, cả SELL lẫn BUY (không phải "chỉ SELL" hay "chỉ BUY").${p.tick ? ` Muốn bỏ bộ lọc này: ${p.tick === "Cách dùng Flip" ? "đổi ô «Cách dùng Flip» (chọn «Không lọc»)" : `bỏ tick «${p.tick}»`} ở menu trái.` : ""}`;
   if (p.state === "NGOÀI CỔNG") { const f = M ? M.gates.filter((g) => !g[0]).map((g) => g[1]) : []; return `một cổng chung chưa qua${f.length ? ": " + f.join("; ") : ""}.`; }
   if (p.state === "TẮT") return "nhóm này đang bỏ tick ở menu trái.";
   if (p.state === "ĐÃ QUA") return "giá đã ở bên kia tường, chờ giá quay lại.";
@@ -1158,7 +1162,7 @@ function ofDirWhy(p) {
 }
 function ofStateTip(p) {
   const col = OF_COL[p.side] || "#f0b429", sec = (t, b) => (b ? `<div style="margin-top:5px;padding-top:4px;border-top:1px solid #2b3440"><b style="color:#f3d38c">${t}</b><br>${b}</div>` : "");
-  const sel = /^nw/.test(p.id) ? "Chọn 9A hay 9B theo Gamma: giá TRÊN Flip (Gamma dương) → 9A; giá DƯỚI Flip (Gamma âm) → 9B; ô «Ngày Flip xa» được tick và Flip cách > 2,5%, hoặc ô «Flip GẦN giá» được tick và Flip cách ≤ ngưỡng $ → «không rõ»: hiện 9A nhưng đứng ngoài. Cả hai ô tắt thì Flip xa bao nhiêu cũng chọn 9A/9B theo dấu Gamma. Đây là bản nháp B10b, chưa kiểm định." : "";
+  const sel = /^nw/.test(p.id) ? "Chọn 9A hay 9B theo Gamma: giá TRÊN Flip (Gamma dương) → 9A; giá DƯỚI Flip (Gamma âm) → 9B; ô «Cách dùng Flip» lọc Flip xa và Flip cách > 2,5%, hoặc lọc Flip gần và Flip cách ≤ ngưỡng $ → «không rõ»: hiện 9A nhưng đứng ngoài. Chọn «Không lọc» thì Flip xa bao nhiêu cũng chọn 9A/9B theo dấu Gamma; «Bỏ hẳn Flip» thì luôn xét 9A. Đây là bản nháp B10b, chưa kiểm định." : "";
   return `<div style="font-weight:700;color:${col};margin-bottom:3px">${p.name}</div><div>Trạng thái: <b>${p.state}</b>${p.dist != null && p.dist > 0 ? ` · cách vùng ${p.dist.toFixed(1)}$` : ""}</div>`
     + sec("Ý nghĩa trạng thái", ofStateWhy(p)) + sec("Hướng lệnh", ofDirWhy(p)) + sec("Chọn 9A / 9B", sel)
     + `<div style="margin-top:5px;color:#9aa4b2">Số x/y xem ở ký hiệu trên nến và thẻ chi tiết.</div>`;
@@ -1423,17 +1427,39 @@ function ofInitUI() {
   if (!lab) { ofTry = (ofTry || 0) + 1; if (ofTry < 20) setTimeout(ofInitUI, 500); else console.warn("[TVLB] không thấy ô Option Flow để gắn hộp bật/tắt"); return; }
   const d = document.createElement("details"); d.id = "ofOpts"; d.style.cssText = "font-size:12px;margin:4px 0 8px 4px";
   const row = (k, t, names) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-of="${names.join("|")}"${ofOn(names[0]) ? " checked" : ""}> ${t}</label>`;
-  d.innerHTML = `<summary style="cursor:pointer;font-weight:600">Bật/tắt điều kiện (TL1 · TL2 · HG)</summary>
+  // 9b-4: XẾP LẠI MENU (chỉ đổi chỗ + tiêu đề, KHÔNG đổi phép tính). ①②③ = làm ĐỔI tín hiệu · ④ = chỉ đổi cách vẽ · Nâng cao thu gọn.
+  // Khung đo SL/TP + quản lý lệnh của Option Flow chuyển sang mục «📏 TP / SL» (khối #ofTpBox, xem dưới). 3 ô Flip gộp thành 1 ô chọn «Cách dùng Flip».
+  const txt = (arr, k) => (arr.find((x) => x[0] === k) || [null, k])[1];
+  const xrow = (k, t) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="${k}"${ofX(k) ? " checked" : ""}> ${t}</label>`;
+  const H = (t, s) => `<div class="sub" style="margin-top:10px">${t}</div>${s ? `<div class="muted" style="font-size:10.5px;margin:0 0 3px">${s}</div>` : ""}`;
+  const sel = (id, opts, cur) => `<select id="${id}" style="font-size:12px">${opts.map(([v, t]) => `<option value="${v}"${cur === v ? " selected" : ""}>${t}</option>`).join("")}</select>`;
+  const gm = OF_CONDS.find(([k]) => k === "gamma");
+  d.innerHTML = `<summary style="cursor:pointer;font-weight:600">Cài đặt Option Flow (TL1 · TL2 · HG · 9A/9B)</summary>
     <div id="ofWarn" style="display:none;color:#ff6b6b;font-weight:600;margin:4px 0"></div>
-    <div class="muted" style="margin:2px 0 4px">Bảng theo dõi nằm ở trang "Vào lệnh OF" bên phải (đứng trước trang "Vào lệnh").</div>
-    <div class="muted" style="margin:4px 0">Nhóm tín hiệu</div>${OF_GROUPS.map(([k, t]) => row(k, t, [k])).join("")}
-    <div class="muted" style="margin:6px 0 4px">Bộ lọc theo anh Nam (MẶC ĐỊNH TẮT = như TL1/TL2 cũ; chờ anh Nam xác nhận)</div>${OF_FILTERS.map(([k, t]) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="${k}"${ofX(k) ? " checked" : ""}> ${t}</label>`).join("")}<div class="muted" style="margin:2px 0 4px 18px">Ngưỡng «Flip GẦN giá»: <select id="ofFN" style="font-size:12px">${[5, 10, 15, 20, 30, 50].map((n) => `<option value="${n}"${ofFlipNear() === n ? " selected" : ""}>${n}$</option>`).join("")}</select> (mặc định 20$; chọn theo ý bạn, chưa kiểm định)</div>${row("wfreeze", "Khóa tỉ lệ quy đổi theo ngày: tường, Magnet, Flip, Max Pain, Volume Profile và vùng 9A/9B không nhảy theo mỗi lần làm mới Options (chưa khóa: vùng Hedge LP)", ["wfreeze"])}<div class="muted" style="margin:6px 0 4px">Hiển thị trên chart</div><label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="hg_show"${ofX("hg_show") ? " checked" : ""}> Hiện nền màu + viền nét đứt của vùng HG HEDGE (bỏ tick = ẩn, chỉ còn nhãn, vì trùng vùng HEDGE −Γ)</label>
-    <div class="muted" style="margin:6px 0 4px">Số xác nhận tối thiểu: <select id="ofMin" style="font-size:12px">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}"${(Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm) === n ? " selected" : ""}>${n}</option>`).join("")}</select> (mặc định 2; nhớ để các điều kiện bên dưới được tick)</div>
-    <div class="muted" style="margin:2px 0 6px">Tỉ lệ lời/lỗ tối thiểu (TP1 ÷ SL) của TL1·TL2·HG: <select id="ofRR" style="font-size:12px">${[0, 0.5, 1, 1.5, 2].map((n) => `<option value="${n}"${(Number(OFS.minRR) || 0) === n ? " selected" : ""}>${n === 0 ? "0 (tắt)" : n}</option>`).join("")}</select> (mặc định tắt; thấp hơn ngưỡng thì KHÔNG ra tín hiệu, không vẽ khung)</div>
-    <div class="muted" style="margin:2px 0 6px">R:R tối thiểu riêng cho nhóm HG (TP1 = tường đang hiển thị kế tiếp): <select id="ofRRh" style="font-size:12px">${[0, 1, 1.5, 2, 2.5, 3].map((n) => `<option value="${n}"${hgRRmin() === n ? " selected" : ""}>${n === 0 ? "0 (tắt)" : n}</option>`).join("")}</select> (mặc định 2 = lời ≥ 2 × lỗ)</div>
-    <div class="muted" style="margin:2px 0 6px">Quản lý lệnh trên khung đo: dời SL về hòa vốn khi lời +1R <select id="ofBE" style="font-size:12px"><option value="1"${OFS.beOff !== true ? " selected" : ""}>Bật</option><option value="0"${OFS.beOff === true ? " selected" : ""}>Tắt</option></select> · đóng lệnh lúc 12:30 Chicago <select id="ofTE" style="font-size:12px"><option value="1"${OFS.teOff !== true ? " selected" : ""}>Bật</option><option value="0"${OFS.teOff === true ? " selected" : ""}>Tắt</option></select> (giả thuyết, chưa backtest)</div>
-    <div class="muted" style="margin:2px 0 6px">Hộp đo SL/TP trên chart: hiện <select id="ofBoxMax" style="font-size:12px">${[[0, "tất cả"], [3, "3 hộp mới nhất"], [5, "5 hộp mới nhất"], [8, "8 hộp mới nhất"], [12, "12 hộp mới nhất"]].map(([n, t]) => `<option value="${n}"${(OFS.boxMax == null ? 8 : +OFS.boxMax) === n ? " selected" : ""}>${t}</option>`).join("")}</select> · <select id="ofBoxRun" style="font-size:12px"><option value="0"${OFS.boxRun !== true ? " selected" : ""}>cả lệnh đã xong</option><option value="1"${OFS.boxRun === true ? " selected" : ""}>chỉ lệnh đang chạy</option></select></div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
-  d.addEventListener("change", (e) => {
+    <div class="muted" style="margin:2px 0 4px">Bảng theo dõi ở trang "Vào lệnh OF" bên phải. Nhóm ① ② ③ làm ĐỔI tín hiệu; nhóm ④ chỉ đổi cách vẽ. Khung đo SL/TP và quản lý lệnh nằm ở mục «📏 TP / SL».</div>
+    ${H("① Bật nhóm tín hiệu")}${["g_tl1", "g_trap", "g_hedge"].map((k) => row(k, txt(OF_GROUPS, k), [k])).join("")}${xrow("x_near", txt(OF_FILTERS, "x_near") + " → nguồn tường cho 9A/9B")}
+    <div class="muted" style="font-size:10.5px;margin:2px 0 0">Lưu ý: HG lấy TP theo tường ĐANG HIỂN THỊ, nên bật/tắt nút GC Levels / GLD Levels trên thanh đầu cũng đổi TP của HG.</div>
+    ${H("② Bộ lọc đứng ngoài", "không đạt thì KHÔNG ra lệnh (cả BUY lẫn SELL)")}${row("session", txt(OF_GROUPS, "session"), ["session"])}${row(gm[0], gm[1], gm[2])}${xrow("x_regime", txt(OF_FILTERS, "x_regime"))}
+    <div class="muted" style="margin:4px 0 2px">Cách dùng Flip (chọn 9A/9B và đứng ngoài):</div>${sel("ofFlip", OF_FLIP_OPTS, ofFlipMode())}
+    <div class="muted" style="margin:2px 0 4px">Ngưỡng «Flip gần giá»: ${sel("ofFN", [5, 10, 15, 20, 30, 50].map((n) => [n, n + "$"]), ofFlipNear())} (chỉ dùng khi chọn có Flip gần; mặc định 20$, chưa kiểm định)</div>
+    <div class="muted" style="margin:2px 0 4px">Tỉ lệ lời/lỗ tối thiểu (TP1 ÷ SL) của TL1·TL2·HG: ${sel("ofRR", [0, 0.5, 1, 1.5, 2].map((n) => [n, n === 0 ? "0 (tắt)" : String(n)]), Number(OFS.minRR) || 0)} (thấp hơn thì KHÔNG ra tín hiệu)</div>
+    <div class="muted" style="margin:2px 0 4px">R:R tối thiểu riêng cho nhóm HG (TP1 = tường đang hiển thị kế tiếp): ${sel("ofRRh", [0, 1, 1.5, 2, 2.5, 3].map((n) => [n, n === 0 ? "0 (tắt)" : String(n)]), hgRRmin())} (mặc định 2 = lời ≥ 2 × lỗ)</div>
+    ${H("③ Điều kiện xác nhận", "nến phải đạt ít nhất «Số xác nhận tối thiểu» trong các ô đang tick (x/y trên chart)")}
+    <div class="muted" style="margin:2px 0 4px">Số xác nhận tối thiểu: ${sel("ofMin", [0, 1, 2, 3, 4].map((n) => [n, String(n)]), Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm)} (mặc định 2)</div>${OF_CONDS.filter(([k]) => k !== "gamma").map(([k, t, n]) => row(k, t, n.map((x) => "c:" + x))).join("")}
+    ${H("④ Hiển thị trên chart", "chỉ đổi cách vẽ, không đổi tín hiệu")}${row("zones", txt(OF_GROUPS, "zones"), ["zones"])}${row("watch", txt(OF_GROUPS, "watch"), ["watch"])}${xrow("hg_show", "Hiện nền màu + viền nét đứt của vùng HG HEDGE (bỏ tick = ẩn, chỉ còn nhãn, vì trùng vùng HEDGE −Γ)")}
+    <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Nâng cao</summary>${row("wfreeze", "Khóa tỉ lệ quy đổi theo ngày ở TRÌNH DUYỆT (dự phòng). Máy chủ từ 9b-3 đã khóa ratio, nên ô này chỉ có tác dụng khi máy chủ không gửi mã khóa (ratio_lock_id)", ["wfreeze"])}</details>`;
+  // 9b-4: khối «Khung đo Option Flow» đặt lên đầu mục «📏 TP / SL» của menu TVLB+ (tvlb_tinhieu.js); không tìm thấy mục đó thì để cuối khung này.
+  const tpBox = document.createElement("div"); tpBox.id = "ofTpBox"; tpBox.style.cssText = "font-size:12px";
+  tpBox.innerHTML = `<div class="sub">Khung đo Option Flow (TL1 · TL2 · HG · 9A/9B)</div>${row("rr", "Vẽ khung đo SL/TP cho tín hiệu Option Flow hôm nay", ["rr"])}
+    <div class="muted" style="margin:2px 0 4px">Số khung: ${sel("ofBoxMax", [[0, "tất cả"], [3, "3 khung mới nhất"], [5, "5 khung mới nhất"], [8, "8 khung mới nhất"], [12, "12 khung mới nhất"]], OFS.boxMax == null ? 8 : +OFS.boxMax)} ${sel("ofBoxRun", [[0, "cả lệnh đã xong"], [1, "chỉ lệnh đang chạy"]], OFS.boxRun === true ? 1 : 0)}</div>
+    <div class="muted" style="margin:2px 0 4px">Dời SL về hòa vốn khi lời +1R: ${sel("ofBE", [[1, "Bật"], [0, "Tắt"]], OFS.beOff === true ? 0 : 1)}</div>
+    <div class="muted" style="margin:2px 0 4px">Đóng lệnh lúc 12:30 Chicago: ${sel("ofTE", [[1, "Bật"], [0, "Tắt"]], OFS.teOff === true ? 0 : 1)} (giả thuyết, chưa backtest)</div>
+    <div class="note">Các ô BÊN DƯỚI (cách chốt lời, hộp +N lệnh, SL tối đa, đóng sau N nến) KHÔNG áp cho khung đo này: chúng dùng cho hộp lệnh KH, ký hiệu TVLB+ (B/S, OF·H, H-T, HL, SMC hub) và bảng backtest trang ⑤ (bảng này có cả Option Flow).</div>
+    <div class="sub" style="margin-top:10px">Hộp lệnh KH · TVLB+ · backtest</div>`;
+  const onChg = (e) => {
+    if (e.target.id === "ofFlip") { for (const k of ["x_noflip", "x_flipfar", "x_flipnear"]) delete OFS[k]; const m = e.target.value;   // 9b-4: 1 ô chọn thay 3 ô tick (giữ nguyên 3 cờ cũ bên dưới)
+      if (m === "noflip") OFS.x_noflip = true; if (m === "far" || m === "both") OFS.x_flipfar = true; if (m === "near" || m === "both") OFS.x_flipnear = true;
+      try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofBE" || e.target.id === "ofTE") { OFS[e.target.id === "ofBE" ? "beOff" : "teOff"] = e.target.value === "0"; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofBoxMax" || e.target.id === "ofBoxRun") { if (e.target.id === "ofBoxMax") OFS.boxMax = +e.target.value; else OFS.boxRun = e.target.value === "1"; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } drawOverlay(); return; }
     if (e.target.id === "ofRRh") { OFS.minRRhg = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
@@ -1447,8 +1473,10 @@ function ofInitUI() {
     try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { /* bỏ qua */ }
     if (el.dataset.of === "wfreeze") { pollState(); return; }   // v23ak: bật/tắt khóa -> nạp lại dữ liệu từ server ngay
     replaySignals(); ofRender();
-  });
+  };
+  d.addEventListener("change", onChg); tpBox.addEventListener("change", onChg);
   lab.insertAdjacentElement("afterend", d);
+  { const tpb = document.querySelector('#tvlbPlus .grp[data-g="tp"] .gb'); if (tpb) tpb.insertBefore(tpBox, tpb.firstChild); else d.appendChild(tpBox); }
   ofCompactTop(); ofStartDecor();
   ofRender(); setInterval(ofRender, 3000);
   setTimeout(ofInitPage, 1500);   // đợi các trang ③④⑤ dựng xong để nút ⑥ nằm sau chúng
