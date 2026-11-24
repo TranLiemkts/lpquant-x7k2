@@ -1117,8 +1117,10 @@ function ofWatchList(M0) {
 // nên mọi tường/Magnet/Flip dịch vài đô cùng lúc (quan sát 24/11: +3,4$). Ratio của ngày = giá trị thấy ĐẦU TIÊN trong ngày (localStorage "tvlb.ratio0"); ngay khi nhận dữ liệu từ server (pollState)
 // mọi mốc chart được tính lại = mốc gốc × ratio đó (tường, Flip, Magnet, Max Pain, từng strike, từng kỳ hạn, Volume Profile). Chưa khóa: vùng Hedge LP (server tự tính theo giá live). Tắt: bỏ tick «Khóa tỉ lệ quy đổi».
 const ofR0Key = (o, src) => vnDate(Math.floor(Date.now() / 1000)) + "|" + (o.source || src || "");
+// v23al: server (9b-3) đã KHÓA ratio theo ngày giao dịch CME và gửi ratio_lock_id → dùng thẳng o.ratio, không khóa lại ở trình duyệt (khóa theo ngày VN sẽ giữ ratio cũ sau khi server khóa lại, vd đổi hợp đồng GC)
 function ofRatio0(o, src) {
   if (!o || !(o.ratio > 0)) return o && o.ratio;
+  if (o.ratio_lock_id) return o.ratio;
   const key = ofR0Key(o, src), day = key.split("|")[0];
   if (!S.r0) { try { S.r0 = JSON.parse(localStorage.getItem("tvlb.ratio0") || "{}"); } catch { S.r0 = {}; } }
   if (!(S.r0[key] > 0)) {
@@ -1133,6 +1135,7 @@ function ofFreezeRatio(st) {
     let kGC = null;
     for (const [src, o] of Object.entries(st.options)) {
       if (!o || !(o.ratio > 0) || !o.chart || !Array.isArray(o.strikes)) continue;
+      if (o.ratio_lock_id) continue;   // v23al: server đã khóa (giữ nguyên o.ratio_raw của server)
       const raw = o.ratio, r0 = ofRatio0(o, src); if (!(r0 > 0)) continue;
       o.ratio_raw = raw; if (src === "GC") kGC = r0 / raw;
       const apply = (t) => {
