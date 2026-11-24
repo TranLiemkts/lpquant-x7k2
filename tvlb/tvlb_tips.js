@@ -23,6 +23,7 @@
     mag: "Magnet: bước 6 không thấy Magnet hút giá hơn số tròn đối chứng (khoảng tin cậy của chênh lệch chứa 0).",
     flip: "Gamma Flip / chế độ Gamma: bước 6 không kết luận được (ngày Negative quá ít để đo).",
     mp: "Max Pain: bước 6 không có giả thuyết nào về Max Pain, nên chưa được kiểm.",
+    vp: "POC/VAH/VAL: không nằm trong giả thuyết nào của bước 6 (bước 6 chỉ kiểm tường OI, Magnet, Flip), nên chưa được kiểm.",
   };
   const unv = (k) => sec("⚠ CHƯA KIỂM ĐỊNH", `${UNV[k]}<br><span style="color:#9aa4b2">Dùng như mốc tham khảo, không phải bằng chứng có tác dụng. “Chưa có bằng chứng” KHÔNG có nghĩa “chứng minh không có tác dụng”.</span>`, "#ffb300");
   const BN = { d: "DATE", w: "WEEK", m: "MONTH" }, cm = (x) => Number(x).toFixed(2).replace(".", ",");
@@ -130,6 +131,21 @@
       + "• Đường/cột này vẽ Net GEX (USD dealer phải hedge khi giá đi 1%) theo từng mức giá. Dương = dealer kìm giá; âm = dealer đẩy giá. Điểm đường cắt 0 chính là Gamma Flip."
       + sec("Lưu ý", "Có hệ số kỳ hạn 40/40/20 (xem dòng “Hệ số kỳ hạn” ở thanh KPI). Chưa kiểm định.");
   }
+  // v23o: chú giải VAH / POC / VAL (Volume Profile phiên)
+  function tipVP(key) {
+    const v = typeof S !== "undefined" && S.state && S.state.volume_profile; if (!v || v[key] == null) return null;
+    const p = px(), val = v[key], nm = { poc: "POC", vah: "VAH", val: "VAL" }[key], col = { poc: "#90caf9", vah: "#a5d6a7", val: "#ef9a9a" }[key];
+    const loc = p == null || v.vah == null || v.val == null ? "" : p > v.vah ? `giá đang <b>TRÊN VAH</b> (${sg(p - v.vah)}$): ra khỏi vùng giá trị phía trên` : p < v.val ? `giá đang <b>DƯỚI VAL</b> (${sg(p - v.val)}$): ra khỏi vùng giá trị phía dưới` : `giá đang <b>TRONG Value Area</b> (VAL ${f2(v.val)} – VAH ${f2(v.vah)}), ${v.poc != null ? (p >= v.poc ? "trên" : "dưới") + " POC " + f2(v.poc) : ""}`;
+    const what = { poc: "<b>POC (Point of Control)</b> = mức giá có <b>khối lượng khớp lớn nhất</b> trong phiên: nơi giao dịch dày nhất, thường coi là “giá được chấp nhận” của phiên. Giá hay bị hút về / dao động quanh mức này.",
+      vah: "<b>VAH (Value Area High)</b> = cạnh <b>TRÊN</b> của Value Area (vùng quanh POC chứa phần lớn khối lượng phiên, thường quy ước 70%). Giá đóng trên VAH = đang bị đẩy ra ngoài vùng giá trị phía trên.",
+      val: "<b>VAL (Value Area Low)</b> = cạnh <b>DƯỚI</b> của Value Area. Giá đóng dưới VAL = đang bị đẩy ra ngoài vùng giá trị phía dưới." }[key];
+    return H(`${nm} ${f2(val)} | ${sg(val - p)}$`, col)
+      + sec("1. Là gì", what)
+      + sec("2. Giá hiện tại", loc || "—")
+      + sec("3. Dashboard dùng thế nào (đọc từ code)", `• <b>Vùng hội tụ</b> (trang ③): POC/VAH/VAL được tính như một mốc khi gom các mốc cách nhau ≤ 6$; từ 2 mốc trở lên (tường, Flip, Magnet, POC…) thành một vùng.<br>• <b>Agent trang ③</b>: khi Gamma ÂM, giá dưới VAL → ưu tiên SELL, trên VAH → ưu tiên BUY, trong vùng thì xét dưới/trên POC; vị trí ủng hộ hướng thì cộng 0,10 vào độ tin cậy.<br>• Chỉ làm mốc quan sát: <b>không</b> nằm trong điều kiện của TL1/TL2/9A/9B.`)
+      + sec("4. Nguồn", "Engine tính Volume Profile của phiên, làm mới khoảng 15 phút một lần. Cửa sổ chính xác (từ giờ nào) và tỉ lệ Value Area (có đúng 70% không) <b>chưa kiểm trong dự án</b>.")
+      + unv("vp");
+  }
   function chartTip(e) {
     const wrap = document.querySelector("#chartWrap"); if (!wrap || typeof candleS === "undefined") return null;
     const r = wrap.getBoundingClientRect(), y = e.clientY - r.top, hits = [];
@@ -143,6 +159,7 @@
         else if (g.k === "mp" && P0) return tipMp(P0);
         else if (g.k === "hedge") return tipHedgeZone(g.z, g.win);
         else if (g.k === "gexcurve") return tipGexCurve(P0);
+        else if (g.k === "vp") { const t = tipVP(g.vk); if (t) return t; }
       } }
     const yy = (v) => (v == null ? null : candleS.priceToCoordinate(v));
     [["GC", "#lyKey"], ["GLD", "#lyGLD"]].forEach(([src, chk]) => {
@@ -157,6 +174,8 @@
     const P = primV(); if (P && (!document.querySelector("#lyKey") || document.querySelector("#lyKey").checked)) {
       const c = P.chart; [["magnet", tipMag], ["gamma_flip", tipFlip], ["max_pain", tipMp]].forEach(([k, fn]) => { const v = yy(c[k]); if (v != null && Math.abs(v - y) <= 5) hits.push({ d: Math.abs(v - y), k: 1, f: () => fn(P) }); });
     }
+    { const lv = document.querySelector("#lyVP"), vp = S.state && S.state.volume_profile;   // v23o: rê gần vạch POC/VAH/VAL
+      if (vp && (!lv || lv.checked)) ["poc", "vah", "val"].forEach((k) => { const v = yy(vp[k]); if (v != null && Math.abs(v - y) <= 4) hits.push({ d: Math.abs(v - y), k: 1, f: () => tipVP(k) }); }); }
     if (!hits.length) return null;
     hits.sort((a, b) => a.k - b.k || a.d - b.d);
     // 7f (số 103): mốc trùng nhau (vd Call Wall = Magnet = Max Pain) → hiện TẤT CẢ (bản cũ chỉ lấy 1 mốc gần chuột nhất, có thể là Flip thay vì Magnet),
