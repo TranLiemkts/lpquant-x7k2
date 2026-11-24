@@ -520,7 +520,7 @@ function drawOverlayBase() {
     const tsc = chart.timeScale(), cc = S.candles, P = (v) => candleS.priceToCoordinate(v);
     ctx.font = "500 8.5px 'IBM Plex Mono', monospace"; ctx.textBaseline = "middle";   // v23am-3: chữ nhỏ, mảnh, không nền
     const rrLab = []; let rrN = 0;
-    for (const g of [...S.signals.slice(-6), ...(S.of9Sig || [])]) {
+    for (const g of boxList()) {
       const x0 = tsc.timeToCoordinate(g.time + TZ); if (x0 == null || x0 > plotW) continue;
       const nx = cc[g.i + 1] ? tsc.timeToCoordinate(cc[g.i + 1].time + TZ) : null, bs = nx != null ? Math.max(3, nx - x0) : 8;
       const mg = rrManage(g, cc), hit = mg.t ? { j: mg.j, t: mg.t, r: mg.r } : null;   // v23am-17
@@ -726,6 +726,11 @@ function chiSlot(t) {
   const q = {}; for (const x of CHI_FMT.formatToParts(new Date(t * 1000))) q[x.type] = x.value;
   v = { d: `${q.year}-${q.month}-${q.day}`, s: ((q.hour === "24" ? 0 : +q.hour) * 60 + +q.minute) >= 750 ? 1 : 0 };   // s=1: đã qua 12:30 giờ Chicago trong ngày
   chiMemo.set(t, v); return v;
+}
+function boxList() {   // v23am-19: chọn các hộp đo SL/TP cần vẽ theo menu (OFS.boxRun = chỉ hộp đang chạy · OFS.boxMax = số hộp tối đa, 0 = tất cả)
+  const cc = S.candles; let a = [...S.signals, ...(S.of9Sig || [])].filter((g) => cc[g.i]).sort((u, v) => u.time - v.time);
+  if (OFS.boxRun === true) a = a.filter((g) => !rrManage(g, cc).t);
+  const n = OFS.boxMax == null ? 8 : +OFS.boxMax; return n > 0 ? a.slice(-n) : a;
 }
 function rrManage(g, cc) {
   const buy = g.side === "BUY", risk = Math.abs(g.entry - g.sl), dir = buy ? 1 : -1, beOn = OFS.beOff !== true, teOn = OFS.teOff !== true;
@@ -1426,9 +1431,11 @@ function ofInitUI() {
     <div class="muted" style="margin:6px 0 4px">Số xác nhận tối thiểu: <select id="ofMin" style="font-size:12px">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}"${(Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm) === n ? " selected" : ""}>${n}</option>`).join("")}</select> (mặc định 2; nhớ để các điều kiện bên dưới được tick)</div>
     <div class="muted" style="margin:2px 0 6px">Tỉ lệ lời/lỗ tối thiểu (TP1 ÷ SL) của TL1·TL2·HG: <select id="ofRR" style="font-size:12px">${[0, 0.5, 1, 1.5, 2].map((n) => `<option value="${n}"${(Number(OFS.minRR) || 0) === n ? " selected" : ""}>${n === 0 ? "0 (tắt)" : n}</option>`).join("")}</select> (mặc định tắt; thấp hơn ngưỡng thì KHÔNG ra tín hiệu, không vẽ khung)</div>
     <div class="muted" style="margin:2px 0 6px">R:R tối thiểu riêng cho nhóm HG (TP1 = tường đang hiển thị kế tiếp): <select id="ofRRh" style="font-size:12px">${[0, 1, 1.5, 2, 2.5, 3].map((n) => `<option value="${n}"${hgRRmin() === n ? " selected" : ""}>${n === 0 ? "0 (tắt)" : n}</option>`).join("")}</select> (mặc định 2 = lời ≥ 2 × lỗ)</div>
-    <div class="muted" style="margin:2px 0 6px">Quản lý lệnh trên khung đo: dời SL về hòa vốn khi lời +1R <select id="ofBE" style="font-size:12px"><option value="1"${OFS.beOff !== true ? " selected" : ""}>Bật</option><option value="0"${OFS.beOff === true ? " selected" : ""}>Tắt</option></select> · đóng lệnh lúc 12:30 Chicago <select id="ofTE" style="font-size:12px"><option value="1"${OFS.teOff !== true ? " selected" : ""}>Bật</option><option value="0"${OFS.teOff === true ? " selected" : ""}>Tắt</option></select> (giả thuyết, chưa backtest)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
+    <div class="muted" style="margin:2px 0 6px">Quản lý lệnh trên khung đo: dời SL về hòa vốn khi lời +1R <select id="ofBE" style="font-size:12px"><option value="1"${OFS.beOff !== true ? " selected" : ""}>Bật</option><option value="0"${OFS.beOff === true ? " selected" : ""}>Tắt</option></select> · đóng lệnh lúc 12:30 Chicago <select id="ofTE" style="font-size:12px"><option value="1"${OFS.teOff !== true ? " selected" : ""}>Bật</option><option value="0"${OFS.teOff === true ? " selected" : ""}>Tắt</option></select> (giả thuyết, chưa backtest)</div>
+    <div class="muted" style="margin:2px 0 6px">Hộp đo SL/TP trên chart: hiện <select id="ofBoxMax" style="font-size:12px">${[[0, "tất cả"], [3, "3 hộp mới nhất"], [5, "5 hộp mới nhất"], [8, "8 hộp mới nhất"], [12, "12 hộp mới nhất"]].map(([n, t]) => `<option value="${n}"${(OFS.boxMax == null ? 8 : +OFS.boxMax) === n ? " selected" : ""}>${t}</option>`).join("")}</select> · <select id="ofBoxRun" style="font-size:12px"><option value="0"${OFS.boxRun !== true ? " selected" : ""}>cả lệnh đã xong</option><option value="1"${OFS.boxRun === true ? " selected" : ""}>chỉ lệnh đang chạy</option></select></div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
   d.addEventListener("change", (e) => {
     if (e.target.id === "ofBE" || e.target.id === "ofTE") { OFS[e.target.id === "ofBE" ? "beOff" : "teOff"] = e.target.value === "0"; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } ofRender(); drawOverlay(); return; }
+    if (e.target.id === "ofBoxMax" || e.target.id === "ofBoxRun") { if (e.target.id === "ofBoxMax") OFS.boxMax = +e.target.value; else OFS.boxRun = e.target.value === "1"; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } drawOverlay(); return; }
     if (e.target.id === "ofRRh") { OFS.minRRhg = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofRR") { OFS.minRR = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofMin") { OFS.minConf = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); return; }
