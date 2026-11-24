@@ -857,7 +857,11 @@ function ofWarnText() {
   if (nC < minC) return `Chỉ đang bật ${nC} điều kiện xác nhận nhưng cần tối thiểu ${minC} → sẽ KHÔNG BAO GIỜ có tín hiệu. Hãy tick thêm điều kiện hoặc hạ "Số xác nhận tối thiểu".`;
   return "";
 }
-const OFV = { tab: "new" };
+const OFV = { tab: "new", focus: null, rf: (() => { try { return Object.assign({ st: "all", k: "all" }, JSON.parse(localStorage.getItem("tvlb.ofrun") || "{}")); } catch { return { st: "all", k: "all" }; } })() };   // 9b-5b: rf = bộ lọc tab «Lệnh hôm nay» (nhớ qua F5); focus = kế hoạch đang được chọn để xem
+// 9b-5b: loại lệnh để lọc tab «Lệnh hôm nay»: wall = tường 9A/9B · hg = HG Hedge · tl = TL1 / TL1·2
+const ofKind = (g) => (g.tag === "9A" || g.tag === "9B" ? "wall" : g.tag === "HG" || /HEDGE/i.test(g.type || "") ? "hg" : "tl");
+const OF_KIND_TXT = { wall: "Tường 9A/9B", hg: "HG Hedge", tl: "TL1 / TL1·2" };
+const ofShortChip = (t, col) => `<span style="display:inline-block;font-size:9.5px;font-weight:700;padding:0 5px;margin-right:4px;border-radius:3px;border:1px solid ${col};color:${col}">${t}</span>`;
 const ofFm = (v) => (v == null || !isFinite(v) ? "—" : Number(v).toFixed(2));
 function ofModel() {
   const c = S.candles, sc = S.cfg.signals, L = primaryLevels();
@@ -978,16 +982,19 @@ function ofIllu(p, nocap) {
   const kind = p.id === "ts" || p.id === "tb" || /^nwa/.test(p.id) ? "trap" : p.id === "bd" || p.id === "sq" || /^nwb/.test(p.id) ? "break" : "hedge";
   const cd = (x, o, h, l, c) => { const col = Y(c) < Y(o) ? up : dn, t = Math.min(Y(o), Y(c)); return `<line x1="${x}" x2="${x}" y1="${Y(h)}" y2="${Y(l)}" stroke="${col}" stroke-width="1.8"/><rect x="${x - 6}" y="${t}" width="12" height="${Math.max(2, Math.abs(Y(c) - Y(o)))}" fill="${col}"/>`; };
   const ln = (y, col, txt, dash, x2 = 152) => `<line x1="6" x2="${x2}" y1="${Y(y)}" y2="${Y(y)}" stroke="${col}" stroke-width="1" ${dash ? 'stroke-dasharray="4 3"' : ""}/><text x="${x2 + 5}" y="${Y(y) + 3}" font-size="10.5" fill="${col}">${txt}</text>`;
-  const wick = flip ? "đáy" : "đỉnh", wallName = p.zone || (p.id === "ts" || p.id === "sq" ? "Call Wall" : "Put Wall"), G = "#9aa4b2";
+  const nw = /^nw/.test(p.id || "");   // 9b-5b: 9A/9B dùng luật riêng (SL 0,30%, TP1 tường kế tiếp ≥ 1R) nên chữ trên hình khác TL1
+  const wick = flip ? "đáy" : "đỉnh", wallName = p.zone || (nw ? "tường gần" : p.id === "ts" || p.id === "sq" ? "Call Wall" : "Put Wall"), G = "#9aa4b2";
   let g = "";
   if (kind === "trap") {
-    g += ln(30, G, `${wallName} (tường)`) + ln(14, dn, `SL = ${wick} râu + 3$`, true) + ln(50, "#f0b429", "vào lệnh (đóng nến)", true) + ln(74, up, "TP1: mốc OI kế", true) + ln(92, up, "TP2: tường đối diện", true);
+    g += nw ? ln(30, G, `${wallName} ±0,10%`) + ln(14, dn, "SL = giá vào ± 0,30%", true) + ln(50, "#f0b429", "vào: giá mở nến kế", true) + ln(74, up, "TP1: tường kế (≥ 1R)", true) + ln(92, up, "+1R: dời SL hòa vốn", true)
+      : ln(30, G, `${wallName} (tường)`) + ln(14, dn, `SL = ${wick} râu + 3$`, true) + ln(50, "#f0b429", "vào lệnh (đóng nến)", true) + ln(74, up, "TP1: mốc OI kế", true) + ln(92, up, "TP2: tường đối diện", true);
     g += cd(30, 66, 62, 68, 60) + cd(50, 60, 52, 62, 54) + cd(70, 54, 42, 56, 44) + cd(90, 36, 20, 52, 50) + cd(110, 50, 48, 62, 60) + cd(130, 60, 58, 74, 72) + cd(150, 72, 70, 84, 82);
-    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="10.5" fill="#cfd6e0">râu chọc qua tường</text>`;
+    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="10.5" fill="#cfd6e0">${nw ? "chạm vùng rồi đóng quay ngược ≥ 0,10%" : "râu chọc qua tường"}</text>`;
   } else if (kind === "break") {
-    g += ln(54, G, `${wallName} (tường)`) + ln(42, dn, "SL = tường + 3$", true) + ln(70, "#f0b429", "vào lệnh (đóng nến)", true) + ln(90, up, "TP1: mốc OI kế", true);
+    g += nw ? ln(54, G, `${wallName}`) + ln(42, dn, "SL = giá vào ± 0,30%", true) + ln(70, "#f0b429", "vào: giá mở nến kế", true) + ln(90, up, "TP1: tường kế (≥ 1R)", true)
+      : ln(54, G, `${wallName} (tường)`) + ln(42, dn, "SL = tường + 3$", true) + ln(70, "#f0b429", "vào lệnh (đóng nến)", true) + ln(90, up, "TP1: mốc OI kế", true);
     g += cd(30, 28, 24, 34, 32) + cd(50, 32, 30, 42, 40) + cd(70, 40, 38, 54, 50) + cd(90, 48, 46, 74, 70) + cd(110, 70, 68, 84, 82) + cd(130, 82, 80, 90, 88);
-    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="10.5" fill="#cfd6e0">nến ĐÓNG xuyên tường</text>`;
+    g += `<text x="8" y="${flip ? H - 3 : 9}" font-size="10.5" fill="#cfd6e0">${nw ? "nến ĐÓNG xuyên tường ≥ 0,15%, thân lớn" : "nến ĐÓNG xuyên tường"}</text>`;
   } else {
     g += `<rect x="6" y="${Math.min(Y(48), Y(66))}" width="146" height="18" fill="rgba(240,180,41,.14)" stroke="rgba(240,180,41,.5)" stroke-dasharray="3 3"/><text x="157" y="${Y(57) + 3}" font-size="10.5" fill="#f0b429">vùng Hedge −Γ</text>`;
     g += ln(34, dn, "SL = cực trị 3 nến ± 3$", true) + ln(78, "#f0b429", "vào lệnh (đóng nến)", true) + ln(96, up, "TP1: mốc OI kế", true);
@@ -1429,7 +1436,7 @@ function ofRender() {
     + `<div class="muted" style="font-size:9.5px;line-height:1.35;margin:2px 0 5px">x/y = điều kiện đạt / cần (hình thái nến + xác nhận theo menu, tối thiểu ${lgMin}) của <b>lần chạm gần nhất hôm nay</b>: cùng một con số ở nhãn vùng, danh sách, thẻ và ký hiệu trên nến đó. ⛔ = cổng chưa qua · ✔ = đủ. "–" = hôm nay chưa chạm. <b>ĐỨNG NGOÀI</b> = bị bộ lọc ở menu trái loại, không vào lệnh cả 2 hướng; rê chuột vào nhãn để xem lý do.</div>`
     + live.map((p) => { const full = p.blocked ? (p.why || "Gamma âm: không bắt đáy") : p.past ? "giá đã ở bên kia tường (đã qua)" : p.dist === 0 ? "giá trong vùng" : "còn " + p.dist.toFixed(2) + "$ tới vùng";
       const sh = p.blocked ? (p.why || full) : p.past ? "giá đã qua tường" : p.dist === 0 ? "giá đang trong vùng" : "còn " + p.dist.toFixed(1) + "$ tới vùng";
-      return `<div title="${(ofStateTip(p) ? ofStateTip(p).replace(/<\/?(div|b|br)[^>]*>/g, " ").replace(/\s+/g, " ").trim() : full).replace(/"/g, "&quot;")}" style="display:grid;grid-template-columns:62px 60px 42px 26px 1fr;gap:3px;align-items:start;margin:3px 0;font-size:9px;line-height:1.25"><b style="color:${OF_COL[p.side]};font-size:9px;white-space:nowrap">${p.short}</b><span style="text-align:center">${ofBadge(p.state, p.side)}</span><span style="text-align:center">${ofChip(p)}</span><span style="color:${OF_COL[p.side]};font-weight:700;font-size:9px">${p.side}</span><span class="muted" style="font-size:9px">${sh}</span></div>`; }).join("")
+      return `<div data-ofgo="${p.id}" title="Bấm để mở kế hoạch này ở tab «Kế hoạch mới». ${(ofStateTip(p) ? ofStateTip(p).replace(/<\/?(div|b|br)[^>]*>/g, " ").replace(/\s+/g, " ").trim() : full).replace(/"/g, "&quot;")}" style="display:grid;grid-template-columns:62px 60px 42px 26px 1fr;gap:3px;align-items:start;margin:3px 0;font-size:9px;line-height:1.25;cursor:pointer${OFV.focus === p.id ? ";outline:1px solid #f0b429;border-radius:3px" : ""}"><b style="color:${OF_COL[p.side]};font-size:9px;white-space:nowrap">${p.short}</b><span style="text-align:center">${ofBadge(p.state, p.side)}</span><span style="text-align:center">${ofChip(p)}</span><span style="color:${OF_COL[p.side]};font-weight:700;font-size:9px">${p.side}</span><span class="muted" style="font-size:9px">${sh}</span></div>`; }).join("")
     + `<div style="margin-top:8px"><b>Cổng kiểm</b>${M.gates.map(gate).join("")}</div>` + ofCondHtml(M);
   const kv = (a, b) => `<div class="muted">${a}</div><div>${b}</div>`, k = M.k, sc = M.sc, dxy = S.state?.macro?.DXY?.chg_n_pct;
   $("#ofC").innerHTML = kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
@@ -1449,14 +1456,46 @@ function ofRender() {
     + `<button type="button" data-oftab="run" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "run" ? "#f0b429" : "transparent"};color:${OFV.tab === "run" ? "#1b1407" : "inherit"};cursor:pointer">Lệnh hôm nay (${sg.length}${run ? " · " + run + " đang chạy" : ""})</button>`
     + `<button type="button" data-oftab="watch" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "watch" ? "#f0b429" : "transparent"};color:${OFV.tab === "watch" ? "#1b1407" : "inherit"};cursor:pointer">Nến quan sát (${W.length})</button>`;
   const watchHtml = `<div class="muted" style="font-size:10.5px;margin-bottom:6px">◉ trên chart = nến chạm vùng / đóng xuyên tường của một kế hoạch. x/y tính trên chính nến đó, theo mốc tường và chế độ Gamma HIỆN TẠI. Chỉ để quan sát, chưa kiểm định.</div>`
-    + (W.slice().reverse().map((w) => `<div style="border-left:3px solid ${OF_COL[w.p.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[w.p.side]}">${vnClock(w.time)} ${w.p.short} ${w.p.side}</b> · <b>${ofSimple(w.chk)}</b>${w.chk.full ? " · <b style=\"color:#26b384\">ĐỦ</b>" : ofCandleOk(w.chk) && w.chk.gOk < w.chk.gate.length ? " · <b style=\"color:#f0b429\">nến đã thỏa, cổng chưa qua</b>" : ""}${w.p.blocked ? ` · <span class="muted">bị chặn: ${w.p.why || ""}</span>` : ""}</div><div style="font-size:11px;margin-left:6px">${ofChkLines(w.chk)}</div></div>`).join("") || '<span class="muted">Hôm nay chưa có nến nào chạm vùng / đóng xuyên tường của kế hoạch nào.</span>');
+    + (W.slice().reverse().map((w) => `<div style="border-left:3px solid ${OF_COL[w.p.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[w.p.side]}">${vnClock(w.time)} ${w.p.short} ${w.p.side}</b> <a href="#" data-ofgo="${w.p.id}" style="font-size:10.5px;color:#f0b429">→ xem kế hoạch</a> · <b>${ofSimple(w.chk)}</b> <span class="muted" style="font-size:10.5px" title="x/y = (ô hình thái đạt + ô xác nhận tính, tối đa bằng số cần) / (số ô hình thái + số xác nhận cần). Cổng (vd Khung nến ≥ M5) không tính vào x/y.">= hình thái ${w.chk.shOk}/${w.chk.shape.length} + xác nhận ${w.chk.xOk}/${w.chk.need} (đang có ${w.chk.cOk})</span>${w.chk.full ? " · <b style=\"color:#26b384\">ĐỦ</b>" : ofCandleOk(w.chk) && w.chk.gOk < w.chk.gate.length ? " · <b style=\"color:#f0b429\">nến đã thỏa, cổng chưa qua</b>" : ""}${w.p.blocked ? ` · <span class="muted">bị chặn: ${w.p.why || ""}</span>` : ""}</div><div class="muted" style="font-size:10.5px">Kế hoạch: ${w.p.name}</div>${ofNextStep(w)}<div style="font-size:11px;margin-left:6px">${ofChkLines(w.chk)}</div>${ofIllu(w.p)}</div>`).join("") || '<span class="muted">Hôm nay chưa có nến nào chạm vùng / đóng xuyên tường của kế hoạch nào.</span>');
+  // 9b-5b: thứ tự thẻ: kế hoạch GẦN NHẤT trước, rồi theo khoảng cách tới vùng; kế hoạch bị lọc (ĐỨNG NGOÀI) xuống cuối. Mỗi thẻ có mã ngắn giống nhãn chart và danh sách bên trái.
+  const liveS = live.slice().sort((a, b) => (near && a === near ? -1 : near && b === near ? 1 : 0) || ((a.blocked ? 1 : 0) - (b.blocked ? 1 : 0)) || ((a.dist == null ? 1e9 : a.dist) - (b.dist == null ? 1e9 : b.dist)));
   $("#ofP").innerHTML = OFV.tab === "new"
-    ? live.map((p) => `<div style="border-left:3px solid ${OF_COL[p.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[p.side]}">${p.name}</b> ${ofBadge(p.state, p.side)}</div>`
+    ? '<div class="muted" style="font-size:10.5px;margin-bottom:6px">Thứ tự: kế hoạch gần giá nhất ở trên, kế hoạch bị lọc (ĐỨNG NGOÀI) ở cuối. Mã ngắn (vd «9A TƯỜNG») giống nhãn trên chart và danh sách «Theo dõi diễn biến»; bấm một dòng ở danh sách đó để nhảy tới thẻ.</div>'
+    + liveS.map((p) => `<div data-ofcard="${p.id}" style="border-left:3px solid ${OF_COL[p.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px${OFV.focus === p.id ? ";outline:2px solid #f0b429;background:rgba(240,180,41,.06)" : near && p === near ? ";background:rgba(240,180,41,.04)" : ""}"><div>${ofShortChip(p.short, OF_COL[p.side])}<b style="color:${OF_COL[p.side]}">${p.name}</b> ${ofBadge(p.state, p.side)}${near && p === near ? ' <b style="color:#f0b429;font-size:10.5px">◀ GẦN NHẤT</b>' : ""}</div>`
       + (ofStateWhy(p) && p.state !== "ĐÃ QUA" ? `<div style="font-size:10.5px;margin:2px 0;color:#f0b429">${p.state}: ${ofStateWhy(p)}</div>` : "")
       + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.past ? " · giá ĐÃ QUA tường (chờ giá quay lại rồi mới tính)" : p.dist ? " · cách " + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div><div class="muted" style="font-size:10.5px">Xác nhận theo menu (cần ≥ ${lgMin}): ${(p.live || p.chk) && (p.live || p.chk).conf && (p.live || p.chk).conf.length ? (p.live || p.chk).conf.map((x) => x[0]).join(", ") : "chưa tick ô nào"}</div>${ofChkHtml(p)}${p.side === "BOTH" ? `<div class="muted" style="margin-top:4px">Hai kịch bản sau khi giá ra khỏi vùng rồi quay lại:</div>` + ofIllu({ id: "hg0", side: "SELL" }, true) + ofIllu({ id: "hg0", side: "BUY" }) : ofIllu(p)}`
       + `<div>SL ${p.sl} · TP1 <b>${typeof p.tp1 === "number" ? ofFm(p.tp1) : p.tp1 || "—"}</b>${p.tp2 != null ? " · TP2 " + ofFm(p.tp2) : ""}</div><div class="muted">Huỷ khi: ${p.cancel}</div></div>`).join("") || '<span class="muted">Chưa có nhóm nào được bật.</span>'
     : OFV.tab === "watch" ? watchHtml
-    : ofRunHeadHtml(sg.map(stOf).filter(Boolean)) + (sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side}${g.virt ? " ✔ đủ điều kiện" : " " + g.score + "/" + g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type ? g.type.replace("[Options Flow] ", "") : g.tag === "9B" ? "9B · phá vỡ tường (Gamma âm)" : "9A · bật lại từ tường"}</div>${ofStatusHtml(stOf(g))}${ofTickLine(g)}</div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>');
+    : ofRunHeadHtml(sg.map(stOf).filter(Boolean)) + ofRunListHtml(sg, stt, stOf);
+}
+// 9b-5b: tab «Lệnh hôm nay»: bộ lọc Trạng thái (đang chạy / đã đóng / tất cả) + Loại (tường 9A/9B / HG / TL); khi xem «tất cả» thì chia 2 nhóm ĐANG CHẠY rồi ĐÃ ĐÓNG (thẻ đã đóng thu gọn)
+function ofRunListHtml(sg, stt, stOf) {
+  const rf = OFV.rf, isRun = (g) => stt(g) === "đang chạy";
+  const byK = (k) => sg.filter((g) => k === "all" || ofKind(g) === k), cntSt = (st, k) => byK(k).filter((g) => (st === "all" ? true : st === "open" ? isRun(g) : !isRun(g))).length;
+  const chip = (key, val, txt) => { const on = rf[key] === val; return `<button type="button" data-ofrf="${key}:${val}" style="margin:0 4px 4px 0;padding:1px 8px;border-radius:10px;font-size:10.5px;border:1px solid ${on ? "#f0b429" : "rgba(255,255,255,.2)"};background:${on ? "#f0b429" : "transparent"};color:${on ? "#1b1407" : "inherit"};cursor:pointer">${txt}</button>`; };
+  const bar = `<div style="margin:0 0 6px">${chip("st", "all", `Tất cả (${cntSt("all", rf.k)})`)}${chip("st", "open", `● Đang chạy (${cntSt("open", rf.k)})`)}${chip("st", "closed", `Đã đóng (${cntSt("closed", rf.k)})`)}<br>`
+    + chip("k", "all", `Mọi loại (${sg.length})`) + ["wall", "hg", "tl"].map((k) => chip("k", k, `${OF_KIND_TXT[k]} (${byK(k).length})`)).join("") + "</div>";
+  const card = (g, small) => { const run = isRun(g), kd = ofKind(g), col = OF_COL[g.side];
+    return `<div style="border-left:3px solid ${col};padding:4px 8px;margin:0 0 ${small ? 5 : 8}px;border-radius:4px${small ? ";opacity:.85" : ""}"><div>${ofShortChip(OF_KIND_TXT[kd], "#9aa4b2")}<b style="color:${col}">${vnClock(g.time)} ${g.tag || ""} ${g.side}${g.virt ? " ✔ đủ điều kiện" : " " + g.score + "/" + g.max}</b> · <b>${stt(g)}</b>${g.rebuilt ? ' <span style="color:#ff8a65;font-size:10.5px" title="Lệnh dựng lại từ mốc tường HIỆN TẠI (lúc lệnh xuất hiện trình duyệt chưa mở hoặc chưa chốt): không ghi nhật ký, có thể biến mất khi tường đổi">· dựng lại, chưa chốt</span>' : ""}</div>`
+      + `<div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div>`
+      + (small ? ofStatusHtml(stOf(g)) : `<div class="muted">${g.type ? g.type.replace("[Options Flow] ", "") : g.tag === "9B" ? "9B · phá vỡ tường (Gamma âm)" : "9A · bật lại từ tường"}</div>${ofStatusHtml(stOf(g))}${ofTickLine(g)}`) + "</div>"; };
+  const L = byK(rf.k), R = L.filter(isRun), D = L.filter((g) => !isRun(g)), hd = (t) => `<div style="font-weight:700;color:#f0b429;margin:6px 0 4px;font-size:11px">${t}</div>`;
+  let body = "";
+  if (rf.st !== "closed") body += (rf.st === "all" ? hd(`● ĐANG CHẠY (${R.length})`) : "") + (R.map((g) => card(g, false)).join("") || '<div class="muted" style="margin-bottom:6px">Không có lệnh đang chạy.</div>');
+  if (rf.st !== "open") body += (rf.st === "all" ? hd(`ĐÃ ĐÓNG (${D.length})`) : "") + (D.map((g) => card(g, true)).join("") || '<div class="muted">Chưa có lệnh đã đóng.</div>');
+  return bar + (sg.length ? body : '<span class="muted">Hôm nay chưa có tín hiệu.</span>');
+}
+// 9b-5b: nến quan sát: một dòng «còn thiếu gì» để biết cần chờ gì tiếp (chỉ diễn giải bảng ✔/✘, không thêm luật)
+function ofNextStep(w) {
+  const h = w.chk; if (!h || !h.tot) return "";
+  const box = (t, col) => `<div style="font-size:10.5px;margin:3px 0;padding:3px 6px;border-radius:4px;background:rgba(255,255,255,.04);color:${col}">${t}</div>`;
+  if (h.full) return box("✔ ĐỦ điều kiện tại nến này: lệnh vào ở giá MỞ nến kế (xem tab «Lệnh hôm nay»).", "#26b384");
+  if (w.p.blocked) return box(`⛔ Kế hoạch đang bị lọc (ĐỨNG NGOÀI): ${w.p.why || ""}. Dù nến đạt cũng không vào lệnh.`, "#ff8a65");
+  const sh = h.shape.filter((x) => !x[0]).map((x) => x[1]);
+  if (sh.length) return box(`⏳ Còn thiếu HÌNH THÁI NẾN: ${sh.join("; ")}. Xác nhận theo menu hiện đạt ${h.cOk}/${h.need} (cần ≥ ${h.need}).`, "#f0b429");
+  if (h.cOk < h.need) return box(`⏳ Hình thái nến đã đạt, còn thiếu XÁC NHẬN: đang có ${h.cOk}, cần ≥ ${h.need} (các ô ✘ bên dưới).`, "#f0b429");
+  const gt = h.gate.filter((x) => !x[0]).map((x) => x[1]);
+  return box(`⛔ Nến đã thỏa nhưng CỔNG chưa qua: ${gt.join("; ")}.`, "#ff8a65");
 }
 let ofTry = 0;
 function ofInitUI() {
@@ -1562,7 +1601,12 @@ function ofInitPage() {
     const ap = () => { g.classList.toggle("ofwide", !!z.w); g.classList.toggle("oftall", !!z.t); try { localStorage.setItem(K, JSON.stringify(z)); } catch { } };
     wb.onclick = () => { z.w = !z.w; ap(); }; tb.onclick = () => { z.t = !z.t; ap(); }; ap();
   }
-  page.addEventListener("click", (e) => { const b = e.target.closest("button[data-oftab]"); if (b) { OFV.tab = b.dataset.oftab; ofRender(); } });
+  page.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-oftab]"); if (b) { OFV.tab = b.dataset.oftab; OFV.focus = null; ofRender(); return; }
+    const f = e.target.closest("button[data-ofrf]"); if (f) { const [k, v] = f.dataset.ofrf.split(":"); OFV.rf[k] = v; try { localStorage.setItem("tvlb.ofrun", JSON.stringify(OFV.rf)); } catch { } ofRender(); return; }   // 9b-5b
+    const go = e.target.closest("[data-ofgo]"); if (go) { e.preventDefault(); OFV.tab = "new"; OFV.focus = go.dataset.ofgo; ofRender();   // 9b-5b: nhảy tới thẻ kế hoạch
+      setTimeout(() => { const el = page.querySelector(`[data-ofcard="${OFV.focus}"]`); if (el) el.scrollIntoView({ block: "start", behavior: "smooth" }); }, 30); }
+  });
   aside.insertBefore(page, aside.querySelector("#pineOut") || null);
   // tự xử lý đổi trang cho nút này (nút thêm sau khi trang tải xong thì bộ đổi trang có sẵn không biết tới)
   btn.addEventListener("click", () => {
