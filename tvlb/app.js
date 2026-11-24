@@ -18,7 +18,7 @@ const API = (p) => {
   if (!STATIC) return p;
   const [path, q] = p.split("?");
   if (path === "/api/klines") return `klines_${new URLSearchParams(q).get("tf")}.json`;
-  return ({ "/api/state": "state.json", "/api/tv": "tv.json", "/api/journal": "journal.json" })[path] || p;
+  return ({ "/api/state": "state.json", "/api/tv": "tv.json", "/api/journal": "journal.json", "/api/settings": "settings.json", "/api/walls9a": "walls9a.json" })[path] || p;
 };
 
 const S = {
@@ -541,9 +541,9 @@ function drawOverlayBase() {
         const pnl = (g.side === "BUY" ? p0 - g.entry : g.entry - p0) / Math.max(risk, 0.01);
         rrLab.push({ t: `${pnl >= 0 ? "+" : "−"}${Math.abs(pnl).toFixed(1)}R`, c: pnl >= 0 ? "#26a69a" : "#ef5350", x: x0 + w / 2, y: (yS + (yT != null ? yT : yE)) / 2, al: "center", pr, o: 0 });
       }
-      if (hit && (hit.t === "hết giờ" || hit.t === "hòa vốn")) {
+      if (hit && (hit.t === "hết giờ" || hit.t === "hòa vốn" || hit.t === "đóng vì lệnh ngược")) {
         const rr = hit.t === "hòa vốn" ? 0 : hit.r;
-        rrLab.push({ t: hit.t === "hòa vốn" ? "BE 0.0R" : `⏱ ${rr >= 0 ? "+" : "−"}${Math.abs(rr).toFixed(1)}R`, c: rr > 0 ? "#26a69a" : rr < 0 ? "#ef5350" : "#9aa4b2", x: x0 + w / 2, y: (yS + (yT != null ? yT : yE)) / 2, al: "center", pr, o: 0 });
+        rrLab.push({ t: hit.t === "hòa vốn" ? "BE 0.0R" : `${hit.t === "đóng vì lệnh ngược" ? "⇄" : "⏱"} ${rr >= 0 ? "+" : "−"}${Math.abs(rr).toFixed(1)}R`, c: rr > 0 ? "#26a69a" : rr < 0 ? "#ef5350" : "#9aa4b2", x: x0 + w / 2, y: (yS + (yT != null ? yT : yE)) / 2, al: "center", pr, o: 0 });
       }
       // v23am-12: bỏ nhãn "SL✕/TP✓" riêng — dấu ✕ nằm ngay sau nhãn SL, dấu ✓ ngay sau nhãn TP khi lệnh đã chạm
     }
@@ -729,13 +729,28 @@ function chiSlot(t) {
 }
 function boxList() {   // v23am-19: chọn các hộp đo SL/TP cần vẽ theo menu (OFS.boxRun = chỉ hộp đang chạy · OFS.boxMax = số hộp tối đa, 0 = tất cả)
   const cc = S.candles; let a = [...S.signals, ...(S.of9Sig || [])].filter((g) => cc[g.i]).sort((u, v) => u.time - v.time);
+  a = a.filter((g) => !rrManage(g, cc).skip);   // 9b-5: lệnh bị bỏ (luật lệnh ngược chiều) không vẽ khung
   if (OFS.boxRun === true) a = a.filter((g) => !rrManage(g, cc).t);
   const n = OFS.boxMax == null ? 8 : +OFS.boxMax; return n > 0 ? a.slice(-n) : a;
 }
-function rrManage(g, cc) {
+// 9b-5: rrManage = kết quả HIỂN THỊ (khung đo + thẻ lệnh): luật tự nhiên (rrNatural) + ép đóng/bỏ theo luật lệnh ngược chiều (S.ofForce do ofRefresh dựng). raw=true: bỏ qua ép.
+function rrManage(g, cc, closedOnly, raw) {
+  if (!raw && S.ofForce && S.ofForce.size) {
+    const f = S.ofForce.get(ofKey(g));
+    if (f) {
+      if (f.skip) return { j: g.i + 1 < cc.length ? g.i + 1 : cc.length - 1, t: "bỏ", r: 0, be: false, skip: true };
+      const n = rrNatural(g, cc, closedOnly), jj = Math.min(f.j, cc.length - 1);
+      if (n.j == null || n.j >= jj) return { j: jj, t: "đóng vì lệnh ngược", r: f.r, be: rrNatural(g, cc.slice(0, jj), closedOnly).be, forced: true };
+      return n;
+    }
+  }
+  return rrNatural(g, cc, closedOnly);
+}
+function rrNatural(g, cc, closedOnly) {
+  if (!cc[g.i]) return { j: null, t: null, be: false };
   const buy = g.side === "BUY", risk = Math.abs(g.entry - g.sl), dir = buy ? 1 : -1, beOn = OFS.beOff !== true, teOn = OFS.teOff !== true;
   let be = false, slE = g.sl; const e0 = chiSlot(cc[g.i].time);
-  for (let j = g.i + 1; j < cc.length; j++) {
+  for (let j = g.i + 1; j < cc.length - (closedOnly ? 1 : 0); j++) {
     const k = cc[j];
     if (teOn) { const c1 = chiSlot(k.time); if (c1.s === 1 && (e0.s === 0 ? c1.d === e0.d : c1.d > e0.d)) return { j, t: "hết giờ", r: (k.open - g.entry) * dir / Math.max(risk, 0.01), be }; }
     if (buy ? k.low <= slE : k.high >= slE) return { j, t: be ? "hòa vốn" : "chạm SL", be };
@@ -882,7 +897,13 @@ function ofModel() {
       const day = vnDate(c[c.length - 1].time), f0 = c.find((x) => vnDate(x.time) === day), ref = f0 ? f0.open : px, unclear = !noFlip && (flip == null || flipOut);   // v23u: "ngày không rõ" theo Ô TICK "Ngày Flip xa" (trước đây bỏ qua ô tick)
       const r0 = ofRatio0(o), frz = ofOn("wfreeze") && o.ratio > 0 && r0 > 0, cv = (s) => (frz && s.strike != null ? s.strike * r0 : s.chart);
       S.wFrz = frz ? { r0, now: o.ratio_raw || o.ratio } : null;
-      o.strikes.filter((s) => Math.abs(cv(s) / ref - 1) <= 0.025).sort((a, b) => (b.call_oi + b.put_oi) - (a.call_oi + a.put_oi)).slice(0, 3).forEach((s, n) => {
+      const top3 = o.strikes.filter((s) => Math.abs(cv(s) / ref - 1) <= 0.025).sort((a, b) => (b.call_oi + b.put_oi) - (a.call_oi + a.put_oi)).slice(0, 3);
+      try {   // 9b-5 (số 223): danh sách tường 9A/9B của ngày → ofWallsPost ghi lên máy chủ (data/walls9a/<ngày>.jsonl)
+        const brk0 = !noFlip && !unclear && negG;
+        S.w9 = { t: Date.now(), day, ref, flip: flip ?? null, neg: !!negG, mode: brk0 ? "9B" : unclear ? "không rõ" : noFlip ? "9A (bỏ Flip)" : "9A", ratio: r0 || o.ratio || null, src: o.source || "", lock: o.ratio_lock_id || null,
+          walls: top3.map((s, n) => ({ id: (brk0 ? "nwb" : "nwa") + n, lvl: +cv(s).toFixed(2), strike: s.strike ?? null, oi: s.call_oi + s.put_oi, c_oi: s.call_oi, p_oi: s.put_oi })) };
+      } catch { /* không chặn việc tính tín hiệu */ }
+      top3.forEach((s, n) => {
         const lvl = cv(s), up = lvl > px, brk = !noFlip && !unclear && negG, side = brk ? (up ? "BUY" : "SELL") : (up ? "SELL" : "BUY"), oi = s.call_oi + s.put_oi;
         add({ id: (brk ? "nwb" : "nwa") + n, short: brk ? "9B TƯỜNG" : "9A TƯỜNG", name: `${brk ? "9B phá vỡ (Gamma âm)" : unclear ? "9A bật lại (ngày không rõ)" : noFlip ? "9A bật lại (bỏ Flip)" : "9A bật lại (Gamma dương)"} · tường gần ${ofFm(lvl)} (OI ${fmtK(oi)})`, side, on: true, blocked: unclear, why: flip == null ? "Chưa có mốc Gamma Flip nên không phân loại được ngày" : flipNear ? `Flip chỉ cách giá ${Math.abs(px - flip).toFixed(1).replace(".", ",")}$ (≤ ${ofFlipNear()}$): giá sát vùng chuyển Gamma, chưa phân loại được` : `Flip cách giá ${rgp.pctTxt} (> 2,5%): ngày không rõ (B6)`, zone: "tường gần", lo: lvl * 0.999, hi: lvl * 1.001,
           cond: brk ? "nến M5 đóng vượt tường ≥ 0,15% và thân nến lớn hơn trung bình 10 nến M5 trước, vào ở giá mở nến kế" : "chạm vùng ±0,10% quanh tường, trong 3 nến M5 có 1 nến đóng quay ngược ≥ 0,10% từ tường (chưa đóng xuyên quá 0,10%), vào ở giá mở nến kế · chỉ lần chạm đầu trong phiên",
@@ -1251,9 +1272,24 @@ function ofFreezeRatio(st) {
 }
 // v23ai: KHUNG VÀO LỆNH cho 9A/9B (chỉ VẼ, không ghi nhật ký, không tự động đặt lệnh giấy). Quy tắc B10b: SL 0,30%, TP 0,60% tính từ giá vào = giá MỞ nến kế nến xác nhận;
 // chỉ LẦN CHẠM ĐẦU của mỗi tường trong ngày (9A: nến đóng quay ngược trong 3 nến; 9B: nến đóng vượt tường). Chỉ vẽ khi đủ mọi điều kiện theo menu (full).
+// 9b-5: lệnh 9A/9B đã ghi trong nhật ký máy chủ (kind "OF9") của ngày VN hôm nay → dựng lại thành lệnh để vẽ/quản lý (khôi phục lệnh mất khi xóa bộ nhớ trình duyệt, và là NGUỒN DUY NHẤT của điện thoại)
+function ofJournalOrders(c, day, used) {
+  const res = [];
+  for (const e of S.journal || []) {
+    if (e.kind !== "OF9" || vnDate(e.t) !== day || e.entry == null || e.sl == null) continue;
+    const id = String(e.id).replace(/^OF9\|/, ""); if (used && used.has(id)) continue;
+    const ix = ofIdxAt(c, e.t); if (ix < 0) continue;
+    res.push({ i: ix, time: e.t, side: e.side, entry: e.entry, sl: e.sl, tp1: e.tp1 ?? null, tp2: e.tp2 ?? null, tag: e.tag || e.name, id, wall: e.wall, gam: e.gam, flip: e.flip, score: 0, max: 0, virt: true, latched: true, fromJ: true });
+  }
+  return res;
+}
 function ofEntries() {
   const c = S.candles, out = [], seen = {};
-  if (!ofOn("watch") || !c || c.length < 30) return out;
+  if (!c || c.length < 30) return out;
+  const day0 = vnDate(c[c.length - 1].time);
+  if (STATIC) return ofJournalOrders(c, day0, null);   // điện thoại: KHÔNG tự tính 9A/9B, chỉ đọc lệnh máy tính đã ghi
+  if (!ofOn("watch")) return out;
+  const M0 = S.ofM;
   for (const w of ofWatchCached()) {
     if (!w.first || !/^nw/.test(w.p.id) || seen[w.p.id]) continue;
     seen[w.p.id] = true;
@@ -1262,19 +1298,21 @@ function ofEntries() {
     if (idx == null || !c[idx + 1]) continue;
     const sell = w.p.side === "SELL", e = c[idx + 1].open, rk = e * 0.003;
     const wl = shownLevels().filter((x) => (sell ? x <= e - rk : x >= e + rk)).sort((a, b) => (sell ? b - a : a - b));   // v23am-17: TP1 = tường đang hiển thị kế tiếp cách giá vào ≥ 1R (không có thì quay về 0,60% cũ); TP2 = tường sau đó
-    out.push({ i: idx, time: c[idx].time, side: w.p.side, entry: e, sl: e * (sell ? 1.003 : 0.997), tp1: wl.length ? wl[0] : e * (sell ? 0.994 : 1.006), tp2: wl.length > 1 ? wl[1] : null, tag: /^nwa/.test(w.p.id) ? "9A" : "9B", score: 0, max: 0, virt: true });
+    out.push({ i: idx, time: c[idx].time, side: w.p.side, entry: e, sl: e * (sell ? 1.003 : 0.997), tp1: wl.length ? wl[0] : e * (sell ? 0.994 : 1.006), tp2: wl.length > 1 ? wl[1] : null, tag: /^nwa/.test(w.p.id) ? "9A" : "9B", score: 0, max: 0, virt: true,
+      wall: (w.p.lo + w.p.hi) / 2, gam: M0 && M0.flip != null ? (M0.negG ? -1 : 1) : null, flip: M0 && M0.flip != null ? M0.flip : null });   // 9b-5: tường, dấu Gamma và Flip lúc vào lệnh (cho gợi ý + nhật ký)
   }
   // v23am-14: CHỐT LỆNH 9A/9B ngay khi vừa xuất hiện (≤ 2 nến trước), lưu theo ngày VN. Trước đây mọi thứ tính lại từ mốc tường/Gamma HIỆN TẠI nên lệnh đã vào bị biến mất khi Magnet/cổng đổi.
   try {
-    const day = vnDate(c[c.length - 1].time), key = "tvlb.of9." + day;
+    const day = day0, key = "tvlb.of9." + day;
     for (let q = localStorage.length - 1; q >= 0; q--) { const kk = localStorage.key(q); if (kk && kk.indexOf("tvlb.of9.") === 0 && kk !== key) localStorage.removeItem(kk); }
     const saved = JSON.parse(localStorage.getItem(key) || "[]"), byId = new Map(saved.map((x) => [x.id, x]));
     let dirty = false;
-    for (const g of out) { g.id = `${g.tag}|${g.side}|${g.time}`; if (!byId.has(g.id) && c.length - 1 - g.i <= 2) { const o = { id: g.id, time: g.time, side: g.side, entry: g.entry, sl: g.sl, tp1: g.tp1, tag: g.tag }; saved.push(o); byId.set(g.id, o); dirty = true; } }
+    for (const g of out) { g.id = `${g.tag}|${g.side}|${g.time}`; if (!byId.has(g.id) && c.length - 1 - g.i <= 2) { const o = { id: g.id, time: g.time, side: g.side, entry: g.entry, sl: g.sl, tp1: g.tp1, tag: g.tag, wall: g.wall, gam: g.gam, flip: g.flip }; saved.push(o); byId.set(g.id, o); dirty = true; } }
     if (dirty) localStorage.setItem(key, JSON.stringify(saved));
     const res = [], used = new Set();
-    for (const g of out) { used.add(g.id); const sv = byId.get(g.id); res.push(sv ? { ...g, entry: sv.entry, sl: sv.sl, tp1: sv.tp1 } : g); }
-    for (const sv of saved) { if (used.has(sv.id)) continue; let ix = -1; for (let j = c.length - 1; j >= 0; j--) if (c[j].time === sv.time) { ix = j; break; } if (ix < 0) continue; res.push({ i: ix, time: sv.time, side: sv.side, entry: sv.entry, sl: sv.sl, tp1: sv.tp1, tp2: null, tag: sv.tag, score: 0, max: 0, virt: true, latched: true }); }
+    for (const g of out) { used.add(g.id); const sv = byId.get(g.id); res.push(sv ? { ...g, entry: sv.entry, sl: sv.sl, tp1: sv.tp1, wall: sv.wall ?? g.wall, gam: sv.gam ?? g.gam, flip: sv.flip ?? g.flip } : { ...g, rebuilt: true }); }   // rebuilt = dựng lại từ mốc HIỆN TẠI, chưa chốt → không ghi nhật ký
+    for (const sv of saved) { if (used.has(sv.id)) continue; const ix = ofIdxAt(c, sv.time); if (ix < 0) continue; used.add(sv.id); res.push({ i: ix, time: sv.time, side: sv.side, entry: sv.entry, sl: sv.sl, tp1: sv.tp1, tp2: null, tag: sv.tag, id: sv.id, wall: sv.wall, gam: sv.gam, flip: sv.flip, score: 0, max: 0, virt: true, latched: true }); }
+    for (const g of ofJournalOrders(c, day, used)) res.push(g);   // 9b-5 (số 212): lệnh có trong nhật ký máy chủ nhưng mất khỏi bộ nhớ trình duyệt
     return res;
   } catch (e) { return out; }
 }
@@ -1369,7 +1407,7 @@ function ofDrawWatch() {
   ctx.restore();
 }
 function drawOverlay() { try { const ws = `${window.TVLB_TOPN}|${window.TVLB_MINOR}|${window.TVLB_WALLSTYLE}|${$("#lyKey")?.checked}|${$("#lyGLD")?.checked}`; if (S._wallSig !== undefined && S._wallSig !== ws) { S._wallSig = ws; replaySignals(); } S._wallSig = ws; } catch (e) { }   // v23am: đổi menu tường → tính lại tín hiệu
-  try { ofSyncChk(S.ofPlans); S.of9Sig = ofEntries(); } catch (e) { S.of9Sig = []; } drawOverlayBase(); try { ofDrawWatch(); } catch (e) { S.watchErr = String(e && e.message || e); } }
+  try { ofSyncChk(S.ofPlans); S.of9Sig = ofEntries(); } catch (e) { S.of9Sig = []; } try { ofRefresh(); } catch (e) { /* khung đo vẫn vẽ theo luật tự nhiên */ } drawOverlayBase(); try { ofDrawWatch(); } catch (e) { S.watchErr = String(e && e.message || e); } }
 const ofChkLines = (h) => { const li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join(""); return li(h.shape) + li(h.conf, true) + li(h.gate); };
 function ofRender() {
   const wn = $("#ofWarn"), T = $("#ofT"); let w = ""; try { w = ofWarnText(); } catch { /* chưa có cấu hình */ }
@@ -1402,7 +1440,9 @@ function ofRender() {
     + kv("Cấu hình", `xác nhận tối thiểu ${Number.isInteger(OFS.minConf) ? OFS.minConf : sc.min_confirm} · nghỉ ${sc.cooldown_bars} nến · chạm tường ≤ ${sc.touch_tol}$ · SL ± ${sc.sl_buffer}$`);
   const c = S.candles, sg = [...S.signals, ...(S.of9Sig || [])].filter((g) => c[g.i]).sort((a, b) => b.time - a.time);   // v23am-18: cả lệnh 9A/9B (trước đây không có trong danh sách này)
   let W = []; try { W = ofWatchList(M).filter((w) => w.first); } catch (e) { /* bỏ qua */ }
-  const stt = (g) => rrManage(g, c).t || "đang chạy";   // v23am-18: cùng luật với khung đo (hòa vốn, hết giờ 12:30 Chicago)
+  ofRefresh();
+  const stOf = (g) => (S.ofRes ? S.ofRes.get(ofKey(g)) : null);
+  const stt = (g) => { const x = stOf(g); if (x && x.res) return x.res.status === "open" ? "đang chạy" : OF_ST_TXT[x.res.status] || x.res.status; return rrManage(g, c).t || "đang chạy"; };   // v23am-18: cùng luật với khung đo (hòa vốn, hết giờ 12:30 Chicago)
   const run = sg.filter((g) => stt(g) === "đang chạy").length;
   $("#ofAct").textContent = near ? near.state : "";
   $("#ofTabs").innerHTML = `<button type="button" data-oftab="new" class="${OFV.tab === "new" ? "on" : ""}" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "new" ? "#f0b429" : "transparent"};color:${OFV.tab === "new" ? "#1b1407" : "inherit"};cursor:pointer">Kế hoạch mới</button>`
@@ -1416,7 +1456,7 @@ function ofRender() {
       + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.past ? " · giá ĐÃ QUA tường (chờ giá quay lại rồi mới tính)" : p.dist ? " · cách " + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div><div class="muted" style="font-size:10.5px">Xác nhận theo menu (cần ≥ ${lgMin}): ${(p.live || p.chk) && (p.live || p.chk).conf && (p.live || p.chk).conf.length ? (p.live || p.chk).conf.map((x) => x[0]).join(", ") : "chưa tick ô nào"}</div>${ofChkHtml(p)}${p.side === "BOTH" ? `<div class="muted" style="margin-top:4px">Hai kịch bản sau khi giá ra khỏi vùng rồi quay lại:</div>` + ofIllu({ id: "hg0", side: "SELL" }, true) + ofIllu({ id: "hg0", side: "BUY" }) : ofIllu(p)}`
       + `<div>SL ${p.sl} · TP1 <b>${typeof p.tp1 === "number" ? ofFm(p.tp1) : p.tp1 || "—"}</b>${p.tp2 != null ? " · TP2 " + ofFm(p.tp2) : ""}</div><div class="muted">Huỷ khi: ${p.cancel}</div></div>`).join("") || '<span class="muted">Chưa có nhóm nào được bật.</span>'
     : OFV.tab === "watch" ? watchHtml
-    : sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side}${g.virt ? " ✔ đủ điều kiện" : " " + g.score + "/" + g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type ? g.type.replace("[Options Flow] ", "") : g.tag === "9B" ? "9B · phá vỡ tường (Gamma âm)" : "9A · bật lại từ tường"}</div></div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>';
+    : ofRunHeadHtml() + (sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side}${g.virt ? " ✔ đủ điều kiện" : " " + g.score + "/" + g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type ? g.type.replace("[Options Flow] ", "") : g.tag === "9B" ? "9B · phá vỡ tường (Gamma âm)" : "9A · bật lại từ tường"}</div>${ofStatusHtml(stOf(g))}${ofTickLine(g)}</div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>');
 }
 let ofTry = 0;
 function ofInitUI() {
@@ -1454,12 +1494,15 @@ function ofInitUI() {
     <div class="muted" style="margin:2px 0 4px">Số khung: ${sel("ofBoxMax", [[0, "tất cả"], [3, "3 khung mới nhất"], [5, "5 khung mới nhất"], [8, "8 khung mới nhất"], [12, "12 khung mới nhất"]], OFS.boxMax == null ? 8 : +OFS.boxMax)} ${sel("ofBoxRun", [[0, "cả lệnh đã xong"], [1, "chỉ lệnh đang chạy"]], OFS.boxRun === true ? 1 : 0)}</div>
     <div class="muted" style="margin:2px 0 4px">Dời SL về hòa vốn khi lời +1R: ${sel("ofBE", [[1, "Bật"], [0, "Tắt"]], OFS.beOff === true ? 0 : 1)}</div>
     <div class="muted" style="margin:2px 0 4px">Đóng lệnh lúc 12:30 Chicago: ${sel("ofTE", [[1, "Bật"], [0, "Tắt"]], OFS.teOff === true ? 0 : 1)} (giả thuyết, chưa backtest)</div>
+    <div class="muted" style="margin:2px 0 4px">Hai lệnh NGƯỢC CHIỀU chồng nhau (giả thuyết, chưa backtest): ${sel("ofOpp", [["warn", "Chỉ cảnh báo (mặc định)"], ["newer", "Đóng lệnh CŨ khi lệnh mới ngược chiều xuất hiện"], ["older", "Bỏ lệnh MỚI nếu đang có lệnh ngược chiều"]], ofOppRule())}</div>
+    <div class="muted" style="margin:2px 0 4px">Gợi ý quản lý lệnh «Giả thuyết» (sắp 12:30, gần TP1, xuyên tường, vùng Hedge, đổi Gamma): ${sel("ofAdv", [[1, "Bật"], [0, "Tắt"]], OFS.advOff === true ? 0 : 1)}</div>
     <div class="note">Các ô BÊN DƯỚI (cách chốt lời, hộp +N lệnh, SL tối đa, đóng sau N nến) KHÔNG áp cho khung đo này: chúng dùng cho hộp lệnh KH, ký hiệu TVLB+ (B/S, OF·H, H-T, HL, SMC hub) và bảng backtest trang ⑤ (bảng này có cả Option Flow).</div>
     <div class="sub" style="margin-top:10px">Hộp lệnh KH · TVLB+ · backtest</div>`;
   const onChg = (e) => {
     if (e.target.id === "ofFlip") { for (const k of ["x_noflip", "x_flipfar", "x_flipnear"]) delete OFS[k]; const m = e.target.value;   // 9b-4: 1 ô chọn thay 3 ô tick (giữ nguyên 3 cờ cũ bên dưới)
       if (m === "noflip") OFS.x_noflip = true; if (m === "far" || m === "both") OFS.x_flipfar = true; if (m === "near" || m === "both") OFS.x_flipnear = true;
       try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
+    if (e.target.id === "ofOpp" || e.target.id === "ofAdv") { if (e.target.id === "ofOpp") OFS.oppRule = e.target.value; else OFS.advOff = e.target.value === "0"; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } ofRefresh(true); ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofBE" || e.target.id === "ofTE") { OFS[e.target.id === "ofBE" ? "beOff" : "teOff"] = e.target.value === "0"; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofBoxMax" || e.target.id === "ofBoxRun") { if (e.target.id === "ofBoxMax") OFS.boxMax = +e.target.value; else OFS.boxRun = e.target.value === "1"; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } drawOverlay(); return; }
     if (e.target.id === "ofRRh") { OFS.minRRhg = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
@@ -1475,10 +1518,11 @@ function ofInitUI() {
     replaySignals(); ofRender();
   };
   d.addEventListener("change", onChg); tpBox.addEventListener("change", onChg);
-  lab.insertAdjacentElement("afterend", d);
+  { const nt = lab.nextElementSibling; (nt && nt.classList.contains("note") ? nt : lab).insertAdjacentElement("afterend", d); }   // 9b-5 (số 221): ô «Cài đặt Option Flow» nằm SAU ghi chú xám của TVLB+, không chen giữa
   { const tpb = document.querySelector('#tvlbPlus .grp[data-g="tp"] .gb'); if (tpb) tpb.insertBefore(tpBox, tpb.firstChild); else d.appendChild(tpBox); }
   ofCompactTop(); ofStartDecor();
   ofRender(); setInterval(ofRender, 3000);
+  document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-offollow]"); if (!b) return; localStorage.setItem("tvlb.follow", localStorage.getItem("tvlb.follow") === "0" ? "1" : "0"); if (localStorage.getItem("tvlb.follow") !== "0") { localStorage.setItem("tvlb.setRev", "0"); ofSettingsPull(); } ofRender(); });   // điện thoại: bật/tắt «theo cài đặt máy tính»
   setTimeout(ofInitPage, 1500);   // đợi các trang ③④⑤ dựng xong để nút ⑥ nằm sau chúng
 }
 // Trang ⑥ bên phải: theo dõi TL1·TL2 (trang ③ Vào lệnh vẫn giữ KH1-KH3)
@@ -2102,24 +2146,36 @@ function initStatic() {
 // ─────────────────────────── Nhật ký tín hiệu live + thống kê + backtest SMC ───────────────────────────
 // Board ghi mỗi tín hiệu live (Options Flow) và mỗi lệnh SMC đã khớp trong 24 giờ vào data/journal.json (qua /api/journal),
 // rồi tự theo dõi chạm TP1 / SL (cùng nến: tính SL trước). R: TP1 = +RR, SL = −1.
-const J_CLOSED = ["tp1", "sl", "expired"];
+const J_CLOSED = ["tp1", "sl", "expired", "be", "timeout", "opp", "skip"];   // 9b-5: thêm hòa vốn (be), hết 12:30 (timeout), đóng vì lệnh ngược (opp), bị bỏ (skip)
 S.journal = []; S.jTab = "live"; S.bt = null;
 async function journalLoad() {
-  try { S.journal = (await (await fetch(API("/api/journal"))).json()).entries || []; } catch { S.journal = []; }
+  let ok = false;
+  try { S.journal = (await (await fetch(API("/api/journal") + (STATIC ? "?t=" + Date.now() : ""))).json()).entries || []; ok = true; } catch { if (!S.journal) S.journal = []; }
+  if (ok) S.jLoaded = true;   // 9b-5: chưa đọc được nhật ký thì KHÔNG ghi lệnh lên (tránh ghi chồng)
   renderJournal();
 }
 function jPost(list) {
   if (STATIC || !list.length) return;
   fetch("/api/journal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ entries: list }) }).catch(() => { });
 }
+const jSig = (e) => [e.status, e.entry, e.sl, !!e.be, e.opp || "", e.oppBy || "", e.r == null ? "" : e.r, (e.adv || []).length].join("|");
 function jUpsert(e) {
   const i = S.journal.findIndex((x) => x.id === e.id);
   if (i < 0) { S.journal.push(e); return e; }
   const o = S.journal[i];
   if (J_CLOSED.includes(o.status) && !J_CLOSED.includes(e.status)) return null;
-  if (o.status === e.status && o.entry === e.entry) return null;
-  S.journal[i] = { ...o, ...e }; return S.journal[i];
+  const m = { ...o, ...e }, of = o.kind === "OF" || o.kind === "OF9";
+  if (of) {
+    if (J_CLOSED.includes(o.status)) return null;   // 9b-5: trạng thái đã chốt trong nhật ký là CHỐT, đổi luật sau không sửa lại
+    if (o.kind === "OF9") for (const k of OF9_FIXED_JS) if (o[k] !== undefined) m[k] = o[k];   // trường cố định chỉ ghi một lần (khớp server)
+    m.be = !!(o.be || e.be);
+    for (const k of ["opp", "oppBy"]) if (o[k]) m[k] = o[k];
+    if (o.adv || e.adv) m.adv = jAdvMerge(o.adv, e.adv);
+  } else if (o.status === e.status && o.entry === e.entry) return null;
+  if (jSig(m) === jSig(o)) return null;
+  S.journal[i] = m; return m;
 }
+const OF9_FIXED_JS = ["t", "kind", "name", "type", "side", "entry", "sl", "tp1", "tp2", "tf", "tag", "wall", "gam", "flip", "oppRule", "score", "from"];
 const jR = (e, exit) => { const d = e.side === "BUY" ? 1 : -1, risk = (e.entry - e.sl) * d; return risk > 0 ? ((exit - e.entry) * d) / risk : null; };
 function jFromOF(s) {
   return { id: `OF|${s.type}|${s.side}|${s.time}`, t: s.time, kind: "OF", name: s.type.replace("[Options Flow] ", "").replace(/ \(.*\)$/, "").split(":")[0],
@@ -2138,48 +2194,244 @@ function journalSyncSMC() {
   for (const o of smcOrders()) if (o.fillI != null && S.candles[o.fillI] && S.candles[o.fillI].time >= since) { const e = jUpsert(jFromSMC(o)); if (e) out.push(e); }
   jPost(out);
 }
-// Options Flow: theo dõi kết quả bằng nến của khung đang mở (hết hạn sau 2 ngày không chạm)
-function journalTrack() {
-  const c = S.candles, out = [];
-  if (!c.length) return;
-  for (const e of S.journal) {
-    if (e.kind !== "OF" || e.status !== "open" || e.tp1 == null) continue;
-    const d = e.side === "BUY" ? 1 : -1;
-    for (const k of c) {
-      if (k.time <= e.t || k === c[c.length - 1]) continue;   // bỏ nến tín hiệu và nến đang chạy
-      const hitSL = d > 0 ? k.low <= e.sl : k.high >= e.sl, hitTP = d > 0 ? k.high >= e.tp1 : k.low <= e.tp1;
-      if (hitSL || hitTP) { Object.assign(e, { status: hitSL ? "sl" : "tp1", closeT: k.time, exit: hitSL ? e.sl : e.tp1, r: hitSL ? -1 : jR(e, e.tp1) }); out.push(e); break; }
-    }
-    if (e.status === "open" && nowSec() - e.t > 2 * 86400 && c[0].time < e.t) { Object.assign(e, { status: "expired", closeT: nowSec(), r: 0 }); out.push(e); }
+// ═══════════════ 9b-5: LỆNH 9A/9B + QUẢN LÝ LỆNH → NHẬT KÝ MÁY CHỦ, TRẠNG THÁI, LUẬT LỆNH NGƯỢC CHIỀU, ĐỒNG BỘ ĐIỆN THOẠI ═══════════════
+// Mọi luật quản lý lệnh (dời SL hòa vốn +1R, đóng 12:30 Chicago, gợi ý, luật lệnh ngược chiều) là GIẢ THUYẾT chưa backtest.
+// Nguyên tắc: máy tính TÍNH và GHI vào nhật ký máy chủ (/api/journal); điện thoại (bản web) chỉ ĐỌC nhật ký + cài đặt do máy tính đẩy lên rồi tự theo dõi tiếp bằng nến của nó.
+const OPP_RULES = { warn: "Chỉ cảnh báo: cả hai lệnh vẫn chạy, ghi cờ ngược chiều", newer: "Đóng lệnh CŨ khi lệnh mới ngược chiều xuất hiện (đóng ở giá vào của lệnh mới)", older: "BỎ lệnh MỚI nếu đang có lệnh ngược chiều đang chạy" };
+const ofOppRule = () => (OFS.oppRule === "newer" || OFS.oppRule === "older" ? OFS.oppRule : "warn");
+const J_FINAL = ["tp1", "sl", "expired", "be", "timeout", "opp"];   // đã đóng thật (skip = lệnh bị bỏ, tách riêng)
+const ofName = (g) => g.tag || String(g.type || "OF").replace("[Options Flow] ", "").replace(/ \(.*$/, "").split(":")[0].trim();
+const ofKey = (g) => (g.tag ? "OF9|" + (g.id || `${g.tag}|${g.side}|${g.time}`) : `OF|${g.type}|${g.side}|${g.time}`);   // = id trong nhật ký (jFromOF dùng cùng công thức cho lệnh HG/TL)
+const chiMin = (t) => { const q = {}; for (const x of CHI_FMT.formatToParts(new Date(t * 1000))) q[x.type] = x.value; return (q.hour === "24" ? 0 : +q.hour) * 60 + +q.minute; };
+// số phút còn lại tới 12:30 Chicago (tính từ lúc vào lệnh t0; xấp xỉ, bỏ qua 2 ngày/năm đổi giờ mùa hè)
+function ofChiRemain(t0) { const m = chiMin(t0), add = m < 750 ? 750 - m : 1440 - m + 750; return Math.round((t0 + add * 60 - nowSec()) / 60); }
+const ofHm = (min) => (min >= 60 ? `${Math.floor(min / 60)} giờ ${String(min % 60).padStart(2, "0")} phút` : `${min} phút`);
+function jAdvMerge(a, b) { const out = [...(a || [])], have = new Set(out.map((x) => x.c)); for (const x of b || []) if (x && x.c && !have.has(x.c) && out.length < 20) { out.push(x); have.add(x.c); } return out; }
+
+// gộp: lệnh đang tính trên màn hình (S.signals = HG/TL, S.of9Sig = 9A/9B) + lệnh trong nhật ký (OF, OF9) của ~2 ngày; khử trùng theo id nhật ký
+function ofOrderList() {
+  const c = S.candles, now = nowSec(), jm = new Map((S.journal || []).map((e) => [e.id, e])), map = new Map();
+  if (!c || c.length < 30) return [];
+  const idxOf = (t) => ofIdxAt(c, t);
+  const addCalc = (g) => {
+    if (!c[g.i]) return; const key = ofKey(g); if (map.has(key)) return; const e = jm.get(key) || null;
+    const g2 = e && e.entry != null && e.sl != null ? { ...g, entry: e.entry, sl: e.sl, tp1: e.tp1 !== undefined ? e.tp1 : g.tp1, tp2: e.tp2 !== undefined ? e.tp2 : g.tp2 } : g;   // đã có trong nhật ký thì dùng giá ĐÃ GHI
+    map.set(key, { key, e, g: g2 });
+  };
+  for (const g of S.of9Sig || []) addCalc(g);
+  for (const g of S.signals || []) addCalc(g);
+  for (const e of jm.values()) {
+    if ((e.kind !== "OF" && e.kind !== "OF9") || map.has(e.id) || e.entry == null || e.sl == null || (e.kind === "OF" && e.tp1 == null) || e.status === "skip" && e.kind === "OF" || now - e.t > 2 * 86400) continue;
+    const ix = idxOf(e.t); if (ix < 0) continue;
+    map.set(e.id, { key: e.id, e, g: { i: ix, time: e.t, side: e.side, entry: e.entry, sl: e.sl, tp1: e.tp1 ?? null, tp2: e.tp2 ?? null, type: e.type, tag: e.kind === "OF9" ? (e.tag || e.name) : undefined, id: e.kind === "OF9" ? String(e.id).replace(/^OF9\|/, "") : undefined, wall: e.wall, gam: e.gam, flip: e.flip, virt: true, latched: true } });
   }
-  jPost(out);
+  return [...map.values()].sort((a, b) => a.g.i - b.g.i || a.g.time - b.g.time);
 }
+// kết quả cuối của một lệnh
+function ofResOf(st, cc) {
+  const g = st.o.g, dir = g.side === "BUY" ? 1 : -1, risk = Math.max(Math.abs(g.entry - g.sl), 0.01);
+  if (st.skip) return { status: "skip", r: 0, j: g.i + 1, closeT: cc[g.i + 1] ? cc[g.i + 1].time : null, exit: null, be: false };
+  if (st.fin) { const e = st.fin; return { status: e.status, r: e.r ?? 0, j: st.effJ != null && st.effJ >= 0 ? st.effJ : null, closeT: e.closeT ?? null, exit: e.exit ?? null, be: !!e.be || e.status === "be" }; }
+  if (st.forced) { const kc = cc[st.forced.j]; return { status: "opp", r: st.forced.r, j: st.forced.j, closeT: kc ? kc.time : st.forced.t ?? null, exit: st.forced.price, be: rrNatural(g, cc.slice(0, st.forced.j), false).be }; }
+  const n = st.nat, kc = n.j != null ? cc[n.j] : null;
+  if (!n.t) return { status: "open", r: null, j: null, closeT: null, exit: null, be: !!n.be };
+  if (n.t === "chạm TP1") return { status: "tp1", r: ((g.tp1 - g.entry) * dir) / risk, j: n.j, closeT: kc.time, exit: g.tp1, be: !!n.be };
+  if (n.t === "chạm SL") return { status: "sl", r: -1, j: n.j, closeT: kc.time, exit: g.sl, be: false };
+  if (n.t === "hòa vốn") return { status: "be", r: 0, j: n.j, closeT: kc.time, exit: g.entry, be: true };
+  return { status: "timeout", r: n.r, j: n.j, closeT: kc.time, exit: kc.open, be: !!n.be };   // "hết giờ" 12:30 Chicago: đóng ở giá MỞ nến đó
+}
+// QUẢN LÝ + LUẬT LỆNH NGƯỢC CHIỀU. list đã sắp theo thời gian vào lệnh. Hai lệnh "ngược chiều chồng nhau" = lệnh cũ chưa đóng lúc lệnh mới vào (đóng ở nến j ≥ nến vào của lệnh mới).
+// rule: warn = chỉ ghi cờ · newer = đóng lệnh CŨ ở giá vào của lệnh MỚI · older = BỎ lệnh MỚI (chỉ áp cho lệnh chưa có trong nhật ký). Trạng thái đã ghi trong nhật ký (đã đóng / opp / skip) là CHỐT, đổi luật sau không sửa lại.
+function ofResolve(list, cc, rule, closedOnly) {
+  const R = new Map(), live = [], cIdx = (t) => ofIdxAt(cc, t);
+  for (const o of list) {
+    const g = o.g, e = o.e, ie = g.i + 1, st = { o, key: o.key, nat: null, fin: null, forced: null, skip: false, opp: null, oppBy: null, effJ: null, res: null };
+    R.set(o.key, st);
+    if (e && e.status === "skip") { st.skip = true; continue; }
+    st.nat = rrNatural(g, cc, closedOnly); st.effJ = st.nat.j;
+    if (e && J_FINAL.includes(e.status)) {
+      st.fin = e; const jj = e.closeT != null ? cIdx(e.closeT) : -1; st.effJ = jj >= 0 ? jj : st.nat.j != null ? st.nat.j : -1;
+      if (e.status === "opp") st.forced = { j: st.effJ >= 0 ? st.effJ : ie, r: e.r ?? 0, price: e.exit };
+    }
+    const ovl = live.filter((a) => a.o.g.side !== g.side && (a.effJ == null || a.effJ >= ie));
+    if (ovl.length) { st.opp = ovl[ovl.length - 1].key; for (const a of ovl) if (!a.oppBy) a.oppBy = st.key; }
+    if (ovl.length && !e && rule === "older") { st.skip = true; continue; }
+    if (ovl.length && rule === "newer") for (const a of ovl) if (!a.fin) { const ag = a.o.g; a.forced = { j: ie, r: ((g.entry - ag.entry) * (ag.side === "BUY" ? 1 : -1)) / Math.max(Math.abs(ag.entry - ag.sl), 0.01), price: g.entry, t: g.time }; a.effJ = ie; }
+    live.push(st);
+  }
+  for (const st of R.values()) st.res = ofResOf(st, cc);
+  return R;
+}
+// tính lại danh sách + kết quả hiển thị (nến đang chạy cũng tính) — khung đo trên chart và thẻ lệnh dùng S.ofForce / S.ofRes
+function ofRefresh(force) {
+  const cc = S.candles; if (!cc || cc.length < 30) return null;
+  if (!force && S.ofRes && Date.now() - (S.ofRefT || 0) < 2500) return S.ofRes;
+  const list = ofOrderList(), live = ofResolve(list, cc, ofOppRule(), false), fz = new Map();
+  for (const [k, st] of live) { if (st.skip) fz.set(k, { skip: true }); else if (st.forced) fz.set(k, { j: st.forced.j, r: st.forced.r }); }
+  S.ofForce = fz; S.ofRes = live; S.ofList = list; S.ofRefT = Date.now();
+  return live;
+}
+// ── gợi ý quản lý lệnh (lớp 2, GIẢ THUYẾT, tắt được). Trả về [{c: mã, txt}] ──
+function ofAdvise(st, price) {
+  const out = [], g = st.o.g, res = st.res, cc = S.candles; if (!res || res.status !== "open" || OFS.advOff === true || price == null) return out;
+  const dir = g.side === "BUY" ? 1 : -1, risk = Math.max(Math.abs(g.entry - g.sl), 0.01), R = ((price - g.entry) * dir) / risk;
+  if (OFS.teOff !== true) { const m = ofChiRemain(g.time); if (m <= 30 && m >= 0) out.push({ c: "t1230", txt: `Sắp 12:30 Chicago (còn ${m} phút): lệnh sẽ tự đóng ở giá mở nến đó.` }); }
+  if (g.tp1 != null) { const full = Math.abs(g.tp1 - g.entry), done = (price - g.entry) * dir; if (full / risk >= 1 && done >= 0.8 * full && done < full) out.push({ c: "half", txt: `Giá đã đi ≥ 80% quãng tới TP1 (R ${sgn(R, 2)}): cân nhắc chốt ½ rồi giữ SL hòa vốn (giống «Chốt 2 phần» ở trang ⑤).` }); }
+  if (g.wall != null && cc[cc.length - 2] && cc.length - 2 > g.i) { const k = cc[cc.length - 2]; if (dir < 0 ? k.close > g.wall * 1.001 : k.close < g.wall * 0.999) out.push({ c: "wallx", txt: `Nến đóng ${ofFm(k.close)} xuyên tường ${ofFm(g.wall)} quá 0,10% NGƯỢC hướng lệnh (B10b): cân nhắc thoát.` }); }
+  try {
+    const zs = (((hedgeSt() || {}).zones) || []).filter((z) => z.kind === "accel"), inz = zs.find((z) => price >= z.lo && price <= z.hi);
+    if (inz) out.push({ c: "hz", txt: `Giá đang TRONG vùng Hedge −Γ ${ofFm(inz.lo)}–${ofFm(inz.hi)}: biến động mở rộng, SL dễ bị quét.` });
+    else if (g.tp1 != null) { const ah = zs.find((z) => (dir > 0 ? z.lo > price && z.lo < g.tp1 : z.hi < price && z.hi > g.tp1)); if (ah) out.push({ c: "hz", txt: `Vùng Hedge −Γ ${ofFm(ah.lo)}–${ofFm(ah.hi)} nằm giữa giá và TP1: giá có thể gia tốc qua vùng hoặc bị bẫy.` }); }
+  } catch (e) { /* bỏ qua */ }
+  if ((g.gam === 1 || g.gam === -1) && g.flip != null) { const now = price < g.flip ? -1 : 1; if (now !== g.gam) out.push({ c: "flip", txt: `Giá vừa cắt Flip ${ofFm(g.flip)}: Gamma đổi từ ${g.gam < 0 ? "ÂM sang DƯƠNG" : "DƯƠNG sang ÂM"} so với lúc vào lệnh.` }); }
+  return out;
+}
+// ── GHI vào nhật ký máy chủ (PC) / cập nhật bản sao trong bộ nhớ (điện thoại). Dùng NẾN ĐÃ ĐÓNG để chốt trạng thái (khỏi chốt nhầm vì râu nến đang chạy) ──
+function ofJournalPost() {
+  const cc = S.candles; if (!S.jLoaded || !cc || cc.length < 30) return;
+  ofRefresh(true);
+  const rule = ofOppRule(), jr = ofResolve(S.ofList || [], cc, rule, true), out = [], price = lastPrice(), teOn = OFS.teOff !== true, now = nowSec();
+  for (const [key, st] of jr) {
+    const o = st.o, g = o.g, e0 = o.e, is9 = !!g.tag, res = st.res;
+    if (is9 ? g.rebuilt && !e0 : !e0) continue;   // HG/TL chỉ cập nhật lệnh ĐÃ có trong nhật ký; 9A/9B dựng lại (không chốt được) không ghi
+    if (e0 && J_CLOSED.includes(e0.status)) continue;
+    let status = res.status, closeT = res.closeT, r = res.r, exit = res.exit;
+    if (status === "open" && !teOn && now - g.time > 2 * 86400) { status = "expired"; closeT = now; r = 0; }
+    const e = { id: key, t: g.time, kind: is9 ? "OF9" : "OF", status, be: !!res.be, opp: st.opp || undefined, oppBy: st.oppBy || undefined };
+    if (status !== "open") { e.closeT = closeT; e.exit = exit; e.r = r == null ? null : +r.toFixed(3); }
+    if (is9 && !e0) {
+      Object.assign(e, { name: g.tag, type: g.tag === "9B" ? "9B phá vỡ tường (Gamma âm)" : "9A bật lại từ tường", side: g.side, entry: g.entry, sl: g.sl, tp1: g.tp1, tp2: g.tp2 ?? null, tf: S.tf, tag: g.tag, wall: g.wall, gam: g.gam, flip: g.flip,
+        score: "✔ đủ điều kiện", oppRule: rule, from: cc.length - 1 - g.i <= 2 ? "live" : "ls", note: cc.length - 1 - g.i <= 2 ? undefined : "nhập từ bộ nhớ trình duyệt (không phải lúc lệnh xuất hiện)" });
+      if (status === "skip") e.note = "bỏ: đang có lệnh ngược chiều (luật «bỏ lệnh mới»)";
+    }
+    if (is9 && status === "open") { const adv = ofAdvise(st, price).map((a) => ({ c: a.c, t: now, px: price, r: +((((price - g.entry) * (g.side === "BUY" ? 1 : -1)) / Math.max(Math.abs(g.entry - g.sl), 0.01))).toFixed(2), txt: a.txt })); if (adv.length) e.adv = adv; }
+    const n = jUpsert(e); if (n) out.push(n);
+  }
+  if (out.length) { jPost(out); renderJournal(); }
+}
+function journalTrack() { try { ofJournalPost(); } catch (e) { console.error("[TVLB] nhật ký lệnh:", e); } }
+// ── dòng TRẠNG THÁI lệnh (lớp 1) + gợi ý (lớp 2) cho thẻ lệnh ──
+const ofIdxAt = (c, t) => { const s = TF_SEC[S.tf] || 300; for (let j = c.length - 1; j >= 0; j--) if (c[j].time <= t) return t - c[j].time < s ? j : -1; return -1; };   // nến chứa thời điểm t (khung hiện tại có thể khác khung lúc ghi lệnh)
+async function ofWallsLoad() { if (!STATIC) return; try { S.w9file = await (await fetch(API("/api/walls9a") + "?t=" + Date.now())).json(); } catch { /* giữ bản cũ */ } }
+const OF_ST_TXT = { open: "đang chạy", tp1: "✓ chạm TP1", sl: "✗ chạm SL", be: "↔ hòa vốn (SL đã dời)", timeout: "⏱ hết 12:30 Chicago", opp: "⇄ đóng vì lệnh ngược chiều", skip: "bỏ (có lệnh ngược chiều)", expired: "hết hạn" };
+function ofTickLine(g) {   // số 220: thẻ lệnh ghi rõ các ô tick dùng cho loại lệnh này
+  if (!g.tag) return "";
+  const sell = g.side === "SELL", nm = g.tag === "9A" ? (sell ? ["Phân kỳ CVD âm", "CVD dốc xuống", "DXY tăng", "Volume spike", "Vol↑ mà ΔOI≤0", "ΔOI≥1500 tại vùng", "Lệnh lớn bán ròng"] : ["Phân kỳ CVD dương", "CVD dốc lên", "DXY giảm", "Volume spike", "Vol↑ mà ΔOI≤0", "ΔOI≥1500 tại vùng", "Lệnh lớn mua ròng"])
+    : (sell ? ["CVD dốc xuống", "Delta nến âm", "DXY tăng", "Volume spike", "Lệnh lớn bán ròng"] : ["CVD dốc lên", "Delta nến dương", "DXY giảm", "Volume spike", "Lệnh lớn mua ròng"]);
+  const on = nm.filter((n) => ofOn("c:" + n)), need = Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg?.signals?.min_confirm;
+  return `<div class="muted" style="font-size:10.5px">Điều kiện xác nhận theo menu HIỆN TẠI: đang tick <b>${on.length}/${nm.length}</b> ô dùng cho ${g.tag} ${g.side} (cần ≥ ${need})${on.length ? ": " + on.join(", ") : ""} · ${g.tag === "9A" ? "«Delta nến» và «Nến quét» KHÔNG áp dụng cho 9A; «Lệnh lớn» chỉ có khi live" : "«Nến quét» KHÔNG áp dụng cho 9B; «Lệnh lớn» chỉ có khi live"}.</div>`;
+}
+function ofStatusHtml(st) {
+  if (!st || !st.res) return "";
+  const g = st.o.g, res = st.res, nmOf = (k) => { const x = S.ofRes && S.ofRes.get(k); return x ? `${ofName(x.o.g)} ${x.o.g.side} ${vnClock(x.o.g.time)}` : "lệnh khác"; };
+  const sm = "font-size:11px;margin-top:3px;line-height:1.45";
+  if (res.status !== "open") {
+    return `<div style="${sm};color:#9aa4b2">Đã đóng: <b>${OF_ST_TXT[res.status] || res.status}</b>${res.status === "skip" ? "" : ` ${sgn(res.r, 2)}R${res.closeT ? " lúc " + vnClock(res.closeT) : ""}`}${st.opp ? ` · lúc vào có lệnh ngược chiều: ${nmOf(st.opp)}` : ""}</div>`;
+  }
+  const p = lastPrice(), dir = g.side === "BUY" ? 1 : -1, risk = Math.max(Math.abs(g.entry - g.sl), 0.01), R = ((p - g.entry) * dir) / risk, slNow = res.be ? g.entry : g.sl;
+  const dSL = (p - slNow) * dir, dTP = g.tp1 != null ? (g.tp1 - p) * dir : null, bits = [];
+  bits.push(`<b style="color:${R >= 0 ? "#26b384" : "#ef5350"}">R ${sgn(R, 2)}</b> (giá ${ofFm(p)})`);
+  bits.push(res.be ? `SL hiện hành <b>${ofFm(slNow)}</b> ✔ đã dời hòa vốn` : `SL <b>${ofFm(g.sl)}</b> (còn ${sgn(Math.max(0, 1 - R), 2).replace("+", "")}R nữa tới +1R để dời hòa vốn)`);
+  bits.push(`còn <b>${ofFm(Math.max(0, dSL))}$</b> tới SL`);
+  if (dTP != null) bits.push(dTP > 0 ? `còn <b>${ofFm(dTP)}$</b> tới TP1 ${ofFm(g.tp1)} (≈ ${(dTP / risk).toFixed(2)}R)` : `đã vượt TP1 ${ofFm(g.tp1)}`);
+  const l2 = [], nw = nextWall(p, dir > 0);
+  if (nw != null) l2.push(`tường kế tiếp ${ofFm(nw)} (cách ${ofFm(Math.abs(nw - p))}$)`);
+  try {
+    const zs = (((hedgeSt() || {}).zones) || []).filter((z) => z.kind === "accel"), inz = zs.find((z) => p >= z.lo && p <= z.hi), ah = !inz && zs.filter((z) => (dir > 0 ? z.lo > p : z.hi < p)).sort((a, b) => (dir > 0 ? a.lo - b.lo : b.hi - a.hi))[0];
+    if (inz) l2.push(`<b style="color:#f0b429">ĐANG trong vùng Hedge −Γ ${ofFm(inz.lo)}–${ofFm(inz.hi)}</b>`); else if (ah) l2.push(`vùng Hedge −Γ phía trước ${ofFm(ah.lo)}–${ofFm(ah.hi)} (cách ${ofFm(dir > 0 ? ah.lo - p : p - ah.hi)}$)`);
+  } catch (e) { /* bỏ qua */ }
+  if (OFS.teOff !== true) { const m = ofChiRemain(g.time); l2.push(m > 0 ? `còn ${ofHm(m)} tới 12:30 Chicago` : "đã tới 12:30 Chicago (chờ nến đóng lệnh)"); }
+  let h = `<div style="${sm}">● <b>ĐANG CHẠY</b> · ${bits.join(" · ")}</div>`;
+  if (l2.length) h += `<div style="${sm};color:#9aa4b2">${l2.join(" · ")}</div>`;
+  const opps = [...(S.ofRes ? S.ofRes.values() : [])].filter((x) => x.res && x.res.status === "open" && x.o.g.side !== g.side && x.key !== st.key);
+  if (opps.length) h += `<div style="${sm};color:#ff8a65">⚠ CÓ LỆNH NGƯỢC CHIỀU đang chạy: ${opps.map((x) => `${ofName(x.o.g)} ${x.o.g.side} ${vnClock(x.o.g.time)} (R ${sgn(((lastPrice() - x.o.g.entry) * (x.o.g.side === "BUY" ? 1 : -1)) / Math.max(Math.abs(x.o.g.entry - x.o.g.sl), 0.01), 2)})`).join("; ")} · luật hiện tại: ${OPP_RULES[ofOppRule()].split(":")[0]}</div>`;
+  const adv = ofAdvise(st, p);
+  if (adv.length) h += `<div style="${sm};color:#e0a83a">${adv.map((a) => "💡 Giả thuyết · " + a.txt).join("<br>")}</div>`;
+  return h;
+}
+// ── CÀI ĐẶT: máy tính gửi lên máy chủ → bản web điện thoại đọc lại (hướng B, số 216) ──
+const O3_KEYS = ["thSt", "thSg", "sig", "kh", "box", "boxn", "k", "minG", "kh1", "kh2", "kh3", "tpm", "slmax", "tout", "wh", "minor", "topn", "wst", "hubtp"];   // KHÔNG đồng bộ: âm thanh, Telegram, cảnh báo (riêng từng thiết bị)
+function ofSettingsSnap() {
+  const rd = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } }, o3 = rd("tvlb.o3") || {}, snap = { of: OFS, o3: {}, tip: rd("tvlb.tip") || {}, layers: rd("tvlb.layers") || {} };
+  for (const k of O3_KEYS) if (k in o3) snap.o3[k] = o3[k];
+  return snap;
+}
+let setSig = null, setT = 0;
+function ofSettingsPush() {
+  if (STATIC) return;
+  const body = JSON.stringify(ofSettingsSnap()); if (body === setSig || Date.now() - setT < 4000) return;
+  setT = Date.now(); const prev = setSig; setSig = body;
+  fetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body }).then((r) => r.json()).then((r) => { S.setInfo = r; }).catch(() => { setSig = prev; });
+}
+async function ofSettingsPull() {   // điện thoại: theo cài đặt của máy tính (tắt được ở dòng «Cài đặt» trong tab Lệnh hôm nay)
+  if (!STATIC || localStorage.getItem("tvlb.follow") === "0") return;
+  let s = null; try { s = await (await fetch(API("/api/settings") + "?t=" + Date.now())).json(); } catch { return; }
+  if (!s || !(s.rev > 0)) return;
+  S.setInfo = { rev: s.rev, t: s.t };
+  if (Number(localStorage.getItem("tvlb.setRev") || 0) === s.rev) return;
+  const rd = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } }, wr = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } };
+  for (const k of Object.keys(OFS)) delete OFS[k]; Object.assign(OFS, s.of || {}); wr(OF_LS, OFS);
+  let need = false;
+  const o3 = rd("tvlb.o3") || {}, o3n = { ...o3, ...(s.o3 || {}) }; if (JSON.stringify(o3) !== JSON.stringify(o3n)) { wr("tvlb.o3", o3n); need = true; }
+  if (s.tip && Object.keys(s.tip).length && JSON.stringify(rd("tvlb.tip") || {}) !== JSON.stringify(s.tip)) { wr("tvlb.tip", s.tip); need = true; }
+  if (s.layers && Object.keys(s.layers).length && JSON.stringify(rd("tvlb.layers") || {}) !== JSON.stringify(s.layers)) { wr("tvlb.layers", s.layers); need = true; }
+  try { localStorage.setItem("tvlb.setRev", String(s.rev)); } catch { }
+  if (need) { location.reload(); return; }   // tvlb_tinhieu.js đọc cài đặt của nó lúc tải trang
+  if (S.candles && S.candles.length) { try { replaySignals(); ofRender(); drawOverlay(); } catch { } }
+}
+// ── danh sách tường 9A của ngày → nhật ký máy chủ (số 223) ──
+let w9sig = "";
+function ofWallsPost() {
+  const w = S.w9; if (STATIC || !w || !w.walls || !w.walls.length || Date.now() - w.t > 15000) return;
+  const sig = w.day + "|" + w.mode + "|" + w.walls.map((x) => Math.round(x.lvl)).join(","); if (sig === w9sig) return;
+  const prev = w9sig; w9sig = sig;
+  fetch("/api/walls9a", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(w) }).catch(() => { w9sig = prev; });
+}
+function ofSync() {
+  try { ofRefresh(true); ofJournalPost(); ofSettingsPush(); ofWallsPost(); } catch (e) { console.error("[TVLB] ofSync:", e); }
+}
+// dòng đầu tab «Lệnh hôm nay»: tóm tắt lệnh đang chạy, cảnh báo ngược chiều, luật, nguồn cài đặt, tường 9A
+function ofRunHeadHtml() {
+  const R = S.ofRes ? [...S.ofRes.values()].filter((x) => x.res) : [], run = R.filter((x) => x.res.status === "open"), b = run.filter((x) => x.o.g.side === "BUY"), s = run.filter((x) => x.o.g.side === "SELL");
+  const sm = "font-size:10.5px;margin:0 0 4px;line-height:1.45";
+  let h = `<div class="muted" style="${sm}">Đang chạy: <b>${run.length}</b>${run.length ? ` (BUY ${b.length} · SELL ${s.length})` : ""} · luật lệnh ngược chiều: <b>${OPP_RULES[ofOppRule()].split(":")[0]}</b> (đổi ở menu «📏 TP / SL»).</div>`;
+  if (b.length && s.length) h += `<div style="${sm};color:#ff8a65">⚠ Đang có CẢ lệnh BUY lẫn SELL chạy cùng lúc: thống kê và rủi ro bị lệch (hai lệnh triệt tiêu nhau). ${ofOppRule() === "warn" ? "Luật hiện tại chỉ cảnh báo." : ""}</div>`;
+  const w = STATIC ? (S.w9file && S.w9file.row) : S.w9 && { mode: S.w9.mode, ref: S.w9.ref, walls: S.w9.walls };
+  if (w && w.walls && w.walls.length) h += `<div class="muted" style="${sm}">Tường ${w.mode || "9A"} ${STATIC && S.w9file && S.w9file.day ? "ngày " + S.w9file.day : "hôm nay"} (top 3 OI trong ±2,5% quanh giá mở ngày ${w.ref != null ? ofFm(w.ref) : "—"}): ${w.walls.map((x) => ofFm(x.lvl)).join(" · ")}${STATIC ? " (máy tính ghi lúc " + vnClock(S.w9file.row.ts) + ")" : " (đã ghi vào máy chủ)"}</div>`;
+  if (STATIC) {
+    const on = localStorage.getItem("tvlb.follow") !== "0", si = S.setInfo;
+    h += `<div class="muted" style="${sm}">📱 Cài đặt: <b>${on ? "theo máy tính" : "riêng điện thoại"}</b>${on && si && si.t ? " · bản " + new Date(si.t).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : ""} <button type="button" data-offollow="1" style="cursor:pointer;font-size:10.5px;border:1px solid #2b3440;background:#141a22;color:#9aa4b2;border-radius:4px;padding:1px 6px">${on ? "Ngừng theo máy tính" : "Theo máy tính"}</button></div>`;
+  } else if (S.setInfo && S.setInfo.rev) h += `<div class="muted" style="${sm}">💻 Cài đặt menu đã gửi lên máy chủ (điện thoại sẽ theo sau vài phút).</div>`;
+  return h;
+}
+
 // thống kê một danh sách lệnh {status, r, t}: theo thứ tự thời gian
 function statsOf(list) {
-  const done = list.filter((x) => x.status === "tp1" || x.status === "sl").sort((a, b) => (a.closeT ?? a.t) - (b.closeT ?? b.t));
-  let R = 0, pk = 0, dd = 0, ls = 0, mls = 0, w = 0;
+  const FIN = ["tp1", "sl", "be", "timeout", "opp"];   // 9b-5: hòa vốn / hết 12:30 / đóng vì lệnh ngược cũng tính (R lấy từ lệnh); bị bỏ (skip) và hết hạn thì không
+  const done = list.filter((x) => FIN.includes(x.status)).sort((a, b) => (a.closeT ?? a.t) - (b.closeT ?? b.t));
+  let R = 0, pk = 0, dd = 0, ls = 0, mls = 0, w = 0, l = 0, z = 0;
   for (const x of done) {
-    const r = x.status === "tp1" ? (x.r ?? 1) : -1; R += r;
-    if (r > 0) { w++; ls = 0; } else { ls++; mls = Math.max(mls, ls); }
+    const r = x.status === "tp1" ? (x.r ?? 1) : x.status === "sl" ? -1 : (x.r ?? 0); R += r;
+    if (r > 0.0001) { w++; ls = 0; } else if (r < -0.0001) { l++; ls++; mls = Math.max(mls, ls); } else z++;   // r≈0 (hòa vốn): trung tính, không cắt chuỗi thua
     pk = Math.max(pk, R); dd = Math.max(dd, pk - R);
   }
-  return { n: list.length, closed: done.length, w, wr: done.length ? (100 * w) / done.length : null, R, avg: done.length ? R / done.length : null, dd, mls, open: list.filter((x) => x.status === "open" || x.status === "pending").length };
+  return { n: list.filter((x) => x.status !== "skip").length, closed: done.length, w, l, z, wr: done.length ? (100 * w) / done.length : null, R, avg: done.length ? R / done.length : null, dd, mls, open: list.filter((x) => x.status === "open" || x.status === "pending").length };
 }
 const statTxt = (st) => `<span>Lệnh <b>${st.n}</b></span><span>Đã đóng <b>${st.closed}</b></span><span>Winrate <b>${st.wr == null ? "—" : st.wr.toFixed(1) + "%"}</b></span>
   <span>Tổng <b class="${st.R >= 0 ? "win" : "loss"}">${sgn(st.R, 1)}R</b></span><span>TB <b>${st.avg == null ? "—" : sgn(st.avg, 2)}R</b></span><span>DD <b>${st.dd.toFixed(1)}R</b></span><span>Thua liền <b>${st.mls}</b></span>`;
 function groupRows(list, key) {
   const g = {};
   for (const x of list) (g[key(x)] = g[key(x)] || []).push(x);
-  return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => { const st = statsOf(v); return `<tr><td>${esc(k)}</td><td>${st.n}</td><td>${st.w}/${st.closed - st.w}</td><td>${st.wr == null ? "—" : st.wr.toFixed(0) + "%"}</td><td class="${st.R >= 0 ? "win" : "loss"}">${sgn(st.R, 1)}</td><td>${st.dd.toFixed(1)}</td></tr>`; }).join("");
+  return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => { const st = statsOf(v); return `<tr><td>${esc(k)}</td><td>${st.n}</td><td>${st.w}/${st.l}${st.z ? "·" + st.z : ""}</td><td>${st.wr == null ? "—" : st.wr.toFixed(0) + "%"}</td><td class="${st.R >= 0 ? "win" : "loss"}">${sgn(st.R, 1)}</td><td>${st.dd.toFixed(1)}</td></tr>`; }).join("");
 }
 const gHead = (t) => `<thead><tr><th>${t}</th><th>Lệnh</th><th>T/B</th><th>WR</th><th>R</th><th>DD</th></tr></thead>`;
-const stTxt = { open: "đang chạy", pending: "chờ", tp1: "✓ TP1", sl: "✗ SL", expired: "hết hạn", missed: "lỡ", skip: "bỏ" };
+const stTxt = { open: "đang chạy", pending: "chờ", tp1: "✓ TP1", sl: "✗ SL", expired: "hết hạn", missed: "lỡ", skip: "bỏ", be: "↔ hòa vốn", timeout: "⏱ 12:30", opp: "⇄ ngược chiều" };
 function renderJournal() {
   const box = $("#jOut"); if (!box) return;
   document.querySelectorAll("#jTabs button").forEach((b) => b.classList.toggle("on", b.dataset.t === S.jTab));
   if (S.jTab === "live") {
-    const J = S.journal, smc = J.filter((x) => x.kind === "SMC"), of = J.filter((x) => x.kind === "OF");
-    const rows = [...J].sort((a, b) => b.t - a.t).slice(0, 40).map((e) => `<tr><td>${vnDate(e.t).slice(5)} ${vnClock(e.t)}</td><td>${e.kind === "SMC" ? "SMC" : "OF"} ${esc(e.name)} <span class="muted">${esc(e.tf || "")}</span></td>
+    const J = S.journal, smc = J.filter((x) => x.kind === "SMC"), of = J.filter((x) => x.kind === "OF" || x.kind === "OF9");
+    const rows = [...J].sort((a, b) => b.t - a.t).slice(0, 40).map((e) => `<tr><td>${vnDate(e.t).slice(5)} ${vnClock(e.t)}</td><td>${e.kind === "SMC" ? "SMC" : "OF"} ${esc(e.name)}${e.opp || e.oppBy ? ' <span title="Có lệnh ngược chiều chồng nhau">⇄</span>' : ""} <span class="muted">${esc(e.tf || "")}</span></td>
       <td class="${e.side === "BUY" ? "win" : "loss"}">${e.side}</td><td>${fmt(e.entry)}</td><td>${fmt(e.sl)} / ${fmt(e.tp1)}</td><td class="${e.status === "tp1" ? "win" : e.status === "sl" ? "loss" : "muted"}">${stTxt[e.status] || e.status}</td><td>${e.r == null ? "—" : sgn(e.r, 2)}</td></tr>`).join("");
     box.innerHTML = `<div class="hstats"><b>Tất cả</b>${statTxt(statsOf(J))}</div><div class="hstats"><b>SMC</b>${statTxt(statsOf(smc))}</div><div class="hstats"><b>Options Flow</b>${statTxt(statsOf(of))}</div>
       <div class="jgrid"><table class="htable">${gHead("Loại")}<tbody>${groupRows(J, (x) => `${x.kind} ${x.name}`) || `<tr><td colspan="6" class="muted">Chưa có.</td></tr>`}</tbody></table>
@@ -2483,6 +2735,7 @@ async function boot() {
   $("#primarySrc").value = S.primary;
   document.querySelectorAll("#tfs button").forEach((x) => x.classList.toggle("on", x.dataset.tf === S.tf));
   if (STATIC) initStatic();
+  if (STATIC) await ofSettingsPull();   // 9b-5: điện thoại nhận cài đặt của máy tính TRƯỚC khi dựng giao diện
   await pollState(true);
   if (!S.state) { $("#warn").hidden = false; $("#warn").textContent = STATIC ? "Chưa tải được dữ liệu (state.json). Kiểm tra mạng rồi mở lại." : "Không kết nối được backend. Hãy chạy MO_DASHBOARD.bat và giữ cửa sổ đen đó mở."; return; }
   // Không có GC thì mặc định dùng GLD cho Strike Profile
@@ -2493,8 +2746,10 @@ async function boot() {
   await startFeed();
   if (STATIC) { staticRecompute(true); renderAll(); }
   drawPlanLines(); renderPine();
-  await journalLoad(); journalSyncSMC(); journalTrack(); renderJournal();
+  await journalLoad(); await ofWallsLoad(); journalSyncSMC(); journalTrack(); renderJournal();
   setInterval(pollState, STATIC ? 120000 : 20000);
+  setInterval(ofSync, 3000);   // 9b-5: ghi lệnh/cài đặt/tường lên máy chủ (PC) · cập nhật trạng thái lệnh (điện thoại)
+  if (STATIC) setInterval(async () => { try { await journalLoad(); await ofSettingsPull(); await ofWallsLoad(); ofSync(); } catch { } }, 120000);
   if (STATIC) setInterval(() => { staticRecompute(); renderProfile(); renderAgent(); renderHedge(); drawOverlay(); }, 30000);
   setInterval(() => { renderMacro(); renderEngineChip(); renderAgent(); }, 30000);
 }
