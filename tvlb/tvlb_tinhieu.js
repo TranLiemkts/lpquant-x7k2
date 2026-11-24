@@ -764,7 +764,8 @@ function drawTH(ctx, plotW, h) {
     // eslint-disable-next-line no-global-assign
     setMarkers = function () {   // ký hiệu trên nến của Bildol, thêm công tắc: tín hiệu Option Flow anh Thắng · nến quét · nến tạo đỉnh/đáy · lệnh SMC khớp
       const show = document.querySelector("#lyMk").checked, on = lySMC()?.checked && S.smc, c = S.candles, mk = [];
-      if (show && TIP.of) S.signals.forEach((s) => mk.push({ time: s.time + TZ, position: s.side === "SELL" ? "aboveBar" : "belowBar", color: s.side === "SELL" ? C.down : C.up, shape: s.side === "SELL" ? "arrowDown" : "arrowUp", text: `${s.side} ${s.score}/${s.max}` }));
+      window.TVLB_MK_OF = !!(show && TIP.of);   // v23am-9: app.js đọc cờ này để biết có vẽ nhãn tín hiệu Option Flow không
+      if (show && TIP.of) S.signals.forEach((s) => mk.push({ time: s.time + TZ, position: s.side === "SELL" ? "aboveBar" : "belowBar", color: s.side === "SELL" ? C.down : C.up, shape: s.side === "SELL" ? "arrowDown" : "arrowUp", size: 0.7, text: "" }));   // v23am-9: chữ do app.js tự vẽ 2 dòng (điểm / buy-sell); ở đây chỉ còn mũi tên nhỏ
       if (on) {
         const swCode = (t, top) => [/gần nhất/.test(t) && "$", /bằng nhau/.test(t) && (top ? "EQH" : "EQL"), /trendline/.test(t) && "TL"].filter(Boolean).join("+");
         if (TIP.st && TIP.swp) for (const w of S.smc.sweeps) if (c[w.i]) mk.push({ time: c[w.i].time + TZ, position: w.side === "top" ? "aboveBar" : "belowBar", color: C.mag, shape: "circle", size: 0.5, text: "✕ " + swCode(w.txt, w.side === "top") });

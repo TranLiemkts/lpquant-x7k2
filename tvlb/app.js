@@ -531,7 +531,7 @@ function drawOverlayBase() {
       const risk = Math.abs(g.entry - g.sl), gain = g.tp1 != null ? Math.abs(g.tp1 - g.entry) : null, w = x1 - x0;
       if (yT != null) { ctx.fillStyle = "rgba(38,166,154,.07)"; ctx.fillRect(x0, Math.min(yE, yT), w, Math.abs(yT - yE)); }
       ctx.fillStyle = "rgba(239,83,80,.07)"; ctx.fillRect(x0, Math.min(yE, yS), w, Math.abs(yS - yE));
-      ctx.globalAlpha = 0.45; ctx.strokeStyle = "#f0b429"; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x0, yE); ctx.lineTo(x1, yE); ctx.stroke(); ctx.globalAlpha = 1;
+      /* v23am-10: bỏ vạch vàng ngang ở mức vào lệnh — ranh giới giữa khung xanh và đỏ đã thể hiện mức vào */
       ctx.fillStyle = "#f0b429"; ctx.beginPath(); ctx.moveTo(x0, yE - 3); ctx.lineTo(x0 + 3, yE); ctx.lineTo(x0, yE + 3); ctx.lineTo(x0 - 3, yE); ctx.closePath(); ctx.fill();   // dấu vào lệnh (hình thoi)
       const pr = ++rrN;   // v23am-2: nhãn xếp hàng, vẽ sau cùng (tín hiệu mới nhất ưu tiên, nhãn chạm nhau thì bỏ)
       // v23am-4: bỏ nhãn điểm vào lệnh (khung SL/TP đã nằm đúng chỗ vào lệnh; hướng BUY/SELL đã có mũi tên trên nến tín hiệu)
@@ -549,6 +549,28 @@ function drawOverlayBase() {
       rrBox.push({ x0: bx0, x1: bx1, y0: by0, y1: by1 });
       ctx.textAlign = l.al; ctx.globalAlpha = 0.8; ctx.fillStyle = l.c; ctx.fillText(l.t, l.x, l.y); ctx.globalAlpha = 1;
     }
+  }
+
+  // v23am-8: nhãn tín hiệu 2 dòng tự vẽ (thư viện chart không xuống dòng được): dòng trên = điểm xác nhận (tỷ trọng), dòng dưới = buy/sell; mũi tên vẫn do chart vẽ
+  if ($("#lyMk") && $("#lyMk").checked && window.TVLB_MK_OF !== false && S.signals.length) {
+    const tsc2 = chart.timeScale(), cc2 = S.candles;
+    ctx.font = "500 8.5px 'IBM Plex Mono', monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.globalAlpha = 0.85;
+    const sgBox = [];
+    for (const g of [...S.signals].reverse()) {   // mới nhất trước; nhãn chạm nhãn đã đặt thì bỏ (tránh chồng khi nhiều tín hiệu sát nhau)
+      const k = cc2[g.i]; if (!k) continue;
+      const x = tsc2.timeToCoordinate(g.time + TZ); if (x == null || x < 0 || x > plotW) continue;
+      const sell = g.side === "SELL", yb = candleS.priceToCoordinate(sell ? k.high : k.low); if (yb == null) continue;
+      const bsp = Number(tsc2.options().barSpacing) || 8, off = Math.max(21, Math.min(Math.max(bsp, 12), 30) * 0.7 + 14);   // v23am-11: mũi tên to theo mức zoom → đẩy chữ ra xa theo cỡ mũi tên
+      const y1 = sell ? yb - off - 10 : yb + off, y2 = sell ? yb - off : yb + off + 10;   // SELL: chữ nằm phía trên mũi tên xuống; BUY: phía dưới mũi tên lên
+      if (y1 < 2 || y2 > plotH - 2) continue;
+      const tx = `${g.tag ? g.tag + " " : ""}${g.score}/${g.max}`, hw = ctx.measureText(tx).width / 2 + 2;
+      if (sgBox.some((r) => x - hw < r.x1 && x + hw > r.x0 && Math.abs(y1 - r.y) < 24)) continue;
+      sgBox.push({ x0: x - hw, x1: x + hw, y: y1 });
+      ctx.fillStyle = sell ? C.down : C.up;
+      ctx.fillText(tx, x, y1);
+      ctx.fillText(sell ? "sell" : "buy", x, y2);
+    }
+    ctx.globalAlpha = 1;
   }
 
   // Đường cong Net GEX theo strike (nguồn chính)
@@ -1503,7 +1525,7 @@ function setMarkers() {
   const show = $("#lyMk").checked, smcOn = $("#lySMC")?.checked && S.smc;
   const mk = show ? S.signals.map((s) => ({
     time: s.time + TZ, position: s.side === "SELL" ? "aboveBar" : "belowBar", color: s.side === "SELL" ? C.down : C.up,
-    shape: s.side === "SELL" ? "arrowDown" : "arrowUp", size: 0.7, text: `${s.tag ? s.tag + " " : ""}${s.score}/${s.max}`,   // v23am-7: mũi tên nhỏ, chữ gọn (bỏ chữ BUY/SELL — hướng đã có ở mũi tên và màu)
+    shape: s.side === "SELL" ? "arrowDown" : "arrowUp", size: 0.7, text: "",   // v23am-7: mũi tên nhỏ, chữ gọn (bỏ chữ BUY/SELL — hướng đã có ở mũi tên và màu)
   })) : [];
   if (smcOn) {
     const c = S.candles;
