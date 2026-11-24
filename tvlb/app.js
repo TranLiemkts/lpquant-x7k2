@@ -1276,7 +1276,7 @@ function ofFreezeRatio(st) {
 function ofJournalOrders(c, day, used) {
   const res = [];
   for (const e of S.journal || []) {
-    if (e.kind !== "OF9" || vnDate(e.t) !== day || e.entry == null || e.sl == null) continue;
+    if (e.kind !== "OF9" || !of9Tag(e.tag || e.name) || vnDate(e.t) !== day || e.entry == null || e.sl == null) continue;
     const id = String(e.id).replace(/^OF9\|/, ""); if (used && used.has(id)) continue;
     const ix = ofIdxAt(c, e.t); if (ix < 0) continue;
     res.push({ i: ix, time: e.t, side: e.side, entry: e.entry, sl: e.sl, tp1: e.tp1 ?? null, tp2: e.tp2 ?? null, tag: e.tag || e.name, id, wall: e.wall, gam: e.gam, flip: e.flip, score: 0, max: 0, virt: true, latched: true, fromJ: true });
@@ -1438,7 +1438,7 @@ function ofRender() {
     + kv("ΔOI gần nhất", M.doi ? `${M.doi.d_oi} tại strike ${M.doi.chart}` : `không có strike trong ${sc.doi_zone}$`)
     + kv("DXY", dxy == null ? "—" : `${dxy >= 0 ? "+" : ""}${Number(dxy).toFixed(3)}% (ngưỡng ${sc.dxy_thr_pct}%) · chỉ tính khi live`)
     + kv("Cấu hình", `xác nhận tối thiểu ${Number.isInteger(OFS.minConf) ? OFS.minConf : sc.min_confirm} · nghỉ ${sc.cooldown_bars} nến · chạm tường ≤ ${sc.touch_tol}$ · SL ± ${sc.sl_buffer}$`);
-  const c = S.candles, sg = [...S.signals, ...(S.of9Sig || [])].filter((g) => c[g.i]).sort((a, b) => b.time - a.time);   // v23am-18: cả lệnh 9A/9B (trước đây không có trong danh sách này)
+  const c = S.candles, sgK = new Set(), sg = [...(S.of9Sig || []), ...S.signals].filter((g) => { if (!c[g.i]) return false; const k = ofKey(g); if (sgK.has(k)) return false; sgK.add(k); return true; }).sort((a, b) => b.time - a.time);   // 9b-5b: khử trùng theo mã lệnh   // v23am-18: cả lệnh 9A/9B (trước đây không có trong danh sách này)
   let W = []; try { W = ofWatchList(M).filter((w) => w.first); } catch (e) { /* bỏ qua */ }
   ofRefresh();
   const stOf = (g) => (S.ofRes ? S.ofRes.get(ofKey(g)) : null);
@@ -1456,7 +1456,7 @@ function ofRender() {
       + `<div>Vùng: <b>${p.lo === p.hi ? ofFm(p.lo) : ofFm(p.lo) + "–" + ofFm(p.hi)}</b>${p.past ? " · giá ĐÃ QUA tường (chờ giá quay lại rồi mới tính)" : p.dist ? " · cách " + p.dist.toFixed(2) + "$" : ""}</div><div>Điều kiện: ${p.cond}</div><div class="muted" style="font-size:10.5px">Xác nhận theo menu (cần ≥ ${lgMin}): ${(p.live || p.chk) && (p.live || p.chk).conf && (p.live || p.chk).conf.length ? (p.live || p.chk).conf.map((x) => x[0]).join(", ") : "chưa tick ô nào"}</div>${ofChkHtml(p)}${p.side === "BOTH" ? `<div class="muted" style="margin-top:4px">Hai kịch bản sau khi giá ra khỏi vùng rồi quay lại:</div>` + ofIllu({ id: "hg0", side: "SELL" }, true) + ofIllu({ id: "hg0", side: "BUY" }) : ofIllu(p)}`
       + `<div>SL ${p.sl} · TP1 <b>${typeof p.tp1 === "number" ? ofFm(p.tp1) : p.tp1 || "—"}</b>${p.tp2 != null ? " · TP2 " + ofFm(p.tp2) : ""}</div><div class="muted">Huỷ khi: ${p.cancel}</div></div>`).join("") || '<span class="muted">Chưa có nhóm nào được bật.</span>'
     : OFV.tab === "watch" ? watchHtml
-    : ofRunHeadHtml() + (sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side}${g.virt ? " ✔ đủ điều kiện" : " " + g.score + "/" + g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type ? g.type.replace("[Options Flow] ", "") : g.tag === "9B" ? "9B · phá vỡ tường (Gamma âm)" : "9A · bật lại từ tường"}</div>${ofStatusHtml(stOf(g))}${ofTickLine(g)}</div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>');
+    : ofRunHeadHtml(sg.map(stOf).filter(Boolean)) + (sg.map((g) => `<div style="border-left:3px solid ${OF_COL[g.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[g.side]}">${vnClock(g.time)} ${g.tag || ""} ${g.side}${g.virt ? " ✔ đủ điều kiện" : " " + g.score + "/" + g.max}</b> · <b>${stt(g)}</b></div><div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div><div class="muted">${g.type ? g.type.replace("[Options Flow] ", "") : g.tag === "9B" ? "9B · phá vỡ tường (Gamma âm)" : "9A · bật lại từ tường"}</div>${ofStatusHtml(stOf(g))}${ofTickLine(g)}</div>`).join("") || '<span class="muted">Hôm nay chưa có tín hiệu.</span>');
 }
 let ofTry = 0;
 function ofInitUI() {
@@ -2201,7 +2201,9 @@ const OPP_RULES = { warn: "Chỉ cảnh báo: cả hai lệnh vẫn chạy, ghi 
 const ofOppRule = () => (OFS.oppRule === "newer" || OFS.oppRule === "older" ? OFS.oppRule : "warn");
 const J_FINAL = ["tp1", "sl", "expired", "be", "timeout", "opp"];   // đã đóng thật (skip = lệnh bị bỏ, tách riêng)
 const ofName = (g) => g.tag || String(g.type || "OF").replace("[Options Flow] ", "").replace(/ \(.*$/, "").split(":")[0].trim();
-const ofKey = (g) => (g.tag ? "OF9|" + (g.id || `${g.tag}|${g.side}|${g.time}`) : `OF|${g.type}|${g.side}|${g.time}`);   // = id trong nhật ký (jFromOF dùng cùng công thức cho lệnh HG/TL)
+// 9b-5b: CHỈ 9A/9B là lệnh OF9. Tín hiệu HG/TL1/TL1·2 (evaluate) cũng có g.tag (nhãn nến, v23ak) nên trước đây bị coi là 9A → ghi nhật ký sai kind OF9 + trùng lệnh.
+function of9Tag(t) { return t === "9A" || t === "9B"; }
+const ofKey = (g) => (of9Tag(g.tag) ? "OF9|" + (g.id || `${g.tag}|${g.side}|${g.time}`) : `OF|${g.type}|${g.side}|${g.time}`);   // = id trong nhật ký (jFromOF dùng cùng công thức cho lệnh HG/TL)
 const chiMin = (t) => { const q = {}; for (const x of CHI_FMT.formatToParts(new Date(t * 1000))) q[x.type] = x.value; return (q.hour === "24" ? 0 : +q.hour) * 60 + +q.minute; };
 // số phút còn lại tới 12:30 Chicago (tính từ lúc vào lệnh t0; xấp xỉ, bỏ qua 2 ngày/năm đổi giờ mùa hè)
 function ofChiRemain(t0) { const m = chiMin(t0), add = m < 750 ? 750 - m : 1440 - m + 750; return Math.round((t0 + add * 60 - nowSec()) / 60); }
@@ -2221,7 +2223,7 @@ function ofOrderList() {
   for (const g of S.of9Sig || []) addCalc(g);
   for (const g of S.signals || []) addCalc(g);
   for (const e of jm.values()) {
-    if ((e.kind !== "OF" && e.kind !== "OF9") || map.has(e.id) || e.entry == null || e.sl == null || (e.kind === "OF" && e.tp1 == null) || e.status === "skip" && e.kind === "OF" || now - e.t > 2 * 86400) continue;
+    if ((e.kind !== "OF" && e.kind !== "OF9") || (e.kind === "OF9" && !of9Tag(e.tag || e.name)) || map.has(e.id) || e.entry == null || e.sl == null || (e.kind === "OF" && e.tp1 == null) || e.status === "skip" && e.kind === "OF" || now - e.t > 2 * 86400) continue;
     const ix = idxOf(e.t); if (ix < 0) continue;
     map.set(e.id, { key: e.id, e, g: { i: ix, time: e.t, side: e.side, entry: e.entry, sl: e.sl, tp1: e.tp1 ?? null, tp2: e.tp2 ?? null, type: e.type, tag: e.kind === "OF9" ? (e.tag || e.name) : undefined, id: e.kind === "OF9" ? String(e.id).replace(/^OF9\|/, "") : undefined, wall: e.wall, gam: e.gam, flip: e.flip, virt: true, latched: true } });
   }
@@ -2292,7 +2294,7 @@ function ofJournalPost() {
   ofRefresh(true);
   const rule = ofOppRule(), jr = ofResolve(S.ofList || [], cc, rule, true), out = [], price = lastPrice(), teOn = OFS.teOff !== true, now = nowSec();
   for (const [key, st] of jr) {
-    const o = st.o, g = o.g, e0 = o.e, is9 = !!g.tag, res = st.res;
+    const o = st.o, g = o.g, e0 = o.e, is9 = of9Tag(g.tag), res = st.res;
     if (is9 ? g.rebuilt && !e0 : !e0) continue;   // HG/TL chỉ cập nhật lệnh ĐÃ có trong nhật ký; 9A/9B dựng lại (không chốt được) không ghi
     if (e0 && J_CLOSED.includes(e0.status)) continue;
     let status = res.status, closeT = res.closeT, r = res.r, exit = res.exit;
@@ -2315,7 +2317,7 @@ const ofIdxAt = (c, t) => { const s = TF_SEC[S.tf] || 300; for (let j = c.length
 async function ofWallsLoad() { if (!STATIC) return; try { S.w9file = await (await fetch(API("/api/walls9a") + "?t=" + Date.now())).json(); } catch { /* giữ bản cũ */ } }
 const OF_ST_TXT = { open: "đang chạy", tp1: "✓ chạm TP1", sl: "✗ chạm SL", be: "↔ hòa vốn (SL đã dời)", timeout: "⏱ hết 12:30 Chicago", opp: "⇄ đóng vì lệnh ngược chiều", skip: "bỏ (có lệnh ngược chiều)", expired: "hết hạn" };
 function ofTickLine(g) {   // số 220: thẻ lệnh ghi rõ các ô tick dùng cho loại lệnh này
-  if (!g.tag) return "";
+  if (!of9Tag(g.tag)) return "";   // 9b-5b: chỉ 9A/9B (HG/TL dùng danh sách ô riêng của evaluate)
   const sell = g.side === "SELL", nm = g.tag === "9A" ? (sell ? ["Phân kỳ CVD âm", "CVD dốc xuống", "DXY tăng", "Volume spike", "Vol↑ mà ΔOI≤0", "ΔOI≥1500 tại vùng", "Lệnh lớn bán ròng"] : ["Phân kỳ CVD dương", "CVD dốc lên", "DXY giảm", "Volume spike", "Vol↑ mà ΔOI≤0", "ΔOI≥1500 tại vùng", "Lệnh lớn mua ròng"])
     : (sell ? ["CVD dốc xuống", "Delta nến âm", "DXY tăng", "Volume spike", "Lệnh lớn bán ròng"] : ["CVD dốc lên", "Delta nến dương", "DXY giảm", "Volume spike", "Lệnh lớn mua ròng"]);
   const on = nm.filter((n) => ofOn("c:" + n)), need = Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg?.signals?.min_confirm;
@@ -2391,8 +2393,8 @@ function ofSync() {
   try { ofRefresh(true); ofJournalPost(); ofSettingsPush(); ofWallsPost(); } catch (e) { console.error("[TVLB] ofSync:", e); }
 }
 // dòng đầu tab «Lệnh hôm nay»: tóm tắt lệnh đang chạy, cảnh báo ngược chiều, luật, nguồn cài đặt, tường 9A
-function ofRunHeadHtml() {
-  const R = S.ofRes ? [...S.ofRes.values()].filter((x) => x.res) : [], run = R.filter((x) => x.res.status === "open"), b = run.filter((x) => x.o.g.side === "BUY"), s = run.filter((x) => x.o.g.side === "SELL");
+function ofRunHeadHtml(list) {   // 9b-5b: đếm trên ĐÚNG danh sách thẻ đang hiện (trước đây đếm bảng khác nên lệch với nút tab)
+  const R = (list || (S.ofRes ? [...S.ofRes.values()] : [])).filter((x) => x && x.res), run = R.filter((x) => x.res.status === "open"), b = run.filter((x) => x.o.g.side === "BUY"), s = run.filter((x) => x.o.g.side === "SELL");
   const sm = "font-size:10.5px;margin:0 0 4px;line-height:1.45";
   let h = `<div class="muted" style="${sm}">Đang chạy: <b>${run.length}</b>${run.length ? ` (BUY ${b.length} · SELL ${s.length})` : ""} · luật lệnh ngược chiều: <b>${OPP_RULES[ofOppRule()].split(":")[0]}</b> (đổi ở menu «📏 TP / SL»).</div>`;
   if (b.length && s.length) h += `<div style="${sm};color:#ff8a65">⚠ Đang có CẢ lệnh BUY lẫn SELL chạy cùng lúc: thống kê và rủi ro bị lệch (hai lệnh triệt tiêu nhau). ${ofOppRule() === "warn" ? "Luật hiện tại chỉ cảnh báo." : ""}</div>`;
