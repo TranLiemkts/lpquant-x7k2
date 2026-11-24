@@ -709,6 +709,7 @@ const ofOn = (k) => OFS[k] !== false;
 const ofX = (k) => OFS[k] === true;
 const ofFlipNear = () => (Number.isFinite(OFS.flipNear) && OFS.flipNear > 0 ? OFS.flipNear : 20);   // v23ab: ngưỡng $ cho ô "Flip GẦN giá" (giả thuyết, chọn theo ý bạn 10-20$)
 const OF_FILTERS = [
+  ["x_noflip", "BỎ HẲN FLIP: không dùng Flip để chọn 9A/9B và không chặn theo Flip; tường gần luôn xét kiểu 9A (bật lại: tường trên giá = SELL, dưới giá = BUY). TRÁI với bản nháp B10b (Gamma âm = 9B); chỉ để THỬ, chưa kiểm định"],
   ["x_flipnear", "Flip GẦN giá (cách ≤ ngưỡng $ ở dòng dưới) thì ĐỨNG NGOÀI: giá đang ở vùng chuyển Gamma, chưa rõ dương hay âm (theo lời anh Nam; GIẢ THUYẾT, chưa kiểm định)"],
   ["x_flipfar", "Ngày Flip xa (cách giá > 2,5%) thì ĐỨNG NGOÀI (theo B6; chờ xác nhận câu 4)"],
   ["x_near", "Hiện thêm TƯỜNG GẦN theo B10b: top 3 OI trong ±2,5% quanh giá mở ngày (xấp xỉ, THAM KHẢO, chưa kiểm định; chờ xác nhận câu 3)"],
@@ -721,7 +722,7 @@ const OF_GROUPS = [
   ["session", "Chỉ xét phiên Mỹ 19:00-23:00 giờ VN (bỏ tick = xét cả ngày)"],
   ["zones", "Vẽ vùng xem xét TL1·TL2·HG lên chart"],
   ["rr", "Vẽ khung đo SL/TP kiểu TradingView cho tín hiệu hôm nay"],
-  ["watch", "Đánh dấu NẾN ĐANG QUAN SÁT trên chart: ◉ vàng = đang quan sát, ✔ = đủ mọi điều kiện theo menu; kèm tên kế hoạch + x/y (trên nến = SELL, dưới nến = BUY; chỉ hiển thị, không phải lệnh)"],
+  ["watch", "Đánh dấu NẾN ĐANG QUAN SÁT trên chart: tam giác nhỏ + x/y (▽ trên nến = SELL, △ dưới nến = BUY). ✔ = đủ mọi điều kiện, ⛔ = nến đủ nhưng cổng chưa qua, rê chuột để xem chi tiết (chỉ hiển thị, không phải lệnh)"],
 ];
 const OF_CONDS = [
   ["gamma", "Lọc Gamma: Gamma âm thì không BUY bắt đáy (TL1)", ["gamma"]],
@@ -752,7 +753,7 @@ function ofModel() {
   if (!L || L.call_wall == null || L.put_wall == null || c.length < 30) return null;
   const i = c.length - 2, k = c[i], px = c[c.length - 1].close, tol = sc.touch_tol, buf = sc.sl_buffer;
   const cw = L.call_wall, pw = L.put_wall, flip = L.gamma_flip, negG = flip != null && px < flip, blockG = ofOn("gamma") && negG;
-  const rgp = regimePct(px, flip), flipFar = ofX("x_flipfar") && flip != null && rgp.far, flipNear = ofX("x_flipnear") && flip != null && Math.abs(px - flip) <= ofFlipNear(), flipOut = flipFar || flipNear, regX = ofX("x_regime") && flip != null;   // TVLB B9b1
+  const rgp = regimePct(px, flip), noFlip = ofX("x_noflip"), flipFar = !noFlip && ofX("x_flipfar") && flip != null && rgp.far, flipNear = !noFlip && ofX("x_flipnear") && flip != null && Math.abs(px - flip) <= ofFlipNear(), flipOut = flipFar || flipNear, regX = ofX("x_regime") && flip != null;   // TVLB B9b1
   const tfOk = (TF_SEC[S.tf] || 0) >= 300, sessOn = sc.session_only && ofOn("session"), inS = inUsSession(c[c.length - 1].time);
   const since = i - S.lastSigIdx, cdOk = since > sc.cooldown_bars, gatesOk = tfOk && (!sessOn || inS) && !flipOut;
   const gates = [[tfOk, "Khung nến ≥ M5 (đang " + S.tf + ")"], [!sessOn || inS, sessOn ? (inS ? "Trong phiên Mỹ 19:00-23:00 VN" : "Ngoài phiên Mỹ 19:00-23:00 VN") : "Không lọc phiên"], [!flipOut, flipNear ? `Flip chỉ cách giá ${Math.abs(px - flip).toFixed(1).replace(".", ",")}$ (≤ ${ofFlipNear()}$): vùng chuyển Gamma, đứng ngoài (ô «Flip GẦN giá» đang bật)` : flipFar ? `Flip cách giá ${rgp.pctTxt}: ngày "không rõ", đứng ngoài (bộ lọc B6 đang bật)` : "Không lọc theo khoảng cách Flip"], [cdOk, cdOk ? "Hết nghỉ sau tín hiệu trước" : "Đang nghỉ " + (sc.cooldown_bars - since + 1) + " nến sau tín hiệu trước"]];
@@ -782,10 +783,10 @@ function ofModel() {
   try {
     const o = ofX("x_near") ? prim() : null;
     if (o) {
-      const day = vnDate(c[c.length - 1].time), f0 = c.find((x) => vnDate(x.time) === day), ref = f0 ? f0.open : px, unclear = flip == null || flipOut;   // v23u: "ngày không rõ" theo Ô TICK "Ngày Flip xa" (trước đây bỏ qua ô tick)
+      const day = vnDate(c[c.length - 1].time), f0 = c.find((x) => vnDate(x.time) === day), ref = f0 ? f0.open : px, unclear = !noFlip && (flip == null || flipOut);   // v23u: "ngày không rõ" theo Ô TICK "Ngày Flip xa" (trước đây bỏ qua ô tick)
       o.strikes.filter((s) => Math.abs(s.chart / ref - 1) <= 0.025).sort((a, b) => (b.call_oi + b.put_oi) - (a.call_oi + a.put_oi)).slice(0, 3).forEach((s, n) => {
-        const lvl = s.chart, up = lvl > px, brk = !unclear && negG, side = brk ? (up ? "BUY" : "SELL") : (up ? "SELL" : "BUY"), oi = s.call_oi + s.put_oi;
-        add({ id: (brk ? "nwb" : "nwa") + n, short: brk ? "9B TƯỜNG" : "9A TƯỜNG", name: `${brk ? "9B phá vỡ (Gamma âm)" : unclear ? "9A bật lại (ngày không rõ)" : "9A bật lại (Gamma dương)"} · tường gần ${ofFm(lvl)} (OI ${fmtK(oi)})`, side, on: true, blocked: unclear, why: flip == null ? "Chưa có mốc Gamma Flip nên không phân loại được ngày" : flipNear ? `Flip chỉ cách giá ${Math.abs(px - flip).toFixed(1).replace(".", ",")}$ (≤ ${ofFlipNear()}$): giá sát vùng chuyển Gamma, chưa phân loại được` : `Flip cách giá ${rgp.pctTxt} (> 2,5%): ngày không rõ (B6)`, zone: "tường gần", lo: lvl * 0.999, hi: lvl * 1.001,
+        const lvl = s.chart, up = lvl > px, brk = !noFlip && !unclear && negG, side = brk ? (up ? "BUY" : "SELL") : (up ? "SELL" : "BUY"), oi = s.call_oi + s.put_oi;
+        add({ id: (brk ? "nwb" : "nwa") + n, short: brk ? "9B TƯỜNG" : "9A TƯỜNG", name: `${brk ? "9B phá vỡ (Gamma âm)" : unclear ? "9A bật lại (ngày không rõ)" : noFlip ? "9A bật lại (bỏ Flip)" : "9A bật lại (Gamma dương)"} · tường gần ${ofFm(lvl)} (OI ${fmtK(oi)})`, side, on: true, blocked: unclear, why: flip == null ? "Chưa có mốc Gamma Flip nên không phân loại được ngày" : flipNear ? `Flip chỉ cách giá ${Math.abs(px - flip).toFixed(1).replace(".", ",")}$ (≤ ${ofFlipNear()}$): giá sát vùng chuyển Gamma, chưa phân loại được` : `Flip cách giá ${rgp.pctTxt} (> 2,5%): ngày không rõ (B6)`, zone: "tường gần", lo: lvl * 0.999, hi: lvl * 1.001,
           cond: brk ? "nến M5 đóng vượt tường ≥ 0,15% và thân nến lớn hơn trung bình 10 nến M5 trước, vào ở giá mở nến kế" : "chạm vùng ±0,10% quanh tường, trong 3 nến M5 có 1 nến đóng quay ngược ≥ 0,10% từ tường (chưa đóng xuyên quá 0,10%), vào ở giá mở nến kế · chỉ lần chạm đầu trong phiên",
           sl: "0,30% từ giá vào", tp1: "0,60% từ giá vào (R:R 1:2)", tp2: null, cancel: "nến đóng xuyên tường quá 0,10% hoặc 12:30 Chicago" });
       });
@@ -1042,7 +1043,7 @@ function ofCondHtml(M) {
   return `<div style="margin-top:8px"><b>Xác nhận theo menu</b> <span class="muted">(nến ${S.tf} ${vnClock(M.k.time)})</span>`
     + `<div style="font-size:11px;margin:2px 0;color:${bad ? "#ff6b6b" : "#f0b429"}">Đang tick <b>${on.length}</b> ô · cần ≥ <b>${minC}</b> · hiện đạt: SELL <b>${sOk}</b> · BUY <b>${bOk}</b>${bad ? " → không bao giờ đủ" : ""}</div>`
     + R.map((r) => `<div style="font-size:11px;${r.on ? "" : "opacity:.4;"}">${ck(r.on)} ${r.lb} ${r.on ? `· SELL ${mk(r.s)} BUY ${mk(r.b)}` : '<span class="muted">· không tính</span>'}${r.rd ? ` <span class="muted">${r.rd}</span>` : ""}</div>`).join("")
-    + `<div class="muted" style="font-size:10.5px;margin-top:4px">Bộ lọc: Flip xa ${ck(ofX("x_flipfar"))} · Flip gần ${ck(ofX("x_flipnear"))} · Tường gần ${ck(ofX("x_near"))} · Gamma B1 ${ck(ofX("x_regime"))} · Lọc Gamma TL1 ${ck(ofOn("gamma"))} · Phiên Mỹ ${ck(sessOn)}${ofOn("session") && !sc.session_only ? " (cấu hình server chưa bật session_only nên chưa có tác dụng)" : ""}<br>Nhóm: TL1 ${ck(ofOn("g_tl1"))} · Bẫy ${ck(ofOn("g_trap"))} · HG ${ck(ofOn("g_hedge"))}</div></div>`;
+    + `<div class="muted" style="font-size:10.5px;margin-top:4px">Bộ lọc: Bỏ Flip ${ck(ofX("x_noflip"))} · Flip xa ${ck(ofX("x_flipfar"))} · Flip gần ${ck(ofX("x_flipnear"))} · Tường gần ${ck(ofX("x_near"))} · Gamma B1 ${ck(ofX("x_regime"))} · Lọc Gamma TL1 ${ck(ofOn("gamma"))} · Phiên Mỹ ${ck(sessOn)}${ofOn("session") && !sc.session_only ? " (cấu hình server chưa bật session_only nên chưa có tác dụng)" : ""}<br>Nhóm: TL1 ${ck(ofOn("g_tl1"))} · Bẫy ${ck(ofOn("g_trap"))} · HG ${ck(ofOn("g_hedge"))}</div></div>`;
 }
 // v23z: giải thích trạng thái + hướng của kế hoạch (rê chuột vào nhãn vùng, vào dòng danh sách, và dòng trạng thái trong thẻ)
 function ofStateWhy(p) {
@@ -1289,8 +1290,8 @@ function evaluate(i, live) {
   if (!L || L.call_wall == null || L.put_wall == null) return null;
   if (i < Math.max(sc.div_lookback, sc.vol_sma, sc.cvd_slope_bars) + 2) return null;
   if (sc.session_only && ofOn("session") && !inUsSession(k.time)) return null;
-  if (ofX("x_flipfar") && L.gamma_flip != null && regimePct(k.close, L.gamma_flip).far) return null;
-  if (ofX("x_flipnear") && L.gamma_flip != null && Math.abs(k.close - L.gamma_flip) <= ofFlipNear()) return null;   // v23ab   // TVLB B9b1: lọc ngày Flip xa (mặc định tắt)
+  if (!ofX("x_noflip") && ofX("x_flipfar") && L.gamma_flip != null && regimePct(k.close, L.gamma_flip).far) return null;
+  if (!ofX("x_noflip") && ofX("x_flipnear") && L.gamma_flip != null && Math.abs(k.close - L.gamma_flip) <= ofFlipNear()) return null;   // v23ab   // TVLB B9b1: lọc ngày Flip xa (mặc định tắt)
   if ((TF_SEC[S.tf] || 0) < 300) return null;   // Options Flow: chỉ báo trên khung từ M5 trở lên (giống TradingView)
   if (i - S.lastSigIdx <= sc.cooldown_bars) return null;
   const cw = L.call_wall, pw = L.put_wall, tol = sc.touch_tol, d0 = divAt(i), d1 = divAt(i - 1), prev = c[i - 1];
