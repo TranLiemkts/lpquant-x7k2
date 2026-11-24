@@ -800,10 +800,10 @@ function ofModel() {
       return { k: kk, prev: pv, p2: q2, slope: sl, d0: divAt(j), d1: divAt(j - 1), dUp: dx >= sc.dxy_thr_pct, dDn: dx <= -sc.dxy_thr_pct, vSp: vs, dFlat: !!dd && dd.d_oi <= 0, dBig: !!dd && Math.abs(dd.d_oi) >= sc.doi_big,
         bf: hist ? bigFlowAt(j, sc.cvd_slope_bars) : bigFlow(sc.cvd_slope_bars), swp: (S.smc?.sweeps || []).some((w) => w.i >= j - 2 && w.i <= j),
         bod: c.slice(j - 10, j).reduce((a, x) => a + Math.abs(x.close - x.open), 0) / 10, lo3: Math.min(kk.low, pv.low, q2.low), hi3: Math.max(kk.high, pv.high, q2.high),
-        inS: hist ? inUsSession(kk.time) : inS, cdOk: hist ? !S.signals.some((g) => g.i <= j && j - g.i <= sc.cooldown_bars) : cdOk };
+        a: hist ? j : j - 2, b: hist ? Math.min(j + 2, c.length - 2) : j, inS: hist ? inUsSession(kk.time) : inS, cdOk: hist ? !S.signals.some((g) => g.i <= j && j - g.i <= sc.cooldown_bars) : cdOk };
     };
     const chkFor = (p, X) => {
-      const { k, prev, p2, slope, d0, d1, dUp, dDn, vSp, dFlat, dBig, bf, swp, bod, lo3, hi3, inS, cdOk } = X;
+      const { k, prev, p2, slope, d0, d1, dUp, dDn, vSp, dFlat, dBig, bf, swp, bod, lo3, hi3, inS, cdOk } = X;   // X.a..X.b = cửa sổ nến (9A)
       const id = p.id, sell = p.side === "SELL", nw = /^nw/.test(id), lvl = (p.lo + p.hi) / 2;
       if (/^hg/.test(id) && p.side === "BOTH") return { ok: 0, tot: 0, shape: [], conf: [], gate: [], need: 0, note: "giá đang TRONG vùng: chưa có điểm vào, chờ giá ra khỏi vùng rồi quay lại" };
       let shape = [], conf = [];
@@ -814,7 +814,16 @@ function ofModel() {
       else if (/^hg/.test(id)) {
         if (sell) { shape = [[hi3 >= p.lo, "Nến chọc lên vùng (cao nhất 3 nến ≥ mép dưới)"], [k.close < p.lo, "Nến đóng dưới vùng"], [k.close < k.open, "Nến giảm"]]; conf = [["CVD dốc xuống", slope < 0], ["Delta nến âm", k.delta < 0], ["Nến quét thanh khoản", swp], ["DXY tăng", dUp], ["Volume spike", vSp]]; }
         else { shape = [[lo3 <= p.hi, "Nến chọc xuống vùng (thấp nhất 3 nến ≤ mép trên)"], [k.close > p.hi, "Nến đóng trên vùng"], [k.close > k.open, "Nến tăng"]]; conf = [["CVD dốc lên", slope > 0], ["Delta nến dương", k.delta > 0], ["Nến quét thanh khoản", swp], ["DXY giảm", dDn], ["Volume spike", vSp]]; }
-      } else if (/^nwa/.test(id)) { const tch = (x) => (sell ? x.high >= p.lo : x.low <= p.hi), rev = sell ? k.close <= lvl * 0.999 : k.close >= lvl * 1.001; shape = [[tch(k), "Chạm vùng ±0,10% quanh tường"], [rev && (tch(k) || tch(prev) || tch(p2)), "Có nến đóng quay ngược ≥ 0,10% từ tường (sau khi đã chạm trong 3 nến)"]]; }   // v23o: trước đây "quay ngược" tự đạt khi giá ở xa tường
+      } else if (/^nwa/.test(id)) {   // v23q: theo B10b, xét CỬA SỔ 3 nến M5 (không phải 1 nến): chạm vùng, rồi trong 3 nến có 1 nến đóng quay ngược, và chưa đóng xuyên quá 0,10%
+        const tch = (x) => (sell ? x.high >= p.lo : x.low <= p.hi), rv = (x) => (sell ? x.close <= lvl * 0.999 : x.close >= lvl * 1.001), thr = (x) => (sell ? x.close > lvl * 1.001 : x.close < lvl * 0.999);
+        let f = -1; for (let m = X.a; m <= X.b; m++) if (tch(c[m])) { f = m; break; }
+        // quét lần lượt từ nến chạm, TỐI ĐA 3 nến (1, 2 hoặc 3): gặp nến đóng xuyên qua tường trước → hỏng; gặp nến đóng quay ngược → ĐẠT và dừng (các nến sau không còn liên quan)
+        let st = f < 0 ? "none" : "wait", r = -1;
+        if (f >= 0) for (let m = f; m <= Math.min(f + 2, X.b); m++) { if (thr(c[m])) { st = "through"; break; } if (rv(c[m])) { st = "rev"; r = m; break; } }
+        if (st === "wait" && f + 2 <= X.b) st = "expired";
+        const rvTxt = "Có nến đóng quay ngược ≥ 0,10% từ tường (trong 1–3 nến kể từ nến chạm" + (st === "rev" ? `; đạt ở nến thứ ${r - f + 1}` : st === "wait" ? `; mới ${X.b - f + 1} nến, còn chờ` : st === "expired" ? "; đã hết 3 nến mà chưa có" : "") + ")";
+        shape = [[f >= 0, "Chạm vùng ±0,10% quanh tường"], [st === "rev", rvTxt], [f >= 0 && st !== "through", "Chưa đóng xuyên quá 0,10% qua tường (trước nến quay ngược)"]];
+      }
       else if (/^nwb/.test(id)) { shape = [[sell ? k.close <= lvl * 0.9985 : k.close >= lvl * 1.0015, "Nến đóng vượt tường ≥ 0,15%"], [Math.abs(k.close - k.open) > bod, "Thân nến lớn hơn trung bình 10 nến trước"]]; }
       if (!nw && bf && ["ts", "tb", "bd", "sq"].includes(id) || (/^hg/.test(id) && bf)) conf.push([sell ? "Lệnh lớn bán ròng" : "Lệnh lớn mua ròng", sell ? bf.d < 0 : bf.d > 0]);
       conf = conf.filter(([n]) => ofOn("c:" + n));   // điều kiện bị tắt thì không tính (giống mkSig)
@@ -1027,16 +1036,18 @@ function ofWatchList(M0) {
       if (!p.on || /^hg/.test(p.id) || !chk || !chk.tot) continue;
       const ev = /^(ts|tb|nwa)/.test(p.id) ? k.high >= p.lo && k.low <= p.hi : chk.shape.length >= 2 && chk.shape[0][0] && chk.shape[1][0];
       const was1 = was[p.id]; was[p.id] = ev;
-      if (ev && !was1) out.push({ j, time: k.time, p, chk, tot: chk.tot });
+      if (ev) out.push({ j, time: k.time, p, chk, tot: chk.tot, first: !was1 });   // first = nến đầu của một đợt; các nến sau trong cùng đợt cũng được chấm (chấm nhỏ)
     }
   }
   return out;
 }
 function ofWatchMarks() {
-  let W = []; try { W = ofWatchList(); } catch (e) { return []; }
+  let W = []; try { W = ofWatchList(); } catch (e) { S.watchN = null; S.watchErr = String(e && e.message || e); return []; }
+  S.watchErr = null; S.watchN = W.filter((w) => w.first).length;
   const per = {}, out = [];
   for (const w of W) { const n = per[w.time] = (per[w.time] || 0) + 1; if (n > 3) continue;
-    out.push({ time: w.time + TZ, position: w.p.side === "SELL" ? "aboveBar" : "belowBar", color: "#f0b429", shape: "circle", size: 0.8, text: `◉ ${w.p.short.replace(" TƯỜNG GẦN", "")} ${w.chk.ok}/${w.chk.tot}${w.p.blocked ? " ⛔" : ""}` }); }
+    out.push({ time: w.time + TZ, position: w.p.side === "SELL" ? "aboveBar" : "belowBar", color: "#f0b429", shape: "circle", size: w.first ? 0.9 : 0.5,
+      text: w.first ? `◉ ${w.p.short.replace(" TƯỜNG GẦN", "")} ${w.chk.ok}/${w.chk.tot}${w.p.blocked ? " ⛔" : ""}` : "" }); }
   return out;
 }
 const ofChkLines = (h) => { const li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join(""); return li(h.shape) + li(h.conf, true) + li(h.gate); };
@@ -1066,7 +1077,7 @@ function ofRender() {
     + kv("DXY", dxy == null ? "—" : `${dxy >= 0 ? "+" : ""}${Number(dxy).toFixed(3)}% (ngưỡng ${sc.dxy_thr_pct}%) · chỉ tính khi live`)
     + kv("Cấu hình", `xác nhận tối thiểu ${Number.isInteger(OFS.minConf) ? OFS.minConf : sc.min_confirm} · nghỉ ${sc.cooldown_bars} nến · chạm tường ≤ ${sc.touch_tol}$ · SL ± ${sc.sl_buffer}$`);
   const sg = S.signals.slice().reverse(), c = S.candles;
-  let W = []; try { W = ofWatchList(M); } catch (e) { /* bỏ qua */ }
+  let W = []; try { W = ofWatchList(M).filter((w) => w.first); } catch (e) { /* bỏ qua */ }
   const stt = (g) => { for (let j = g.i + 1; j < c.length; j++) { const x = c[j]; if (g.side === "BUY" ? x.low <= g.sl : x.high >= g.sl) return "chạm SL"; if (g.tp1 != null && (g.side === "BUY" ? x.high >= g.tp1 : x.low <= g.tp1)) return "chạm TP1"; } return "đang chạy"; };
   const run = sg.filter((g) => stt(g) === "đang chạy").length;
   $("#ofAct").textContent = near ? near.state : "";
@@ -1276,11 +1287,11 @@ function setMarkers() {
     }
     if (show) for (const s of smcFilled()) mk.push({ time: s.time + TZ, position: s.side === "SELL" ? "aboveBar" : "belowBar", color: s.side === "SELL" ? C.down : C.up, shape: s.side === "SELL" ? "arrowDown" : "arrowUp", size: 1.4, text: `${s.name} ${s.side}${s.status === "tp1" ? " ✓" : s.status === "sl" ? " ✗" : ""}` });
   }
-  if (show) { try { for (const m of ofWatchMarks()) mk.push(m); } catch (e) { /* bỏ qua */ } }   // v23o: nến đang quan sát, hiện cả khi tắt lớp SMC
+  try { for (const m of ofWatchMarks()) mk.push(m); } catch (e) { /* bỏ qua */ }   // v23p: nến đang quan sát; chỉ phụ thuộc ô "watch" trong hộp Bật/tắt điều kiện (không phụ thuộc nút Markers, không phụ thuộc lớp SMC)
   mk.sort((a, b) => a.time - b.time);
   candleS.setMarkers(mk);
   const nS = smcOn ? smcFilled().filter((s) => vnDate(s.time) === vnDate(nowSec())).length : 0;
-  $("#sigCount").textContent = `${S.signals.length} tín hiệu Options · ${nS} SMC hôm nay`;
+  $("#sigCount").textContent = `${S.signals.length} tín hiệu Options · ${nS} SMC hôm nay` + (S.watchErr ? ` · lỗi nến quan sát: ${S.watchErr}` : S.watchN != null ? ` · ${S.watchN} nến quan sát` : "");
 }
 function planFor(s) {
   const r = S.cfg.risk, risk = r.account_size_usd * r.risk_pct / 100, dist = Math.abs(s.entry - s.sl);
