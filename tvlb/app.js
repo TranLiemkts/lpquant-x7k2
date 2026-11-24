@@ -784,8 +784,10 @@ function ofModel() {
     const o = ofX("x_near") ? prim() : null;
     if (o) {
       const day = vnDate(c[c.length - 1].time), f0 = c.find((x) => vnDate(x.time) === day), ref = f0 ? f0.open : px, unclear = !noFlip && (flip == null || flipOut);   // v23u: "ngày không rõ" theo Ô TICK "Ngày Flip xa" (trước đây bỏ qua ô tick)
-      o.strikes.filter((s) => Math.abs(s.chart / ref - 1) <= 0.025).sort((a, b) => (b.call_oi + b.put_oi) - (a.call_oi + a.put_oi)).slice(0, 3).forEach((s, n) => {
-        const lvl = s.chart, up = lvl > px, brk = !noFlip && !unclear && negG, side = brk ? (up ? "BUY" : "SELL") : (up ? "SELL" : "BUY"), oi = s.call_oi + s.put_oi;
+      const r0 = ofRatio0(o), frz = ofOn("wfreeze") && o.ratio > 0 && r0 > 0, cv = (s) => (frz && s.strike != null ? s.strike * r0 : s.chart);
+      S.wFrz = frz ? { r0, now: o.ratio_raw || o.ratio } : null;
+      o.strikes.filter((s) => Math.abs(cv(s) / ref - 1) <= 0.025).sort((a, b) => (b.call_oi + b.put_oi) - (a.call_oi + a.put_oi)).slice(0, 3).forEach((s, n) => {
+        const lvl = cv(s), up = lvl > px, brk = !noFlip && !unclear && negG, side = brk ? (up ? "BUY" : "SELL") : (up ? "SELL" : "BUY"), oi = s.call_oi + s.put_oi;
         add({ id: (brk ? "nwb" : "nwa") + n, short: brk ? "9B TƯỜNG" : "9A TƯỜNG", name: `${brk ? "9B phá vỡ (Gamma âm)" : unclear ? "9A bật lại (ngày không rõ)" : noFlip ? "9A bật lại (bỏ Flip)" : "9A bật lại (Gamma dương)"} · tường gần ${ofFm(lvl)} (OI ${fmtK(oi)})`, side, on: true, blocked: unclear, why: flip == null ? "Chưa có mốc Gamma Flip nên không phân loại được ngày" : flipNear ? `Flip chỉ cách giá ${Math.abs(px - flip).toFixed(1).replace(".", ",")}$ (≤ ${ofFlipNear()}$): giá sát vùng chuyển Gamma, chưa phân loại được` : `Flip cách giá ${rgp.pctTxt} (> 2,5%): ngày không rõ (B6)`, zone: "tường gần", lo: lvl * 0.999, hi: lvl * 1.001,
           cond: brk ? "nến M5 đóng vượt tường ≥ 0,15% và thân nến lớn hơn trung bình 10 nến M5 trước, vào ở giá mở nến kế" : "chạm vùng ±0,10% quanh tường, trong 3 nến M5 có 1 nến đóng quay ngược ≥ 0,10% từ tường (chưa đóng xuyên quá 0,10%), vào ở giá mở nến kế · chỉ lần chạm đầu trong phiên",
           sl: "0,30% từ giá vào", tp1: "0,60% từ giá vào (R:R 1:2)", tp2: null, cancel: "nến đóng xuyên tường quá 0,10% hoặc 12:30 Chicago" });
@@ -1044,7 +1046,7 @@ function ofCondHtml(M) {
   return `<div style="margin-top:8px"><b>Xác nhận theo menu</b> <span class="muted">(nến ${S.tf} ${vnClock(M.k.time)})</span>`
     + `<div style="font-size:11px;margin:2px 0;color:${bad ? "#ff6b6b" : "#f0b429"}">Đang tick <b>${on.length}</b> ô · cần ≥ <b>${minC}</b> · hiện đạt: SELL <b>${sOk}</b> · BUY <b>${bOk}</b>${bad ? " → không bao giờ đủ" : ""}</div>`
     + R.map((r) => `<div style="font-size:11px;${r.on ? "" : "opacity:.4;"}">${ck(r.on)} ${r.lb} ${r.on ? `· SELL ${mk(r.s)} BUY ${mk(r.b)}` : '<span class="muted">· không tính</span>'}${r.rd ? ` <span class="muted">${r.rd}</span>` : ""}</div>`).join("")
-    + `<div class="muted" style="font-size:10.5px;margin-top:4px">Bộ lọc: Bỏ Flip ${ck(ofX("x_noflip"))} · Flip xa ${ck(ofX("x_flipfar"))} · Flip gần ${ck(ofX("x_flipnear"))} · Tường gần ${ck(ofX("x_near"))} · Gamma B1 ${ck(ofX("x_regime"))} · Lọc Gamma TL1 ${ck(ofOn("gamma"))} · Phiên Mỹ ${ck(sessOn)}${ofOn("session") && !sc.session_only ? " (cấu hình server chưa bật session_only nên chưa có tác dụng)" : ""}<br>Nhóm: TL1 ${ck(ofOn("g_tl1"))} · Bẫy ${ck(ofOn("g_trap"))} · HG ${ck(ofOn("g_hedge"))}</div></div>`;
+    + `<div class="muted" style="font-size:10.5px;margin-top:4px">${S.wFrz ? `Tỉ lệ quy đổi: khóa ${S.wFrz.r0.toFixed(5)} · hiện ${S.wFrz.now.toFixed(5)} (lệch ${((S.wFrz.now / S.wFrz.r0 - 1) * 3600).toFixed(1).replace(".", ",")}$ ở giá 3.600)<br>` : ""}Bộ lọc: Bỏ Flip ${ck(ofX("x_noflip"))} · Flip xa ${ck(ofX("x_flipfar"))} · Flip gần ${ck(ofX("x_flipnear"))} · Tường gần ${ck(ofX("x_near"))} · Gamma B1 ${ck(ofX("x_regime"))} · Lọc Gamma TL1 ${ck(ofOn("gamma"))} · Phiên Mỹ ${ck(sessOn)}${ofOn("session") && !sc.session_only ? " (cấu hình server chưa bật session_only nên chưa có tác dụng)" : ""}<br>Nhóm: TL1 ${ck(ofOn("g_tl1"))} · Bẫy ${ck(ofOn("g_trap"))} · HG ${ck(ofOn("g_hedge"))}</div></div>`;
 }
 // v23z: giải thích trạng thái + hướng của kế hoạch (rê chuột vào nhãn vùng, vào dòng danh sách, và dòng trạng thái trong thẻ)
 function ofStateWhy(p) {
@@ -1110,6 +1112,40 @@ function ofWatchList(M0) {
     }
   }
   return out;
+}
+// v23ak: KHÓA TỈ LỆ QUY ĐỔI THEO NGÀY cho MỌI mốc Options. Server tính vị trí chart = strike × ratio và TÍNH LẠI ratio mỗi lần làm mới Options (khoảng 15 phút; ratio = giá XAU cùng thời điểm với giá Yahoo GC=F),
+// nên mọi tường/Magnet/Flip dịch vài đô cùng lúc (quan sát 24/11: +3,4$). Ratio của ngày = giá trị thấy ĐẦU TIÊN trong ngày (localStorage "tvlb.ratio0"); ngay khi nhận dữ liệu từ server (pollState)
+// mọi mốc chart được tính lại = mốc gốc × ratio đó (tường, Flip, Magnet, Max Pain, từng strike, từng kỳ hạn, Volume Profile). Chưa khóa: vùng Hedge LP (server tự tính theo giá live). Tắt: bỏ tick «Khóa tỉ lệ quy đổi».
+const ofR0Key = (o, src) => vnDate(Math.floor(Date.now() / 1000)) + "|" + (o.source || src || "");
+function ofRatio0(o, src) {
+  if (!o || !(o.ratio > 0)) return o && o.ratio;
+  const key = ofR0Key(o, src), day = key.split("|")[0];
+  if (!S.r0) { try { S.r0 = JSON.parse(localStorage.getItem("tvlb.ratio0") || "{}"); } catch { S.r0 = {}; } }
+  if (!(S.r0[key] > 0)) {
+    const keep = {}; for (const k of Object.keys(S.r0)) if (k.startsWith(day + "|")) keep[k] = S.r0[k];   // chỉ giữ các khóa của hôm nay
+    keep[key] = o.ratio; S.r0 = keep; try { localStorage.setItem("tvlb.ratio0", JSON.stringify(S.r0)); } catch { /* bỏ qua */ }
+  }
+  return S.r0[key];
+}
+function ofFreezeRatio(st) {
+  try {
+    if (STATIC || !st || !st.options || !ofOn("wfreeze")) return;
+    let kGC = null;
+    for (const [src, o] of Object.entries(st.options)) {
+      if (!o || !(o.ratio > 0) || !o.chart || !Array.isArray(o.strikes)) continue;
+      const raw = o.ratio, r0 = ofRatio0(o, src); if (!(r0 > 0)) continue;
+      o.ratio_raw = raw; if (src === "GC") kGC = r0 / raw;
+      const apply = (t) => {
+        if (!t || !t.chart) return;
+        for (const k of Object.keys(t.chart)) if (typeof t[k] === "number" && typeof t.chart[k] === "number") t.chart[k] = +(t[k] * r0).toFixed(2);
+        if (Array.isArray(t.strikes)) for (const x of t.strikes) if (typeof x.strike === "number") x.chart = +(x.strike * r0).toFixed(2);
+        t.ratio = r0;
+      };
+      apply(o); for (const bt of Object.values(o.by_tenor || {})) apply(bt);
+    }
+    const vp = st.volume_profile;
+    if (kGC && Math.abs(kGC - 1) > 1e-9 && vp && typeof vp === "object") for (const k of Object.keys(vp)) if (typeof vp[k] === "number") vp[k] = +(vp[k] * kGC).toFixed(2);
+  } catch { /* giữ dữ liệu gốc */ }
 }
 // v23ai: KHUNG VÀO LỆNH cho 9A/9B (chỉ VẼ, không ghi nhật ký, không tự động đặt lệnh giấy). Quy tắc B10b: SL 0,30%, TP 0,60% tính từ giá vào = giá MỞ nến kế nến xác nhận;
 // chỉ LẦN CHẠM ĐẦU của mỗi tường trong ngày (9A: nến đóng quay ngược trong 3 nến; 9B: nến đóng vượt tường). Chỉ vẽ khi đủ mọi điều kiện theo menu (full).
@@ -1250,7 +1286,7 @@ function ofInitUI() {
     <div id="ofWarn" style="display:none;color:#ff6b6b;font-weight:600;margin:4px 0"></div>
     <div class="muted" style="margin:2px 0 4px">Bảng theo dõi nằm ở trang "Vào lệnh OF" bên phải (đứng trước trang "Vào lệnh").</div>
     <div class="muted" style="margin:4px 0">Nhóm tín hiệu</div>${OF_GROUPS.map(([k, t]) => row(k, t, [k])).join("")}
-    <div class="muted" style="margin:6px 0 4px">Bộ lọc theo anh Nam (MẶC ĐỊNH TẮT = như TL1/TL2 cũ; chờ anh Nam xác nhận)</div>${OF_FILTERS.map(([k, t]) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="${k}"${ofX(k) ? " checked" : ""}> ${t}</label>`).join("")}<div class="muted" style="margin:2px 0 4px 18px">Ngưỡng «Flip GẦN giá»: <select id="ofFN" style="font-size:12px">${[5, 10, 15, 20, 30, 50].map((n) => `<option value="${n}"${ofFlipNear() === n ? " selected" : ""}>${n}$</option>`).join("")}</select> (mặc định 20$; chọn theo ý bạn, chưa kiểm định)</div><div class="muted" style="margin:6px 0 4px">Hiển thị trên chart</div><label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="hg_show"${ofX("hg_show") ? " checked" : ""}> Hiện nền màu + viền nét đứt của vùng HG HEDGE (bỏ tick = ẩn, chỉ còn nhãn, vì trùng vùng HEDGE −Γ)</label>
+    <div class="muted" style="margin:6px 0 4px">Bộ lọc theo anh Nam (MẶC ĐỊNH TẮT = như TL1/TL2 cũ; chờ anh Nam xác nhận)</div>${OF_FILTERS.map(([k, t]) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="${k}"${ofX(k) ? " checked" : ""}> ${t}</label>`).join("")}<div class="muted" style="margin:2px 0 4px 18px">Ngưỡng «Flip GẦN giá»: <select id="ofFN" style="font-size:12px">${[5, 10, 15, 20, 30, 50].map((n) => `<option value="${n}"${ofFlipNear() === n ? " selected" : ""}>${n}$</option>`).join("")}</select> (mặc định 20$; chọn theo ý bạn, chưa kiểm định)</div>${row("wfreeze", "Khóa tỉ lệ quy đổi theo ngày: tường, Magnet, Flip, Max Pain, Volume Profile và vùng 9A/9B không nhảy theo mỗi lần làm mới Options (chưa khóa: vùng Hedge LP)", ["wfreeze"])}<div class="muted" style="margin:6px 0 4px">Hiển thị trên chart</div><label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="hg_show"${ofX("hg_show") ? " checked" : ""}> Hiện nền màu + viền nét đứt của vùng HG HEDGE (bỏ tick = ẩn, chỉ còn nhãn, vì trùng vùng HEDGE −Γ)</label>
     <div class="muted" style="margin:6px 0 4px">Số xác nhận tối thiểu: <select id="ofMin" style="font-size:12px">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}"${(Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm) === n ? " selected" : ""}>${n}</option>`).join("")}</select> (mặc định 2; nhớ để các điều kiện bên dưới được tick)</div>
     <div class="muted" style="margin:2px 0 6px">Tỉ lệ lời/lỗ tối thiểu (TP1 ÷ SL) của TL1·TL2·HG: <select id="ofRR" style="font-size:12px">${[0, 0.5, 1, 1.5, 2].map((n) => `<option value="${n}"${(Number(OFS.minRR) || 0) === n ? " selected" : ""}>${n === 0 ? "0 (tắt)" : n}</option>`).join("")}</select> (mặc định tắt; thấp hơn ngưỡng thì KHÔNG ra tín hiệu, không vẽ khung)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
   d.addEventListener("change", (e) => {
@@ -1262,6 +1298,7 @@ function ofInitUI() {
     const el = e.target.closest("input[data-of]"); if (!el) return;
     for (const k of el.dataset.of.split("|")) { if (el.checked) delete OFS[k]; else OFS[k] = false; }
     try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { /* bỏ qua */ }
+    if (el.dataset.of === "wfreeze") { pollState(); return; }   // v23ak: bật/tắt khóa -> nạp lại dữ liệu từ server ngay
     replaySignals(); ofRender();
   });
   lab.insertAdjacentElement("afterend", d);
@@ -2149,6 +2186,7 @@ function exportCsv() {
 async function pollState(first = false) {
   try {
     const st = await (await fetch(API("/api/state") + (STATIC ? "?t=" + Date.now() : ""))).json();
+    ofFreezeRatio(st);   // v23ak: khóa tỉ lệ quy đổi trước khi so sánh/hiển thị
     const changed = JSON.stringify(st.options) !== JSON.stringify(S.state?.options);
     S.state = st; S.cfg = st.config;
     if (first) return;
