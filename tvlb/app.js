@@ -516,10 +516,10 @@ function drawOverlayBase() {
   }
 
   // TVLB B9b0: khung đo SL/TP kiểu TradingView + dấu vào lệnh cho các tín hiệu Option Flow hôm nay
-  if (ofOn("rr") && S.ofChk && S.ofChk.checked && S.signals.length) {
+  if (ofOn("rr") && S.ofChk && S.ofChk.checked && (S.signals.length || (S.of9Sig && S.of9Sig.length))) {
     const tsc = chart.timeScale(), cc = S.candles, P = (v) => candleS.priceToCoordinate(v);
     ctx.font = "600 10px 'IBM Plex Mono', monospace"; ctx.textBaseline = "middle";
-    for (const g of S.signals.slice(-6)) {
+    for (const g of [...S.signals.slice(-6), ...(S.of9Sig || [])]) {
       const x0 = tsc.timeToCoordinate(g.time + TZ); if (x0 == null || x0 > plotW) continue;
       const nx = cc[g.i + 1] ? tsc.timeToCoordinate(cc[g.i + 1].time + TZ) : null, bs = nx != null ? Math.max(3, nx - x0) : 8;
       let hit = null;
@@ -802,7 +802,7 @@ function ofModel() {
       const kk = c[j], pv = c[j - 1], q2 = c[j - 2], dx = S.state?.macro?.DXY?.chg_n_pct ?? 0;
       const av = c.slice(j - sc.vol_sma, j).reduce((a, x) => a + x.vol, 0) / sc.vol_sma, sl = kk.cvd - c[j - sc.cvd_slope_bars].cvd, dd = nearDoi(kk.close);
       const vs = av > 0 && kk.vol >= sc.vol_spike_mult * av;
-      return { k: kk, prev: pv, p2: q2, slope: sl, d0: divAt(j), d1: divAt(j - 1), dUp: dx >= sc.dxy_thr_pct, dDn: dx <= -sc.dxy_thr_pct, vSp: vs, dFlat: !!dd && dd.d_oi <= 0, dBig: !!dd && Math.abs(dd.d_oi) >= sc.doi_big,
+      return { j, k: kk, prev: pv, p2: q2, slope: sl, d0: divAt(j), d1: divAt(j - 1), dUp: dx >= sc.dxy_thr_pct, dDn: dx <= -sc.dxy_thr_pct, vSp: vs, dFlat: !!dd && dd.d_oi <= 0, dBig: !!dd && Math.abs(dd.d_oi) >= sc.doi_big,
         bf: hist ? bigFlowAt(j, sc.cvd_slope_bars) : bigFlow(sc.cvd_slope_bars), swp: (S.smc?.sweeps || []).some((w) => w.i >= j - 2 && w.i <= j),
         bod: c.slice(j - 10, j).reduce((a, x) => a + Math.abs(x.close - x.open), 0) / 10, lo3: Math.min(kk.low, pv.low, q2.low), hi3: Math.max(kk.high, pv.high, q2.high),
         a: hist ? j : j - 2, b: hist ? Math.min(j + 2, c.length - 2) : j, inS: hist ? inUsSession(kk.time) : inS, cdOk: hist ? !S.signals.some((g) => g.i <= j && j - g.i <= sc.cooldown_bars) : cdOk };
@@ -811,7 +811,7 @@ function ofModel() {
       const { k, prev, p2, slope, d0, d1, dUp, dDn, vSp, dFlat, dBig, bf, swp, bod, lo3, hi3, inS, cdOk } = X;   // X.a..X.b = cửa sổ nến (9A)
       const id = p.id, sell = p.side === "SELL", nw = /^nw/.test(id), lvl = (p.lo + p.hi) / 2;
       if (/^hg/.test(id) && p.side === "BOTH") return { ok: 0, tot: 0, shape: [], conf: [], gate: [], need: 0, note: "giá đang TRONG vùng: chưa có điểm vào, chờ giá ra khỏi vùng rồi quay lại" };
-      let shape = [], conf = [];
+      let shape = [], conf = [], revIdx = null;
       if (id === "ts") { shape = [[k.high >= cw - tol, `Nến chạm vùng (cao nhất ≥ ${ofFm(cw - tol)})`], [k.close < cw, "Nến đóng dưới tường"], [k.close < k.open, "Nến giảm"]]; conf = [["Phân kỳ CVD âm", d0.bear || d1.bear], ["CVD dốc xuống", slope < 0], ["DXY tăng", dUp], ["Volume spike", vSp], ["Vol↑ mà ΔOI≤0", vSp && dFlat], ["ΔOI≥1500 tại vùng", dBig]]; }
       else if (id === "tb") { shape = [[k.low <= pw + tol, `Nến chạm vùng (thấp nhất ≤ ${ofFm(pw + tol)})`], [k.close > pw, "Nến đóng trên tường"], [k.close > k.open, "Nến tăng"]]; conf = [["Phân kỳ CVD dương", d0.bull || d1.bull], ["CVD dốc lên", slope > 0], ["DXY giảm", dDn], ["Volume spike", vSp], ["Vol↑ mà ΔOI≤0", vSp && dFlat], ["ΔOI≥1500 tại vùng", dBig]]; }
       else if (id === "bd") { shape = [[k.close < pw - tol, `Nến đóng dưới ${ofFm(pw - tol)}`], [prev.close >= pw - tol, "Nến trước còn ở trên"]]; conf = [["CVD dốc xuống", slope < 0], ["Delta nến âm", k.delta < 0], ["DXY tăng", dUp], ["Volume spike", vSp]]; }
@@ -826,6 +826,7 @@ function ofModel() {
         let st = f < 0 ? "none" : "wait", r = -1;
         if (f >= 0) for (let m = f; m <= Math.min(f + 2, X.b); m++) { if (thr(c[m])) { st = "through"; break; } if (rv(c[m])) { st = "rev"; r = m; break; } }
         if (st === "wait" && f + 2 <= X.b) st = "expired";
+        revIdx = st === "rev" ? r : null;   // v23ai: nến xác nhận quay ngược (để vẽ khung vào lệnh ở nến kế)
         const rvTxt = "Có nến đóng quay ngược ≥ 0,10% từ tường (trong 1–3 nến kể từ nến chạm" + (st === "rev" ? `; đạt ở nến thứ ${r - f + 1}` : st === "wait" ? `; mới ${X.b - f + 1} nến, còn chờ` : st === "expired" ? "; đã hết 3 nến mà chưa có" : "") + ")";
         shape = [[f >= 0, "Chạm vùng ±0,10% quanh tường"], [st === "rev", rvTxt], [f >= 0 && st !== "through", "Chưa đóng xuyên quá 0,10% qua tường (trước nến quay ngược)"]];
         // v23s: xác nhận theo MENU (cùng bộ với bẫy TL1·2; B10b gốc không có xác nhận, đây là phần gắn thêm theo yêu cầu: điều kiện phải theo menu)
@@ -845,7 +846,7 @@ function ofModel() {
       const cOk = conf.filter((x) => x[1]).length, need = minC;   // v23v: đúng như engine (score >= minConf): ít ô tick hơn mức tối thiểu thì KHÔNG BAO GIỜ đủ
       // v23t: số x/y hiển thị bên ngoài = các ô XÁC NHẬN đang tick trong menu (không cộng hình thái + cổng như v23s). Hình thái và cổng vẫn bắt buộc: "full" = đủ cả ba.
       const shOk = shape.filter((x) => x[0]).length, gOk = gate.filter((x) => x[0]).length, xOk = Math.min(cOk, need), full = shOk === shape.length && cOk >= need && gOk === gate.length;
-      return { shape, conf, gate, need, cOk, xOk, shOk, gOk, full, time: k.time, ok: shOk + xOk + gOk, tot: shape.length + need + gate.length };   // v23v: ok/tot chỉ để biết có dữ liệu; hiển thị luôn dùng ofSum(h)
+      return { shape, conf, gate, need, cOk, xOk, shOk, gOk, full, time: k.time, revIdx, cj: X.j, ok: shOk + xOk + gOk, tot: shape.length + need + gate.length };   // v23v: ok/tot chỉ để biết có dữ liệu; hiển thị luôn dùng ofSum(h)
     };
     liveX = mkCtx(i, false); plans.forEach((p) => { p.chk = chkFor(p, liveX); });
     watchAt = (j) => { const X = mkCtx(j, true); return plans.map((p) => ({ p, chk: chkFor(p, X) })); };
@@ -1110,6 +1111,22 @@ function ofWatchList(M0) {
   }
   return out;
 }
+// v23ai: KHUNG VÀO LỆNH cho 9A/9B (chỉ VẼ, không ghi nhật ký, không tự động đặt lệnh giấy). Quy tắc B10b: SL 0,30%, TP 0,60% tính từ giá vào = giá MỞ nến kế nến xác nhận;
+// chỉ LẦN CHẠM ĐẦU của mỗi tường trong ngày (9A: nến đóng quay ngược trong 3 nến; 9B: nến đóng vượt tường). Chỉ vẽ khi đủ mọi điều kiện theo menu (full).
+function ofEntries() {
+  const c = S.candles, out = [], seen = {};
+  if (!ofOn("watch") || !c || c.length < 30) return out;
+  for (const w of ofWatchCached()) {
+    if (!w.first || !/^nw/.test(w.p.id) || seen[w.p.id]) continue;
+    seen[w.p.id] = true;
+    if (!w.chk.full) continue;
+    const idx = /^nwa/.test(w.p.id) ? w.chk.revIdx : w.chk.cj;
+    if (idx == null || !c[idx + 1]) continue;
+    const sell = w.p.side === "SELL", e = c[idx + 1].open;
+    out.push({ i: idx, time: c[idx].time, side: w.p.side, entry: e, sl: e * (sell ? 1.003 : 0.997), tp1: e * (sell ? 0.994 : 1.006), tp2: null, tag: /^nwa/.test(w.p.id) ? "9A" : "9B", score: 0, max: 0, virt: true });
+  }
+  return out;
+}
 // v23t: ký hiệu NẾN QUAN SÁT vẽ trên lớp overlay (cùng lớp với nhãn VAH/POC/VAL, vùng HG), không dùng setMarkers của biểu đồ.
 // ◉ vàng = nến chạm vùng, kèm x/y = số ô XÁC NHẬN (tick trong menu) đạt / số ô đang tick · ✔ = đủ hình thái + xác nhận tối thiểu + cổng. Chỉ hiển thị, không phải lệnh.
 function ofWatchCached(M0) {
@@ -1171,7 +1188,7 @@ function ofDrawWatch() {
   }
   ctx.restore();
 }
-function drawOverlay() { try { ofSyncChk(S.ofPlans); } catch (e) { /* bỏ qua */ } drawOverlayBase(); try { ofDrawWatch(); } catch (e) { S.watchErr = String(e && e.message || e); } }
+function drawOverlay() { try { ofSyncChk(S.ofPlans); S.of9Sig = ofEntries(); } catch (e) { S.of9Sig = []; } drawOverlayBase(); try { ofDrawWatch(); } catch (e) { S.watchErr = String(e && e.message || e); } }
 const ofChkLines = (h) => { const li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join(""); return li(h.shape) + li(h.conf, true) + li(h.gate); };
 function ofRender() {
   const wn = $("#ofWarn"), T = $("#ofT"); let w = ""; try { w = ofWarnText(); } catch { /* chưa có cấu hình */ }
@@ -1234,8 +1251,10 @@ function ofInitUI() {
     <div class="muted" style="margin:2px 0 4px">Bảng theo dõi nằm ở trang "Vào lệnh OF" bên phải (đứng trước trang "Vào lệnh").</div>
     <div class="muted" style="margin:4px 0">Nhóm tín hiệu</div>${OF_GROUPS.map(([k, t]) => row(k, t, [k])).join("")}
     <div class="muted" style="margin:6px 0 4px">Bộ lọc theo anh Nam (MẶC ĐỊNH TẮT = như TL1/TL2 cũ; chờ anh Nam xác nhận)</div>${OF_FILTERS.map(([k, t]) => `<label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="${k}"${ofX(k) ? " checked" : ""}> ${t}</label>`).join("")}<div class="muted" style="margin:2px 0 4px 18px">Ngưỡng «Flip GẦN giá»: <select id="ofFN" style="font-size:12px">${[5, 10, 15, 20, 30, 50].map((n) => `<option value="${n}"${ofFlipNear() === n ? " selected" : ""}>${n}$</option>`).join("")}</select> (mặc định 20$; chọn theo ý bạn, chưa kiểm định)</div><div class="muted" style="margin:6px 0 4px">Hiển thị trên chart</div><label style="display:block;margin:2px 0;cursor:pointer"><input type="checkbox" data-ofx="hg_show"${ofX("hg_show") ? " checked" : ""}> Hiện nền màu + viền nét đứt của vùng HG HEDGE (bỏ tick = ẩn, chỉ còn nhãn, vì trùng vùng HEDGE −Γ)</label>
-    <div class="muted" style="margin:6px 0 4px">Số xác nhận tối thiểu: <select id="ofMin" style="font-size:12px">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}"${(Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm) === n ? " selected" : ""}>${n}</option>`).join("")}</select> (mặc định 2; nhớ để các điều kiện bên dưới được tick)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
+    <div class="muted" style="margin:6px 0 4px">Số xác nhận tối thiểu: <select id="ofMin" style="font-size:12px">${[0, 1, 2, 3, 4].map((n) => `<option value="${n}"${(Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm) === n ? " selected" : ""}>${n}</option>`).join("")}</select> (mặc định 2; nhớ để các điều kiện bên dưới được tick)</div>
+    <div class="muted" style="margin:2px 0 6px">Tỉ lệ lời/lỗ tối thiểu (TP1 ÷ SL) của TL1·TL2·HG: <select id="ofRR" style="font-size:12px">${[0, 0.5, 1, 1.5, 2].map((n) => `<option value="${n}"${(Number(OFS.minRR) || 0) === n ? " selected" : ""}>${n === 0 ? "0 (tắt)" : n}</option>`).join("")}</select> (mặc định tắt; thấp hơn ngưỡng thì KHÔNG ra tín hiệu, không vẽ khung)</div>${OF_CONDS.map(([k, t, n]) => row(k, t, n.map((x) => (x === "gamma" ? x : "c:" + x)))).join("")}`;
   d.addEventListener("change", (e) => {
+    if (e.target.id === "ofRR") { OFS.minRR = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofMin") { OFS.minConf = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); return; }
     if (e.target.id === "ofFN") { OFS.flipNear = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
     const ex = e.target.closest("input[data-ofx]");   // TVLB B9b1
@@ -1328,6 +1347,7 @@ function evaluate(i, live) {
     for (const kk of Object.keys(conf)) if (!ofOn("c:" + kk)) delete conf[kk]; // điều kiện bị tắt
     const tag = grp === "g_tl1" ? "TL1" : grp === "g_trap" ? "TL1·2" : "HG";
     const score = Object.values(conf).filter(Boolean).length;
+    if (Number(OFS.minRR) > 0) { const risk = Math.abs(k.close - sl), gain = tp1 != null ? Math.abs(tp1 - k.close) : 0; if (!(gain / Math.max(risk, 0.01) >= OFS.minRR)) return null; }   // v23ai: bỏ tín hiệu có tỉ lệ lời/lỗ (TP1/SL) thấp hơn ngưỡng ở menu (0 = tắt)
     return score >= (Number.isInteger(OFS.minConf) ? OFS.minConf : sc.min_confirm) ? { i, time: k.time, type: "[Options Flow] " + type, side, conf, score, max: Object.keys(conf).length, entry: k.close, sl, tp1, tp2, live, tag } : null;
   };
   let s = null;
