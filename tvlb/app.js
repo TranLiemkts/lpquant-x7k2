@@ -1094,7 +1094,7 @@ function ofBadge(st, side) {
 function ofWatchList(M0) {
   if (!ofOn("watch")) return [];
   const M = M0 || ofModel(); if (!M || !M.watchAt) return [];
-  const c = S.candles, sc = S.cfg.signals, day = vnDate(c[c.length - 1].time), j0 = Math.max(sc.vol_sma, sc.cvd_slope_bars, sc.div_lookback + 1, 12) + 2, out = [], was = {};
+  const c = S.candles, sc = S.cfg.signals, day = vnDate(c[c.length - 1].time), j0 = Math.max(sc.vol_sma, sc.cvd_slope_bars, sc.div_lookback + 1, 12) + 2, out = [], was = {}, lastF = {};
   for (let j = j0; j <= c.length - 2; j++) {
     if (vnDate(c[j].time) !== day) continue;
     const k = c[j];
@@ -1102,7 +1102,10 @@ function ofWatchList(M0) {
       if (!p.on || /^hg/.test(p.id) || !chk || !chk.tot) continue;
       const ev = /^(ts|tb|nwa)/.test(p.id) ? k.high >= p.lo && k.low <= p.hi : chk.shape.length >= 2 && chk.shape[0][0] && chk.shape[1][0];
       const was1 = was[p.id]; was[p.id] = ev;
-      if (ev) out.push({ j, time: k.time, p, chk, tot: chk.tot, first: !was1 });   // first = nến đầu của một đợt; các nến sau trong cùng đợt cũng được chấm (chấm nhỏ)
+      // v23ah: nến chạm lại trong cửa sổ 3 nến kể từ nến "first" của cùng kế hoạch chỉ là CHẤM, không thành đợt mới (không thêm tam giác/nhãn thứ hai)
+      const inWin = /^(ts|tb|nwa)/.test(p.id) && lastF[p.id] != null && j - lastF[p.id] <= 2, isFirst = ev && !was1 && !inWin;
+      if (isFirst) lastF[p.id] = j;
+      if (ev) out.push({ j, time: k.time, p, chk, tot: chk.tot, first: isFirst });   // first = nến đầu của một đợt; các nến sau trong cùng đợt cũng được chấm (chấm nhỏ)
     }
   }
   return out;
@@ -1138,6 +1141,7 @@ function ofDrawWatch() {
   const c = S.candles, tsc = chart.timeScale(), dpr = ov.dpr, Wd = ov.cv.width / dpr, Hd = ov.cv.height / dpr, psW = chart.priceScale("right").width() || 70, plotW = Wd - psW, plotH = Hd - 28, per = {};
   ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = "700 10.5px 'IBM Plex Mono', monospace"; ctx.textBaseline = "middle"; ctx.textAlign = "center";
   const nAt = {}; for (const w of W) nAt[w.j] = (nAt[w.j] || 0) + 1;
+  const evAt = new Set(W.map((w) => w.p.id + "|" + w.j)), boxes = [];   // v23ae: các ô nhãn đã vẽ, để nhãn sau tự né không đè lên nhãn trước
   for (const w of W) {
     const k = c[w.j]; if (!k) continue; const x = tsc.timeToCoordinate(w.time + TZ); if (x == null || x < 0 || x > plotW) continue;
     const sell = w.p.side === "SELL", ye = candleS.priceToCoordinate(sell ? k.high : k.low); if (ye == null) continue;
@@ -1147,10 +1151,23 @@ function ofDrawWatch() {
     if (!w.first) { ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(x, tipY + dir * 3, 2.2, 0, 7); ctx.fill(); ctx.globalAlpha = 1; continue; }   // nến tiếp theo trong cùng đợt chạm: chỉ chấm nhỏ
     // tam giác nhỏ chỉ vào nến (SELL: ▼ phía trên nến · BUY: ▲ phía dưới nến) + số x/y; chi tiết khi rê chuột
     ctx.beginPath(); ctx.moveTo(x, tipY); ctx.lineTo(x - 4.5, tipY + dir * 7); ctx.lineTo(x + 4.5, tipY + dir * 7); ctx.closePath(); ctx.fill();
-    const t = (nAt[w.j] > 1 ? w.p.short.replace(/ TƯỜNG( GẦN)?/, "") + " " : "") + ofSimple(w.chk), ty = tipY + dir * 15, tw = ctx.measureText(t).width;
+    // v23ag: 9A có cửa sổ 3 nến (nến chạm + 2 nến sau): chấm nhỏ cho 2 nến kế tiếp, kể cả khi chúng không còn chạm vùng (như bản cũ nhưng không phụ thuộc nến có chạm hay không)
+    if (/^nwa/.test(w.p.id)) for (let jj = w.j + 1; jj <= w.j + 2 && jj < c.length; jj++) {
+      if (evAt.has(w.p.id + "|" + jj) || !c[jj]) continue;
+      const x2 = tsc.timeToCoordinate(c[jj].time + TZ), y2 = candleS.priceToCoordinate(sell ? c[jj].high : c[jj].low); if (x2 == null || y2 == null || x2 < 0 || x2 > plotW) continue;
+      ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(x2, y2 + (sell ? -dy : dy) + dir * 3, 2.2, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+    }
+    const t = (nAt[w.j] > 1 ? w.p.short.replace(/ TƯỜNG( GẦN)?/, "") + " " : "") + ofSimple(w.chk), tw = ctx.measureText(t).width, bw = tw + 10, bh = 16;
+    let ty = tipY + dir * 16;
+    for (let g = 0; g < 4; g++) {   // v23ae: nhãn trùng chỗ thì đẩy ra xa nến một nấc, không đè chữ lên nhau
+      const r = { x0: x - bw / 2, x1: x + bw / 2, y0: ty - bh / 2, y1: ty + bh / 2 };
+      if (!boxes.some((b) => r.x0 < b.x1 && r.x1 > b.x0 && r.y0 < b.y1 && r.y1 > b.y0) || g === 3) { boxes.push(r); break; }
+      ty += dir * (bh + 2);
+    }
     if (ty < 8 || ty > plotH - 8) continue;
-    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(10,14,20,.9)"; ctx.strokeText(t, x, ty); ctx.fillStyle = col; ctx.fillText(t, x, ty);
-    ov.tags.push({ x0: x - Math.max(tw / 2, 5) - 3, x1: x + Math.max(tw / 2, 5) + 3, y0: Math.min(tipY, ty) - 8, y1: Math.max(tipY + dir * 7, ty) + 8, k: "watch", tip: ofWatchTip(w) });
+    // v23af: trả về kiểu cũ (gọn): chữ sáng có viền tối, KHÔNG có ô nền; màu trạng thái nằm ở tam giác
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(10,14,20,.9)"; ctx.strokeText(t, x, ty); ctx.fillStyle = col === "#9aa4b2" ? col : "#e6e9ee"; ctx.fillText(t, x, ty);
+    ov.tags.push({ x0: x - bw / 2 - 2, x1: x + bw / 2 + 2, y0: Math.min(tipY, ty - 8) - 2, y1: Math.max(tipY + dir * 7, ty + 8) + 2, k: "watch", tip: ofWatchTip(w) });
   }
   ctx.restore();
 }
