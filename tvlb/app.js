@@ -536,9 +536,13 @@ function drawOverlayBase() {
       const pr = ++rrN;   // v23am-2: nhãn xếp hàng, vẽ sau cùng (tín hiệu mới nhất ưu tiên, nhãn chạm nhau thì bỏ)
       // v23am-4: bỏ nhãn điểm vào lệnh (khung SL/TP đã nằm đúng chỗ vào lệnh; hướng BUY/SELL đã có mũi tên trên nến tín hiệu)
       // v23am-6: TP ở cạnh TP, SL ở cạnh SL, mỗi nhãn căn giữa bề rộng khung đo
-      if (yT != null) rrLab.push({ t: `TP ${gain.toFixed(0)} · 1:${(gain / Math.max(risk, 0.01)).toFixed(1)}`, c: "#26a69a", x: x0 + w / 2, y: yT + (g.side === "BUY" ? 6 : -6), al: "center", pr, o: 1 });
-      rrLab.push({ t: `SL ${risk.toFixed(0)}`, c: "#ef5350", x: x0 + w / 2, y: yS + (g.side === "BUY" ? -6 : 6), al: "center", pr, o: 2 });
-      if (hit) rrLab.push({ t: hit.t === "chạm SL" ? "SL✕" : "TP✓", c: hit.t === "chạm SL" ? "#ef5350" : "#26a69a", x: x1 - 3, y: yE, al: "right", pr, o: 3 });
+      if (yT != null) rrLab.push({ t: `TP ${gain.toFixed(0)} · 1:${(gain / Math.max(risk, 0.01)).toFixed(1)}${hit && hit.t === "chạm TP1" ? " ✓" : ""}`, c: "#26a69a", x: x0 + w / 2, y: yT + (g.side === "BUY" ? 6 : -6), al: "center", pr, o: 1 });
+      rrLab.push({ t: `SL ${risk.toFixed(0)}${hit && hit.t === "chạm SL" ? " ✕" : ""}`, c: "#ef5350", x: x0 + w / 2, y: yS + (g.side === "BUY" ? -6 : 6), al: "center", pr, o: 2 });
+      if (!hit && p0 != null && cc.length - 1 <= g.i + 14) {   // v23am-13: lệnh đang chạy (chưa chạm SL/TP, khung còn trong 14 nến): ghi R hiện tại ở giữa khung
+        const pnl = (g.side === "BUY" ? p0 - g.entry : g.entry - p0) / Math.max(risk, 0.01);
+        rrLab.push({ t: `${pnl >= 0 ? "+" : "−"}${Math.abs(pnl).toFixed(1)}R`, c: pnl >= 0 ? "#26a69a" : "#ef5350", x: x0 + w / 2, y: (yS + (yT != null ? yT : yE)) / 2, al: "center", pr, o: 0 });
+      }
+      // v23am-12: bỏ nhãn "SL✕/TP✓" riêng — dấu ✕ nằm ngay sau nhãn SL, dấu ✓ ngay sau nhãn TP khi lệnh đã chạm
     }
     rrLab.sort((a, b) => b.pr - a.pr || a.o - b.o);
     const rrBox = [];
@@ -1225,7 +1229,19 @@ function ofEntries() {
     const sell = w.p.side === "SELL", e = c[idx + 1].open;
     out.push({ i: idx, time: c[idx].time, side: w.p.side, entry: e, sl: e * (sell ? 1.003 : 0.997), tp1: e * (sell ? 0.994 : 1.006), tp2: null, tag: /^nwa/.test(w.p.id) ? "9A" : "9B", score: 0, max: 0, virt: true });
   }
-  return out;
+  // v23am-14: CHỐT LỆNH 9A/9B ngay khi vừa xuất hiện (≤ 2 nến trước), lưu theo ngày VN. Trước đây mọi thứ tính lại từ mốc tường/Gamma HIỆN TẠI nên lệnh đã vào bị biến mất khi Magnet/cổng đổi.
+  try {
+    const day = vnDate(c[c.length - 1].time), key = "tvlb.of9." + day;
+    for (let q = localStorage.length - 1; q >= 0; q--) { const kk = localStorage.key(q); if (kk && kk.indexOf("tvlb.of9.") === 0 && kk !== key) localStorage.removeItem(kk); }
+    const saved = JSON.parse(localStorage.getItem(key) || "[]"), byId = new Map(saved.map((x) => [x.id, x]));
+    let dirty = false;
+    for (const g of out) { g.id = `${g.tag}|${g.side}|${g.time}`; if (!byId.has(g.id) && c.length - 1 - g.i <= 2) { const o = { id: g.id, time: g.time, side: g.side, entry: g.entry, sl: g.sl, tp1: g.tp1, tag: g.tag }; saved.push(o); byId.set(g.id, o); dirty = true; } }
+    if (dirty) localStorage.setItem(key, JSON.stringify(saved));
+    const res = [], used = new Set();
+    for (const g of out) { used.add(g.id); const sv = byId.get(g.id); res.push(sv ? { ...g, entry: sv.entry, sl: sv.sl, tp1: sv.tp1 } : g); }
+    for (const sv of saved) { if (used.has(sv.id)) continue; let ix = -1; for (let j = c.length - 1; j >= 0; j--) if (c[j].time === sv.time) { ix = j; break; } if (ix < 0) continue; res.push({ i: ix, time: sv.time, side: sv.side, entry: sv.entry, sl: sv.sl, tp1: sv.tp1, tp2: null, tag: sv.tag, score: 0, max: 0, virt: true, latched: true }); }
+    return res;
+  } catch (e) { return out; }
 }
 // v23t: ký hiệu NẾN QUAN SÁT vẽ trên lớp overlay (cùng lớp với nhãn VAH/POC/VAL, vùng HG), không dùng setMarkers của biểu đồ.
 // ◉ vàng = nến chạm vùng, kèm x/y = số ô XÁC NHẬN (tick trong menu) đạt / số ô đang tick · ✔ = đủ hình thái + xác nhận tối thiểu + cổng. Chỉ hiển thị, không phải lệnh.
