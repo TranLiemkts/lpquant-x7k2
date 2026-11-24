@@ -525,7 +525,7 @@ function drawOverlayBase() {
       const nx = cc[g.i + 1] ? tsc.timeToCoordinate(cc[g.i + 1].time + TZ) : null, bs = nx != null ? Math.max(3, nx - x0) : 8;
       let hit = null;
       for (let j = g.i + 1; j < cc.length; j++) { const k2 = cc[j]; if (g.side === "BUY" ? k2.low <= g.sl : k2.high >= g.sl) { hit = { j, t: "chạm SL" }; break; } if (g.tp1 != null && (g.side === "BUY" ? k2.high >= g.tp1 : k2.low <= g.tp1)) { hit = { j, t: "chạm TP1" }; break; } }
-      let x1 = hit ? tsc.timeToCoordinate(cc[hit.j].time + TZ) : null; if (x1 == null) x1 = x0 + 14 * bs;
+      let x1 = hit ? tsc.timeToCoordinate(cc[hit.j].time + TZ) : null; if (x1 == null) { const xl = tsc.timeToCoordinate(cc[cc.length - 1].time + TZ); x1 = xl != null ? xl + bs : x0 + 14 * bs; }   // v23am-16: lệnh chưa chạm SL/TP = còn mở → khung kéo tới nến hiện tại
       x1 = Math.min(plotW - 2, Math.max(x1, x0 + 6 * bs));
       const yE = P(g.entry), yS = P(g.sl), yT = g.tp1 != null ? P(g.tp1) : null; if (yE == null || yS == null) continue;
       const risk = Math.abs(g.entry - g.sl), gain = g.tp1 != null ? Math.abs(g.tp1 - g.entry) : null, w = x1 - x0;
@@ -538,7 +538,7 @@ function drawOverlayBase() {
       // v23am-6: TP ở cạnh TP, SL ở cạnh SL, mỗi nhãn căn giữa bề rộng khung đo
       if (yT != null) rrLab.push({ t: `TP ${gain.toFixed(0)} · 1:${(gain / Math.max(risk, 0.01)).toFixed(1)}${hit && hit.t === "chạm TP1" ? " ✓" : ""}`, c: "#26a69a", x: x0 + w / 2, y: yT + (g.side === "BUY" ? 6 : -6), al: "center", pr, o: 1 });
       rrLab.push({ t: `SL ${risk.toFixed(0)}${hit && hit.t === "chạm SL" ? " ✕" : ""}`, c: "#ef5350", x: x0 + w / 2, y: yS + (g.side === "BUY" ? -6 : 6), al: "center", pr, o: 2 });
-      if (!hit && p0 != null && cc.length - 1 <= g.i + 14) {   // v23am-13: lệnh đang chạy (chưa chạm SL/TP, khung còn trong 14 nến): ghi R hiện tại ở giữa khung
+      if (!hit && p0 != null) {   // v23am-13: lệnh đang chạy (chưa chạm SL/TP, khung còn trong 14 nến): ghi R hiện tại ở giữa khung
         const pnl = (g.side === "BUY" ? p0 - g.entry : g.entry - p0) / Math.max(risk, 0.01);
         rrLab.push({ t: `${pnl >= 0 ? "+" : "−"}${Math.abs(pnl).toFixed(1)}R`, c: pnl >= 0 ? "#26a69a" : "#ef5350", x: x0 + w / 2, y: (yS + (yT != null ? yT : yE)) / 2, al: "center", pr, o: 0 });
       }
@@ -1245,11 +1245,36 @@ function ofEntries() {
 }
 // v23t: ký hiệu NẾN QUAN SÁT vẽ trên lớp overlay (cùng lớp với nhãn VAH/POC/VAL, vùng HG), không dùng setMarkers của biểu đồ.
 // ◉ vàng = nến chạm vùng, kèm x/y = số ô XÁC NHẬN (tick trong menu) đạt / số ô đang tick · ✔ = đủ hình thái + xác nhận tối thiểu + cổng. Chỉ hiển thị, không phải lệnh.
+// v23am-15: CHỐT KÝ HIỆU NẾN QUAN SÁT "ĐỦ ĐIỀU KIỆN" (✓ x/y) của 9A/9B ngay khi vừa xuất hiện (≤ 2 nến trước), lưu theo ngày VN. Trước đây mọi ký hiệu tính lại từ mốc tường/Gamma HIỆN TẠI nên ✓ 3/3 biến mất khi cổng đổi.
+function ofWatchLatch(list) {
+  const c = S.candles; if (!c || !c.length) return list;
+  const day = vnDate(c[c.length - 1].time), key = "tvlb.ow." + day;
+  for (let q = localStorage.length - 1; q >= 0; q--) { const kk = localStorage.key(q); if (kk && kk.indexOf("tvlb.ow.") === 0 && kk !== key) localStorage.removeItem(kk); }
+  const saved = JSON.parse(localStorage.getItem(key) || "[]"), have = new Set(saved.map((x) => x.id));
+  let dirty = false;
+  for (const w of list) {
+    if (!w.first || !w.chk || !w.chk.full || !/^nw/.test(w.p.id) || c.length - 1 - w.j > 2) continue;
+    const id = w.p.id + "|" + w.time; if (have.has(id)) continue;
+    saved.push({ id, time: w.time, pid: w.p.id, side: w.p.side, short: w.p.short, lo: w.p.lo, hi: w.p.hi, chk: w.chk, tot: w.tot }); have.add(id); dirty = true;
+  }
+  if (dirty) localStorage.setItem(key, JSON.stringify(saved));
+  const present = new Set(list.filter((w) => w.first).map((w) => w.p.id + "|" + w.time)), out = list.slice();
+  for (const sv of saved) {
+    if (present.has(sv.id)) continue;
+    let j = -1; for (let q = c.length - 1; q >= 0; q--) if (c[q].time === sv.time) { j = q; break; }
+    if (j < 0) continue;
+    const plan = (S.ofPlans || []).find((p) => p.id === sv.pid) || { id: sv.pid, side: sv.side, short: sv.short, lo: sv.lo, hi: sv.hi, on: true };
+    out.push({ j, time: sv.time, p: plan, chk: sv.chk, tot: sv.tot, first: true, latched: true });
+  }
+  out.sort((x, y) => x.j - y.j);
+  return out;
+}
 function ofWatchCached(M0) {
   const c = S.candles; if (!c || c.length < 30) return [];
   const key = [c.length, c[c.length - 1].time, c[c.length - 1].close, S.tf, JSON.stringify(OFS)].join("|"), now = Date.now();
   if (S.watchC && S.watchC.key === key && now - S.watchC.t < 5000) return S.watchC.list;
   let list = []; try { list = ofWatchList(M0 || ofModel()); S.watchErr = null; } catch (e) { S.watchErr = String(e && e.message || e); }
+  try { list = ofWatchLatch(list); } catch (e) { /* giữ list gốc */ }
   S.watchC = { key, t: now, list }; S.watchN = list.filter((w) => w.first).length; return list;
 }
 // gán x/y của MỖI kế hoạch = lần theo dõi gần nhất hôm nay (cùng nguồn với ký hiệu trên nến); gọi cả từ ofRender lẫn lúc vẽ overlay để hai nơi không lệch nhau
