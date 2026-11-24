@@ -160,7 +160,7 @@
         else if (g.k === "hedge") return tipHedgeZone(g.z, g.win);
         else if (g.k === "gexcurve") return tipGexCurve(P0);
         else if (g.k === "vp") { const t = tipVP(g.vk); if (t) return t; }
-        else if (g.k === "watch" && g.tip) return g.tip;   // v23t: chú giải ký hiệu nến quan sát
+        else if ((g.k === "watch" || g.k === "zone") && g.tip) return g.tip;   // v23t: chú giải ký hiệu nến quan sát
       } }
     const yy = (v) => (v == null ? null : candleS.priceToCoordinate(v));
     [["GC", "#lyKey"], ["GLD", "#lyGLD"]].forEach(([src, chk]) => {
