@@ -719,7 +719,7 @@ const OF_GROUPS = [
   ["session", "Chỉ xét phiên Mỹ 19:00-23:00 giờ VN (bỏ tick = xét cả ngày)"],
   ["zones", "Vẽ vùng xem xét TL1·TL2·HG lên chart"],
   ["rr", "Vẽ khung đo SL/TP kiểu TradingView cho tín hiệu hôm nay"],
-  ["watch", "Đánh dấu NẾN ĐANG QUAN SÁT trên chart: ◉ + tên kế hoạch + số điều kiện đạt x/y (trên nến = SELL, dưới nến = BUY; chỉ hiển thị, không phải tín hiệu vào lệnh)"],
+  ["watch", "Đánh dấu NẾN ĐANG QUAN SÁT trên chart: ◉ vàng = đang quan sát, ✔ = đủ mọi điều kiện theo menu; kèm tên kế hoạch + x/y (trên nến = SELL, dưới nến = BUY; chỉ hiển thị, không phải lệnh)"],
 ];
 const OF_CONDS = [
   ["gamma", "Lọc Gamma: Gamma âm thì không BUY bắt đáy (TL1)", ["gamma"]],
@@ -823,12 +823,16 @@ function ofModel() {
         if (st === "wait" && f + 2 <= X.b) st = "expired";
         const rvTxt = "Có nến đóng quay ngược ≥ 0,10% từ tường (trong 1–3 nến kể từ nến chạm" + (st === "rev" ? `; đạt ở nến thứ ${r - f + 1}` : st === "wait" ? `; mới ${X.b - f + 1} nến, còn chờ` : st === "expired" ? "; đã hết 3 nến mà chưa có" : "") + ")";
         shape = [[f >= 0, "Chạm vùng ±0,10% quanh tường"], [st === "rev", rvTxt], [f >= 0 && st !== "through", "Chưa đóng xuyên quá 0,10% qua tường (trước nến quay ngược)"]];
+        // v23s: xác nhận theo MENU (cùng bộ với bẫy TL1·2; B10b gốc không có xác nhận, đây là phần gắn thêm theo yêu cầu: điều kiện phải theo menu)
+        conf = sell ? [["Phân kỳ CVD âm", d0.bear || d1.bear], ["CVD dốc xuống", slope < 0], ["DXY tăng", dUp], ["Volume spike", vSp], ["Vol↑ mà ΔOI≤0", vSp && dFlat], ["ΔOI≥1500 tại vùng", dBig]] : [["Phân kỳ CVD dương", d0.bull || d1.bull], ["CVD dốc lên", slope > 0], ["DXY giảm", dDn], ["Volume spike", vSp], ["Vol↑ mà ΔOI≤0", vSp && dFlat], ["ΔOI≥1500 tại vùng", dBig]];
       }
-      else if (/^nwb/.test(id)) { shape = [[sell ? k.close <= lvl * 0.9985 : k.close >= lvl * 1.0015, "Nến đóng vượt tường ≥ 0,15%"], [Math.abs(k.close - k.open) > bod, "Thân nến lớn hơn trung bình 10 nến trước"]]; }
-      if (!nw && bf && ["ts", "tb", "bd", "sq"].includes(id) || (/^hg/.test(id) && bf)) conf.push([sell ? "Lệnh lớn bán ròng" : "Lệnh lớn mua ròng", sell ? bf.d < 0 : bf.d > 0]);
+      else if (/^nwb/.test(id)) { shape = [[sell ? k.close <= lvl * 0.9985 : k.close >= lvl * 1.0015, "Nến đóng vượt tường ≥ 0,15%"], [Math.abs(k.close - k.open) > bod, "Thân nến lớn hơn trung bình 10 nến trước"]];
+        conf = sell ? [["CVD dốc xuống", slope < 0], ["Delta nến âm", k.delta < 0], ["DXY tăng", dUp], ["Volume spike", vSp]] : [["CVD dốc lên", slope > 0], ["Delta nến dương", k.delta > 0], ["DXY giảm", dDn], ["Volume spike", vSp]];   // v23s: xác nhận theo menu
+      }
+      if ((bf && (nw || ["ts", "tb", "bd", "sq"].includes(id))) || (/^hg/.test(id) && bf)) conf.push([sell ? "Lệnh lớn bán ròng" : "Lệnh lớn mua ròng", sell ? bf.d < 0 : bf.d > 0]);
       conf = conf.filter(([n]) => ofOn("c:" + n));   // điều kiện bị tắt thì không tính (giống mkSig)
       const gate = [];
-      if (!nw) { gate.push([tfOk, "Khung nến ≥ M5"]); if (sessOn) gate.push([inS, "Trong phiên Mỹ 19:00-23:00 VN"]); gate.push([cdOk, "Hết nghỉ sau tín hiệu trước"]); }
+      gate.push([tfOk, "Khung nến ≥ M5"]); if (sessOn) gate.push([inS, "Trong phiên Mỹ 19:00-23:00 VN"]); if (!nw) gate.push([cdOk, "Hết nghỉ sau tín hiệu trước"]);   // v23s
       if (ofX("x_flipfar")) gate.push([!flipFar, "Flip không xa quá 2,5%"]);
       if (typeof p.blocked === "boolean") gate.push([!p.blocked, "Chế độ Gamma cho phép"]);
       const cOk = conf.filter((x) => x[1]).length, need = Math.min(minC, conf.length);
@@ -1046,8 +1050,9 @@ function ofWatchMarks() {
   S.watchErr = null; S.watchN = W.filter((w) => w.first).length;
   const per = {}, out = [];
   for (const w of W) { const n = per[w.time] = (per[w.time] || 0) + 1; if (n > 3) continue;
-    out.push({ time: w.time + TZ, position: w.p.side === "SELL" ? "aboveBar" : "belowBar", color: "#f0b429", shape: "circle", size: w.first ? 0.9 : 0.5,
-      text: w.first ? `◉ ${w.p.short.replace(" TƯỜNG GẦN", "")} ${w.chk.ok}/${w.chk.tot}${w.p.blocked ? " ⛔" : ""}` : "" }); }
+    const full = w.chk.ok === w.chk.tot;   // v23s: đủ điều kiện theo menu → ✔ màu theo hướng; chưa đủ → ◉ vàng
+    out.push({ time: w.time + TZ, position: w.p.side === "SELL" ? "aboveBar" : "belowBar", color: full ? (w.p.side === "SELL" ? "#ef5350" : "#26a69a") : "#f0b429", shape: "circle", size: w.first ? (full ? 1.2 : 0.9) : 0.5,
+      text: w.first ? `${full ? "✔" : "◉"} ${w.p.short.replace(" TƯỜNG GẦN", "")} ${w.chk.ok}/${w.chk.tot}${w.p.blocked ? " ⛔" : ""}` : "" }); }
   return out;
 }
 const ofChkLines = (h) => { const li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join(""); return li(h.shape) + li(h.conf, true) + li(h.gate); };
