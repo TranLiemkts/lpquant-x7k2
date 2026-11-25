@@ -1376,10 +1376,14 @@ function ofSyncChk(plans, M0) {
 function ofWatchTip(w) {
   const h = w.chk, col = w.chk.full ? (w.p.side === "SELL" ? "#ef5350" : "#26a69a") : ofColH(w.chk), li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#7be0b0" : "#9aa4b2"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join("");
   const sec = (t, body) => body ? `<div style="margin-top:5px;padding-top:4px;border-top:1px solid #2b3440"><b style="color:#f3d38c">${t}</b>${body}</div>` : "";
-  return `<div style="font-weight:700;color:${col};margin-bottom:3px">${h.full ? "✔ ĐỦ ĐIỀU KIỆN" : h.gOk < h.gate.length ? (ofCandleOk(h) ? "⛔ Nến đã thỏa, cổng chưa qua (đứng ngoài)" : "⛔ Cổng chưa qua (đứng ngoài)") : "Đang theo dõi"} · ${ofNumW(w) ? "#" + ofNumW(w) + " " : ""}${w.p.short} ${w.p.side} · nến ${vnClock(w.time)}${ofEntW(w) ? " · ✔ ĐÃ VÀO LỆNH" : ""}</div>`
-    + `<div><b>${ofSimple(h)}</b> <span style="color:#9aa4b2">(${ofSum(h)})</span></div>`
+  const ordHtml = (() => { try { if (!/^nw/.test(w.p.id)) return ""; const wk = w.p.id + "|" + w.time, g = (S.of9Sig || []).find((x) => x.wkey === wk);
+    if (g) { const r = S.ofRes && S.ofRes.get(ofKey(g)), st = r && r.res ? r.res.status : ""; return `<div style="margin:2px 0 4px;padding:4px 6px;border-radius:4px;background:rgba(38,166,154,.12)"><b style="color:#7be0b0">✔ ĐÃ VÀO LỆNH #${ofNumW(w) || "?"}</b> · ${g.tag} ${g.side}<br>Vào ${ofFm(g.entry)} (giá mở nến kế) · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}${st ? `<br>Trạng thái: <b>${st}</b>` : ""}${g.rebuilt ? '<br><span style="color:#ff8a65">dựng lại, chưa chốt (không ghi nhật ký)</span>' : ""}</div>`; }
+    const why = w.nth > 1 ? `đã có lần đầu hôm nay lúc ${vnClock(w.firstT)} (luật: mỗi tường, mỗi chiều chỉ tính lần đầu)` : !h.full ? (h.shOk < h.shape.length ? "thiếu hình thái nến" : h.cOk < h.need ? `thiếu xác nhận (đạt ${h.cOk}, cần ≥ ${h.need})` : "cổng chặn") : "đủ điều kiện nhưng không thành lệnh";
+    return `<div style="margin:2px 0 4px;padding:4px 6px;border-radius:4px;background:rgba(255,255,255,.05);color:#c3c9d2"><b>✘ KHÔNG VÀO LỆNH</b>: ${why}</div>`; } catch (e) { return ""; } })();
+  return `<div style="font-weight:700;color:${col};margin-bottom:3px">${h.full ? "ĐỦ ĐIỀU KIỆN" : h.gOk < h.gate.length ? (ofCandleOk(h) ? "⛔ Nến đã thỏa, cổng chưa qua (đứng ngoài)" : "⛔ Cổng chưa qua (đứng ngoài)") : "Đang theo dõi"} · ${ofNumW(w) ? "#" + ofNumW(w) + " " : ""}${w.p.short} ${w.p.side} · nến ${vnClock(w.time)}${ofEntW(w) ? " · ✔ ĐÃ VÀO LỆNH" : ""}</div>`
+    + ordHtml + `<div><b>${ofSimple(h)}</b> <span style="color:#9aa4b2">(${ofSum(h)})</span></div>`
     + sec(`H · Hình thái ${h.shOk}/${h.shape.length}`, li(h.shape)) + sec(`X · Xác nhận (menu): ${ofXNote(h)}`, li(h.conf, true)) + sec(`C · Cổng ${h.gOk}/${h.gate.length}`, li(h.gate))
-    + `<div style="margin-top:5px;color:#9aa4b2">Tính theo mốc tường và chế độ Gamma HIỆN TẠI. Chỉ để quan sát, không phải lệnh. Vào lệnh khi đủ cả 3 nhóm.</div>`;
+    + `<div style="margin-top:5px;color:#9aa4b2">Vào lệnh khi đủ cả 3 nhóm (H, X, C) và là lần đầu của tường + chiều này trong ngày. Mốc tường theo Options hiện tại.</div>`;
 }
 function ofDrawWatch() {
   const ctx = ov.ctx; if (!ctx || !candleS) return;
@@ -1394,7 +1398,7 @@ function ofDrawWatch() {
     const k = c[w.j]; if (!k) continue; const x = tsc.timeToCoordinate(w.time + TZ); if (x == null || x < 0 || x > plotW) continue;
     const sell = w.p.side === "SELL", ye = candleS.priceToCoordinate(sell ? k.high : k.low); if (ye == null) continue;
     const n = per[w.j] = (per[w.j] || 0) + 1; if (n > 3) continue;
-    const late = /^nw/.test(w.p.id) && w.nth > 1, inO = ofEntW(w), wn = ofNumW(w), col = inO ? (sell ? "#ef5350" : "#26a69a") : late ? "#9aa4b2" : ofColH(w.chk), dy = 3 + (n - 1) * 22, tipY = ye + (sell ? -dy : dy), dir = sell ? -1 : 1;
+    const late = /^nw/.test(w.p.id) && w.nth > 1, inO = ofEntW(w), wn = ofNumW(w), col = inO ? (sell ? "#ef5350" : "#26a69a") : "#7d8794", dy = 3 + (n - 1) * 22, tipY = ye + (sell ? -dy : dy), dir = sell ? -1 : 1;
     ctx.fillStyle = col;
     if (!w.first) { ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(x, tipY + dir * 3, 2.2, 0, 7); ctx.fill(); ctx.globalAlpha = 1; continue; }   // nến tiếp theo trong cùng đợt chạm: chỉ chấm nhỏ
     // tam giác nhỏ chỉ vào nến (SELL: ▼ phía trên nến · BUY: ▲ phía dưới nến) + số x/y; chi tiết khi rê chuột
@@ -1419,7 +1423,7 @@ function ofDrawWatch() {
     }
     const yTop = dir > 0 ? ty : ty - bh; if (yTop < 2 || yTop + bh > plotH - 2) continue;
     ctx.lineWidth = 3; ctx.strokeStyle = "rgba(10,14,20,.9)";
-    lines.forEach((q, n) => { const yy = ty + dir * (n * lh + lh / 2 + 1); ctx.strokeText(q, x, yy); ctx.fillStyle = /^#|^✔/.test(q) ? "#f0b429" : /^lần/.test(q) ? "#9aa4b2" : n === 0 || inO ? col : col === "#9aa4b2" ? col : "#e6e9ee"; ctx.fillText(q, x, yy); });
+    lines.forEach((q, n) => { const yy = ty + dir * (n * lh + lh / 2 + 1); ctx.strokeText(q, x, yy); ctx.fillStyle = inO ? (/^#/.test(q) ? "#f0b429" : col) : "#8a93a0"; ctx.fillText(q, x, yy); });   // 9b-5c: đã vào = sáng theo chiều (mã số vàng); chưa thỏa / không vào = xám hết
     ctx.font = "700 10.5px 'IBM Plex Mono', monospace";
     ov.tags.push({ x0: x - bw / 2 - 2, x1: x + bw / 2 + 2, y0: Math.min(tipY, yTop) - 2, y1: Math.max(tipY + dir * 7, yTop + bh) + 2, k: "watch", tip: ofWatchTip(w) });
   }
