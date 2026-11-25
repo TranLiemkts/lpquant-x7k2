@@ -484,7 +484,8 @@ function drawTH(ctx, plotW, h) {
           const ly = p.d < 0 ? a - 4 - 12 * k_ : b + 11 + 12 * k_;   // SELL ghi trên vùng, BUY ghi dưới vùng; cùng vùng thì xếp chồng
           cx.fillText((window.TVLB_COMPACT ? `${p.id} ${p.d < 0 ? "SELL" : "BUY"} ${p.z.st}★${p.st === "CHỜ" ? "" : " · " + p.st}` : `${p.id} ${p.kind === "break" ? "PHÁ" : "BẬT"} ${p.d < 0 ? "SELL" : "BUY"} ${"★".repeat(p.z.st)} · ${p.st}`)   /* 7o số 140: chế độ gọn */, plotW - 6, ly); }); }
       // hộp SL/TP lệnh KH đang chạy + 3 lệnh vừa đóng
-      if (O.box && O.boxn >= 0) { const T = (window.tvlbPlans ? window.tvlbPlans().TRK : []).filter((t) => t.tf === S.tf && !t.drop);
+      if (O.box && O.boxn >= 0) { const khOn = (t) => { const n = (String(t.id || t.code || "").match(/(\d)/) || [])[1]; return !n || O["kh" + n] !== false; };   // 9b-5c: ô KH1/KH2/KH3 cũng ẩn hộp SL/TP + mã K1-/K2-/K3- của kế hoạch đó
+        const T = (window.tvlbPlans ? window.tvlbPlans().TRK : []).filter((t) => t.tf === S.tf && !t.drop && khOn(t));
         const show = T.filter((t) => !t.res).concat(T.filter((t) => t.res).slice(0, O.boxn === 999 ? 1e9 : Math.max(1, O.boxn))); const idx = new Map(bars.map((b, i) => [b.time, i]));
         show.forEach((t) => { const i0 = idx.get(t.t); if (i0 == null) return; const i1 = t.res && t.xt != null && idx.get(t.xt) != null ? idx.get(t.xt) : bars.length + 6;
           const x0 = X(i0), x1 = X(i1), ye = Y(t.e), yt = Y(t.tp), ys = Y(t.sl); if (!ok(x0, x1, ye, yt, ys)) return;
