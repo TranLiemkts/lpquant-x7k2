@@ -13,7 +13,7 @@ const TVLB_DEFAULTS = {
  "tvlb.layers": "{\"#lyGex\":true,\"#lySMC\":true,\"#lyKey\":true,\"#lyGLD\":true,\"#lyVP\":true,\"#lyMk\":true}",
  "tvlb.of": "{\"minConf\":2,\"x_regime\":true,\"x_near\":true,\"boxMax\":5,\"boxRun\":false,\"session\":false,\"x_flipnear\":true}",
  "tvlb.o3": "{\"thSt\":false,\"thSg\":false,\"sig\":false,\"kh\":false,\"box\":true,\"snd\":true,\"tg\":true,\"tout\":36,\"k\":{\"wall\":false,\"oh\":false,\"oht\":false,\"conf\":false,\"pro\":false,\"m\":false,\"sw\":false},\"minG\":\"C\",\"kh1\":false,\"kh2\":false,\"kh3\":false,\"tpm\":\"auto\",\"boxn\":3,\"slmax\":0,\"al\":{\"kh\":false,\"khz\":false,\"sig\":true,\"hedge\":true,\"div\":true,\"news\":true},\"sty\":\"beep\",\"vol\":60,\"diff\":true,\"minor\":false,\"topn\":5,\"wst\":2,\"wh\":true}",
- "tvlb.tip": "{\"st\":true,\"sg\":true,\"of\":true,\"prem\":false,\"ext\":false,\"fib\":false,\"kb2\":false,\"liq\":false,\"tl\":true,\"hl\":false,\"bos\":false,\"swp\":false,\"form\":true,\"ord\":false,\"fill\":false}",
+ "tvlb.tip": "{\"st\":true,\"sg\":false,\"of\":true,\"prem\":false,\"ext\":false,\"fib\":false,\"kb2\":false,\"liq\":false,\"tl\":true,\"hl\":false,\"bos\":false,\"swp\":false,\"form\":true,\"ord\":false,\"fill\":false}",
  "tvlb.plus": "{\"tips\":true,\"fast\":true,\"cd\":true,\"grid\":false,\"compact\":false}",
  "tvlb.p3": "true",
  "tvlb.ofsz": "{\"t\":false,\"w\":false}",
@@ -881,6 +881,14 @@ const OF_CONDS = [
   ["Quét", "Nến quét thanh khoản (chỉ nhóm HG)", ["Nến quét thanh khoản"]],
   ["Lệnh lớn", "Lệnh lớn ròng cùng chiều (chỉ live)", ["Lệnh lớn mua ròng", "Lệnh lớn bán ròng"]],
 ];
+// B9b5c-3: ô xác nhận CÓ trong tài liệu anh Nam (TL2: phân kỳ CVD, Volume tăng mà OI không tăng, ΔOI lớn tại vùng). Các ô còn lại do dashboard gốc tự thêm.
+const OF_DOC = ["Phân kỳ CVD", "Vol↑ΔOI", "ΔOI lớn"];
+function ofPresetNow() {
+  const on = (k) => OF_CONDS.find((c) => c[0] === k)[2].every((x) => ofOn("c:" + x)), ks = OF_CONDS.map((c) => c[0]).filter((k) => k !== "gamma");
+  if (ks.every(on)) return "all";
+  if (ks.every((k) => on(k) === OF_DOC.includes(k))) return "doc";
+  return "custom";
+}
 
 // ── TVLB B9b0: bảng theo dõi Option Flow (cảnh báo cấu hình + đang chờ gì + tín hiệu hôm nay) ──
 function ofWarnText() {
@@ -1645,7 +1653,11 @@ function ofInitUI() {
     <div class="muted" style="margin:2px 0 4px">Tỉ lệ lời/lỗ tối thiểu (TP1 ÷ SL) của TL1·TL2·HG: ${sel("ofRR", [0, 0.5, 1, 1.5, 2].map((n) => [n, n === 0 ? "0 (tắt)" : String(n)]), Number(OFS.minRR) || 0)} (thấp hơn thì KHÔNG ra tín hiệu)</div>
     <div class="muted" style="margin:2px 0 4px">R:R tối thiểu riêng cho nhóm HG (TP1 = tường đang hiển thị kế tiếp): ${sel("ofRRh", [0, 1, 1.5, 2, 2.5, 3].map((n) => [n, n === 0 ? "0 (tắt)" : String(n)]), hgRRmin())} (mặc định 2 = lời ≥ 2 × lỗ)</div>
     ${H("③ Điều kiện xác nhận", "nến phải đạt ít nhất «Số xác nhận tối thiểu» trong các ô đang tick (x/y trên chart)")}
-    <div class="muted" style="margin:2px 0 4px">Số xác nhận tối thiểu: ${sel("ofMin", [0, 1, 2, 3, 4].map((n) => [n, String(n)]), Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm)} (mặc định 2)</div>${OF_CONDS.filter(([k]) => k !== "gamma").map(([k, t, n]) => row(k, t, n.map((x) => "c:" + x))).join("")}
+    <div class="muted" style="margin:2px 0 4px">Số xác nhận tối thiểu: ${sel("ofMin", [0, 1, 2, 3, 4].map((n) => [n, String(n)]), Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm)} (mặc định 2)</div>
+    <div class="muted" style="margin:2px 0 4px">Bộ xác nhận: ${sel("ofPreset", [["custom", "Tùy chỉnh (tự tick)"], ["doc", "Chỉ theo tài liệu (TL2)"], ["all", "Bật tất cả"]], ofPresetNow())}</div>
+    <div class="sub" style="margin-top:6px;color:#26b384">📄 Theo tài liệu anh Nam (TL2)</div>${OF_CONDS.filter(([k]) => OF_DOC.includes(k)).map(([k, t, n]) => row(k, t, n.map((x) => "c:" + x))).join("")}
+    <div class="sub" style="margin-top:6px;color:#f0b429">🔧 Dashboard tự thêm (không có trong TL1/TL2)</div>${OF_CONDS.filter(([k]) => k !== "gamma" && !OF_DOC.includes(k)).map(([k, t, n]) => row(k, t, n.map((x) => "c:" + x))).join("")}
+    <div class="muted" style="font-size:10.5px;margin:2px 0 0">⚠ «Chỉ theo tài liệu»: nhóm TL1 Thủng/Squeeze và HG KHÔNG có ô nào thuộc tài liệu → sẽ không ra tín hiệu (trừ khi «Số xác nhận tối thiểu» = 0); Bull/Bear Trap còn tối đa 3 ô. Con số 1,8× SMA20 của Volume spike cũng do dashboard tự đặt (số 189).</div>
     ${H("④ Hiển thị trên chart", "chỉ đổi cách vẽ, không đổi tín hiệu")}${row("zones", txt(OF_GROUPS, "zones"), ["zones"])}${row("watch", txt(OF_GROUPS, "watch"), ["watch"])}${xrow("hg_show", "Hiện nền màu + viền nét đứt của vùng HG HEDGE (bỏ tick = ẩn, chỉ còn nhãn, vì trùng vùng HEDGE −Γ)")}
     <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Nâng cao</summary>${row("wfreeze", "Khóa tỉ lệ quy đổi theo ngày ở TRÌNH DUYỆT (dự phòng). Máy chủ từ 9b-3 đã khóa ratio, nên ô này chỉ có tác dụng khi máy chủ không gửi mã khóa (ratio_lock_id)", ["wfreeze"])}</details>`;
   // 9b-4: khối «Khung đo Option Flow» đặt lên đầu mục «📏 TP / SL» của menu TVLB+ (tvlb_tinhieu.js); không tìm thấy mục đó thì để cuối khung này.
@@ -1667,6 +1679,11 @@ function ofInitUI() {
     if (e.target.id === "ofBoxMax" || e.target.id === "ofBoxRun") { if (e.target.id === "ofBoxMax") OFS.boxMax = +e.target.value; else OFS.boxRun = e.target.value === "1"; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } drawOverlay(); return; }
     if (e.target.id === "ofRRh") { OFS.minRRhg = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofRR") { OFS.minRR = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
+    if (e.target.id === "ofPreset") { const m = e.target.value; if (m === "custom") return;   // B9b5c-3: bộ xác nhận theo tài liệu / tất cả
+      for (const [k, , n] of OF_CONDS) { if (k === "gamma") continue; for (const x of n) { if (m === "all" || OF_DOC.includes(k)) delete OFS["c:" + x]; else OFS["c:" + x] = false; } }
+      try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { }
+      d.querySelectorAll('input[data-of^="c:"]').forEach((el) => { el.checked = ofOn(el.dataset.of.split("|")[0]); });
+      replaySignals(); ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofMin") { OFS.minConf = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); return; }
     if (e.target.id === "ofFN") { OFS.flipNear = +e.target.value; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
     const ex = e.target.closest("input[data-ofx]");   // TVLB B9b1
@@ -1674,7 +1691,8 @@ function ofInitUI() {
     const el = e.target.closest("input[data-of]"); if (!el) return;
     for (const k of el.dataset.of.split("|")) { if (el.checked) delete OFS[k]; else OFS[k] = false; }
     try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { /* bỏ qua */ }
-    if (el.dataset.of === "wfreeze") { pollState(); return; }   // v23ak: bật/tắt khóa -> nạp lại dữ liệu từ server ngay
+    if (el.dataset.of === "wfreeze") { pollState(); return; }
+    { const ps = d.querySelector("#ofPreset"); if (ps) ps.value = ofPresetNow(); }   // v23ak: bật/tắt khóa -> nạp lại dữ liệu từ server ngay
     replaySignals(); ofRender();
   };
   d.addEventListener("change", onChg); tpBox.addEventListener("change", onChg);
