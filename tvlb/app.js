@@ -1396,7 +1396,7 @@ function ofJournalOrders(c, day, used) {
     if (e.kind !== "OF9" || !of9Tag(e.tag || e.name) || vnDate(e.t) !== day || e.entry == null || e.sl == null) continue;
     const id = String(e.id).replace(/^OF9\|/, ""); if (used && used.has(id)) continue;
     const ix = ofIdxAt(c, e.t); if (ix < 0) continue;
-    res.push({ i: ix, time: e.t, side: e.side, entry: e.entry, sl: e.sl, tp1: e.tp1 ?? null, tp2: e.tp2 ?? null, tag: e.tag || e.name, id, wall: e.wall, gam: e.gam, flip: e.flip, score: 0, max: 0, virt: true, latched: true, fromJ: true });
+    res.push({ i: ix, time: e.t, side: e.side, entry: e.entry, sl: e.sl, tp1: e.tp1 ?? null, tp2: e.tp2 ?? null, tag: e.tag || e.name, n2: e.alt === "lan2" || /LẦN 2/.test(e.type || "") || undefined, id, wall: e.wall, gam: e.gam, flip: e.flip, score: 0, max: 0, virt: true, latched: true, fromJ: true });
   }
   return res;
 }
@@ -1408,22 +1408,23 @@ function ofEntries() {
   if (!ofOn("watch")) return out;
   const M0 = S.ofM;
   for (const w of ofWatchCached()) {
-    if (!w.first || !/^nw/.test(w.p.id) || seen[w.p.id]) continue;
-    seen[w.p.id] = true;
+    if (!w.first || !/^nw/.test(w.p.id)) continue;
+    const n2 = !!seen[w.p.id]; if (n2 && !ofX("x_nw2")) continue;   // B9b5d: công tắc «Cho phép lần 2» (mặc định TẮT = chỉ lần đầu, đúng B10b)
+    seen[w.p.id] = true;   // lần chạm/phá ĐẦU (dù chưa đủ điều kiện) vẫn là «lần đầu», như trước
     if (!w.chk.full) continue;
     const idx = /^nwa/.test(w.p.id) ? w.chk.revIdx : w.chk.cj;
     if (idx == null || !c[idx + 1]) continue;
     const sell = w.p.side === "SELL", e = c[idx + 1].open, rk = e * 0.003;
     const wl = shownLevels().filter((x) => (sell ? x <= e - rk : x >= e + rk)).sort((a, b) => (sell ? b - a : a - b));   // v23am-17: TP1 = tường đang hiển thị kế tiếp cách giá vào ≥ 1R (không có thì quay về 0,60% cũ); TP2 = tường sau đó
-    out.push({ i: idx, time: c[idx].time, side: w.p.side, entry: e, sl: e * (sell ? 1.003 : 0.997), tp1: wl.length ? wl[0] : e * (sell ? 0.994 : 1.006), tp2: wl.length > 1 ? wl[1] : null, tag: /^nwa/.test(w.p.id) ? "9A" : "9B", score: 0, max: 0, virt: true, wkey: w.p.id + "|" + w.time,
+    out.push({ i: idx, time: c[idx].time, side: w.p.side, entry: e, sl: e * (sell ? 1.003 : 0.997), tp1: wl.length ? wl[0] : e * (sell ? 0.994 : 1.006), tp2: wl.length > 1 ? wl[1] : null, tag: /^nwa/.test(w.p.id) ? "9A" : "9B", n2: n2 || undefined, score: 0, max: 0, virt: true, wkey: w.p.id + "|" + w.time,
       wall: (w.p.lo + w.p.hi) / 2, gam: M0 && M0.flip != null ? (M0.negG ? -1 : 1) : null, flip: M0 && M0.flip != null ? M0.flip : null });   // 9b-5: tường, dấu Gamma và Flip lúc vào lệnh (cho gợi ý + nhật ký)
   }
   // B9b5c-3: B10b của anh Nam — tối đa 1 lệnh mỗi PHÍA (BUY/SELL) mỗi phiên và 2 lệnh mỗi ngày (tính cả lệnh đã chốt hôm nay); lệnh sau bị bỏ
   if (ofOn("b10bCap") || ofOn("b10bOne")) { out.sort((x, y) => x.i - y.i); let sv0 = []; try { sv0 = JSON.parse(localStorage.getItem("tvlb.of9." + day0) || "[]"); } catch (e) { }
-    const used = {}, ids = new Set(), acc = []; for (const g of sv0) { if (ids.has(g.id)) continue; ids.add(g.id); used[g.side] = (used[g.side] || 0) + 1; acc.push({ ...g, i: ofIdxAt(c, g.time) }); }
+    const used = {}, ids = new Set(), acc = []; for (const g of sv0) { if (ids.has(g.id)) continue; ids.add(g.id); if (g.n2) continue; used[g.side] = (used[g.side] || 0) + 1; acc.push({ ...g, i: ofIdxAt(c, g.time) }); }   // B9b5d: lệnh «lần 2» là nhánh SO SÁNH riêng: không chiếm suất B10b
     // B9b5d: B10b «không mở lệnh mới nếu đang có lệnh mở» (chỉ xét lệnh 9A/9B). Lệnh cũ còn mở khi nến vào lệnh mới (g.i + 1) mở cửa = chưa chốt (j == null) hoặc chốt ở nến ≥ g.i + 1. Tắt: OFS.b10bOne = false.
     const stillOpen = (g) => ofOn("b10bOne") && acc.some((a) => { if (!(a.i >= 0) || a.i >= g.i || a.entry == null || a.sl == null) return false; const r = rrNatural(a, c, false); return r.j == null || r.j > g.i; });
-    for (let q = 0; q < out.length; q++) { const g = out[q], id = `${g.tag}|${g.side}|${g.time}`; if (ids.has(id)) continue; const tot = (used.BUY || 0) + (used.SELL || 0);
+    for (let q = 0; q < out.length; q++) { const g = out[q], id = `${g.tag}|${g.side}|${g.time}`; if (ids.has(id) || g.n2) continue; const tot = (used.BUY || 0) + (used.SELL || 0);
       if ((ofOn("b10bCap") && ((used[g.side] || 0) >= 1 || tot >= 2)) || stillOpen(g)) { out.splice(q, 1); q--; continue; } used[g.side] = (used[g.side] || 0) + 1; ids.add(id); acc.push(g); } }
   // v23am-14: CHỐT LỆNH 9A/9B ngay khi vừa xuất hiện (≤ 2 nến trước), lưu theo ngày VN. Trước đây mọi thứ tính lại từ mốc tường/Gamma HIỆN TẠI nên lệnh đã vào bị biến mất khi Magnet/cổng đổi.
   try {
@@ -1431,11 +1432,11 @@ function ofEntries() {
     for (let q = localStorage.length - 1; q >= 0; q--) { const kk = localStorage.key(q); if (kk && kk.indexOf("tvlb.of9.") === 0 && kk !== key) localStorage.removeItem(kk); }
     const saved = JSON.parse(localStorage.getItem(key) || "[]"), byId = new Map(saved.map((x) => [x.id, x]));
     let dirty = false;
-    for (const g of out) { g.id = `${g.tag}|${g.side}|${g.time}`; if (!byId.has(g.id) && c.length - 1 - g.i <= 2) { const o = { id: g.id, time: g.time, side: g.side, entry: g.entry, sl: g.sl, tp1: g.tp1, tag: g.tag, wall: g.wall, gam: g.gam, flip: g.flip, wkey: g.wkey }; saved.push(o); byId.set(g.id, o); dirty = true; } }
+    for (const g of out) { g.id = `${g.tag}|${g.side}|${g.time}`; if (!byId.has(g.id) && c.length - 1 - g.i <= 2) { const o = { id: g.id, time: g.time, side: g.side, entry: g.entry, sl: g.sl, tp1: g.tp1, tag: g.tag, wall: g.wall, gam: g.gam, flip: g.flip, wkey: g.wkey, n2: g.n2 || undefined }; saved.push(o); byId.set(g.id, o); dirty = true; } }
     if (dirty) localStorage.setItem(key, JSON.stringify(saved));
     const res = [], used = new Set();
     for (const g of out) { used.add(g.id); const sv = byId.get(g.id); res.push(sv ? { ...g, entry: sv.entry, sl: sv.sl, tp1: sv.tp1, wall: sv.wall ?? g.wall, gam: sv.gam ?? g.gam, flip: sv.flip ?? g.flip } : { ...g, rebuilt: true }); }   // rebuilt = dựng lại từ mốc HIỆN TẠI, chưa chốt → không ghi nhật ký
-    for (const sv of saved) { if (used.has(sv.id)) continue; const ix = ofIdxAt(c, sv.time); if (ix < 0) continue; used.add(sv.id); res.push({ i: ix, time: sv.time, side: sv.side, entry: sv.entry, sl: sv.sl, tp1: sv.tp1, tp2: null, tag: sv.tag, id: sv.id, wkey: sv.wkey, wall: sv.wall, gam: sv.gam, flip: sv.flip, score: 0, max: 0, virt: true, latched: true }); }
+    for (const sv of saved) { if (used.has(sv.id)) continue; const ix = ofIdxAt(c, sv.time); if (ix < 0) continue; used.add(sv.id); res.push({ i: ix, time: sv.time, side: sv.side, entry: sv.entry, sl: sv.sl, tp1: sv.tp1, tp2: null, tag: sv.tag, n2: sv.n2 || undefined, id: sv.id, wkey: sv.wkey, wall: sv.wall, gam: sv.gam, flip: sv.flip, score: 0, max: 0, virt: true, latched: true }); }
     for (const g of ofJournalOrders(c, day, used)) res.push(g);   // 9b-5 (số 212): lệnh có trong nhật ký máy chủ nhưng mất khỏi bộ nhớ trình duyệt
     return res;
   } catch (e) { return out; }
@@ -1489,7 +1490,7 @@ function ofWatchTip(w) {
   const h = w.chk, col = w.chk.full ? (w.p.side === "SELL" ? "#ef5350" : "#26a69a") : ofColH(w.chk), li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#7be0b0" : "#9aa4b2"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join("");
   const sec = (t, body) => body ? `<div style="margin-top:5px;padding-top:4px;border-top:1px solid #2b3440"><b style="color:#f3d38c">${t}</b>${body}</div>` : "";
   const ordHtml = (() => { try { if (!/^nw/.test(w.p.id)) return ""; const wk = w.p.id + "|" + w.time, g = (S.of9Sig || []).find((x) => x.wkey === wk);
-    if (g) { const r = S.ofRes && S.ofRes.get(ofKey(g)), st = r && r.res ? r.res.status : ""; return `<div style="margin:2px 0 4px;padding:4px 6px;border-radius:4px;background:rgba(38,166,154,.12)"><b style="color:#7be0b0">✔ ĐÃ VÀO LỆNH #${ofNumW(w) || "?"}</b> · ${g.tag} ${g.side}<br>Vào ${ofFm(g.entry)} (giá mở nến kế) · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}${st ? `<br>Trạng thái: <b>${st}</b>` : ""}${g.rebuilt ? '<br><span style="color:#ff8a65">dựng lại, chưa chốt (không ghi nhật ký)</span>' : ""}</div>`; }
+    if (g) { const r = S.ofRes && S.ofRes.get(ofKey(g)), st = r && r.res ? r.res.status : ""; return `<div style="margin:2px 0 4px;padding:4px 6px;border-radius:4px;background:rgba(38,166,154,.12)"><b style="color:#7be0b0">✔ ĐÃ VÀO LỆNH #${ofNumW(w) || "?"}</b> · ${g.tag} ${g.side}${g.n2 ? ' <b style="color:#ffb74d">· LẦN 2 · SO SÁNH, KHÔNG theo B10b, CHƯA KIỂM CHỨNG</b>' : ""}<br>Vào ${ofFm(g.entry)} (giá mở nến kế) · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}${st ? `<br>Trạng thái: <b>${st}</b>` : ""}${g.rebuilt ? '<br><span style="color:#ff8a65">dựng lại, chưa chốt (không ghi nhật ký)</span>' : ""}</div>`; }
     const why = w.nth > 1 ? `đã có lần đầu hôm nay lúc ${vnClock(w.firstT)} (luật: mỗi tường, mỗi chiều chỉ tính lần đầu)` : !h.full ? (h.shOk < h.shape.length ? "thiếu hình thái nến" : h.cOk < h.need ? `thiếu xác nhận (đạt ${h.cOk}, cần ≥ ${h.need})` : "cổng chặn") : "đủ điều kiện nhưng không thành lệnh";
     return `<div style="margin:2px 0 4px;padding:4px 6px;border-radius:4px;background:rgba(255,255,255,.05);color:#c3c9d2"><b>✘ KHÔNG VÀO LỆNH</b>: ${why}</div>`; } catch (e) { return ""; } })();
   return `<div style="font-weight:700;color:${col};margin-bottom:3px">${h.full ? "ĐỦ ĐIỀU KIỆN" : h.gOk < h.gate.length ? (ofCandleOk(h) ? "⛔ Nến đã thỏa, cổng chưa qua (đứng ngoài)" : "⛔ Cổng chưa qua (đứng ngoài)") : "Đang theo dõi"} · ${ofNumW(w) ? "#" + ofNumW(w) + " " : ""}${w.p.short} ${w.p.side} · nến ${vnClock(w.time)}${ofEntW(w) ? " · ✔ ĐÃ VÀO LỆNH" : ""}</div>`
@@ -1692,6 +1693,7 @@ function ofPlanPics(p) {
 function ofNextStep(w) {
   const h = w.chk; if (!h || !h.tot) return "";
   const box = (t, col) => `<div style="font-size:10.5px;margin:3px 0;padding:3px 6px;border-radius:4px;background:rgba(255,255,255,.04);color:${col}">${t}</div>`;
+  if (h.full && /^nw/.test(w.p.id) && w.nth > 1 && ofEntW(w)) return box(`✔ ĐÃ VÀO LỆNH #${ofNumW(w) || "?"} · LẦN 2 · SO SÁNH, KHÔNG theo B10b, CHƯA KIỂM CHỨNG: lần đầu hôm nay lúc ${vnClock(w.firstT)}; lệnh này chỉ vào vì công tắc «Cho phép lần 2» đang bật, KHÔNG chiếm suất 1 lệnh/phía · 2 lệnh/ngày của B10b.`, "#ffb74d");
   if (h.full && /^nw/.test(w.p.id) && w.nth > 1) return box(`✔ Nến đạt đủ điều kiện nhưng KHÔNG vào lệnh: ${w.p.short} ${w.p.side} đã có lần đầu hôm nay lúc ${vnClock(w.firstT)} (luật: mỗi tường, mỗi chiều chỉ tính lần đầu trong ngày).`, "#9aa4b2");   // 9b-5c (số 239)
   if (h.full && /^nw/.test(w.p.id)) return ofEntW(w) ? box(`✔ ĐÃ VÀO LỆNH #${ofNumW(w) || "?"}: vào ở giá MỞ nến kế (xem tab «Lệnh hôm nay»).`, "#26b384") : box("Nến đạt đủ điều kiện nhưng CHƯA thành lệnh (xem dòng ✔/✘ bên dưới).", "#9aa4b2");
   if (h.full) return box("Đủ điều kiện ở nến này (nhóm TL: lệnh do bộ máy tín hiệu riêng quyết định, xem tab «Lệnh hôm nay»).", "#26b384");
@@ -1734,6 +1736,7 @@ function ofInitUI() {
     ${H("②b 9A/9B theo B10b (dự thảo anh Nam 23/11)", "mặc định = đúng B10b; tắt ô nào là đi KHÁC B10b (chỉ để so). B10b chưa được duyệt chính thức, CHƯA KIỂM ĐỊNH bằng backtest.")}
     ${xrow("x_nwconf", "Bắt 9A/9B đạt thêm ô xác nhận theo menu ③ (KHÔNG có trong B10b; mặc định TẮT)")}${row("b10bTime", "Không VÀO lệnh 9A/9B từ 11:30 Chicago tới khi có OI mới (xấp xỉ 20:00 Chicago); lệnh đang chạy vẫn đóng lúc 12:30", ["b10bTime"])}
     ${row("b10bCap", "Tối đa 1 lệnh mỗi phía (BUY/SELL) và 2 lệnh mỗi ngày, tính cả lệnh đã chốt hôm nay", ["b10bCap"])}${row("b10bOne", "Không mở lệnh 9A/9B mới khi lệnh 9A/9B trước còn đang mở", ["b10bOne"])}
+    ${xrow("x_nw2", '<b style="color:#ffb74d">Cho phép LẦN 2</b> (cú chạm/phá thứ 2, 3… cùng tường cùng chiều trong ngày) — KHÔNG theo B10b, CHƯA KIỂM CHỨNG, chỉ để SO SÁNH; mặc định TẮT. Lệnh lần 2 ghi riêng (nhãn «LẦN 2», nhật ký alt = lan2), không chiếm suất 1 lệnh/phía · 2 lệnh/ngày')}
     ${row("b10bF9B", "9B tại Gamma Flip: Flip cũng là một mốc để đánh 9B phá vỡ (B10b: «tường gần hoặc Gamma Flip»; chỉ ngày Gamma âm)", ["b10bF9B"])}
     ${H("③ Điều kiện xác nhận", "nến phải đạt ít nhất «Số xác nhận tối thiểu» trong các ô đang tick (x/y trên chart)")}
     <div class="muted" style="margin:2px 0 4px">Số xác nhận tối thiểu: ${sel("ofMin", [0, 1, 2, 3, 4].map((n) => [n, String(n)]), Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm)} (mặc định 2)</div>
@@ -2610,9 +2613,10 @@ function ofJournalPost() {
     const e = { id: key, t: g.time, kind: is9 ? "OF9" : "OF", status, be: !!res.be, opp: st.opp || undefined, oppBy: st.oppBy || undefined };
     if (status !== "open") { e.closeT = closeT; e.exit = exit; e.r = r == null ? null : +r.toFixed(3); }
     if (is9 && !e0) {
-      Object.assign(e, { name: g.tag, type: g.tag === "9B" ? "9B phá vỡ tường (Gamma âm)" : "9A bật lại từ tường", side: g.side, entry: g.entry, sl: g.sl, tp1: g.tp1, tp2: g.tp2 ?? null, tf: S.tf, tag: g.tag, wall: g.wall, gam: g.gam, flip: g.flip,
+      Object.assign(e, { name: g.tag, type: (g.tag === "9B" ? "9B phá vỡ tường (Gamma âm)" : "9A bật lại từ tường") + (g.n2 ? " · LẦN 2 · SO SÁNH, KHÔNG theo B10b, CHƯA KIỂM CHỨNG" : ""), alt: g.n2 ? "lan2" : undefined, side: g.side, entry: g.entry, sl: g.sl, tp1: g.tp1, tp2: g.tp2 ?? null, tf: S.tf, tag: g.tag, wall: g.wall, gam: g.gam, flip: g.flip,
         score: "✔ đủ điều kiện", oppRule: rule, from: cc.length - 1 - g.i <= 2 ? "live" : "ls", note: cc.length - 1 - g.i <= 2 ? undefined : "nhập từ bộ nhớ trình duyệt (không phải lúc lệnh xuất hiện)" });
-      if (status === "skip") e.note = "bỏ: đang có lệnh ngược chiều (luật «bỏ lệnh mới»)";
+      if (g.n2) e.note = "lệnh LẦN 2 (công tắc so sánh, không theo B10b, chưa kiểm chứng): KHÔNG gộp với lệnh B10b khi thống kê";
+      if (status === "skip") e.note = (e.note ? e.note + " · " : "") + "bỏ: đang có lệnh ngược chiều (luật «bỏ lệnh mới»)";
     }
     if (is9 && status === "open") { const adv = ofAdvise(st, price).map((a) => ({ c: a.c, t: now, px: price, r: +((((price - g.entry) * (g.side === "BUY" ? 1 : -1)) / Math.max(Math.abs(g.entry - g.sl), 0.01))).toFixed(2), txt: a.txt })); if (adv.length) e.adv = adv; }
     const n = jUpsert(e); if (n) out.push(n);
