@@ -1405,17 +1405,23 @@ function ofDrawWatch() {
       const x2 = tsc.timeToCoordinate(c[jj].time + TZ), y2 = candleS.priceToCoordinate(sell ? c[jj].high : c[jj].low); if (x2 == null || y2 == null || x2 < 0 || x2 > plotW) continue;
       ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(x2, y2 + (sell ? -dy : dy) + dir * 3, 2.2, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
     }
-    const t = (wn ? `#${wn} ` : "") + (inO ? "✔ " : "") + (late ? `lần ${w.nth} ` : "") + (nAt[w.j] > 1 ? w.p.short.replace(/ TƯỜNG( GẦN)?/, "") + " " : "") + ofSimple(w.chk), tw = ctx.measureText(t).width, bw = tw + 10, bh = 16;
-    let ty = tipY + dir * 16;
-    for (let g = 0; g < 4; g++) {   // v23ae: nhãn trùng chỗ thì đẩy ra xa nến một nấc, không đè chữ lên nhau
-      const r = { x0: x - bw / 2, x1: x + bw / 2, y0: ty - bh / 2, y1: ty + bh / 2 };
-      if (!boxes.some((b) => r.x0 < b.x1 && r.x1 > b.x0 && r.y0 < b.y1 && r.y1 > b.y0) || g === 3) { boxes.push(r); break; }
+    // 9b-5c: nhãn XẾP DỌC (mẫu nhãn lệnh HG), mỗi dòng một ý
+    const xy = ofSimple(w.chk).replace(/^(đủ|⛔) /, ""), nm = /^nw/.test(w.p.id) ? (/^nwa/.test(w.p.id) ? "9A" : "9B") : /^(ts|tb)/.test(w.p.id) ? "TL1·2" : "TL1";
+    const st2 = (w.chk.gOk < w.chk.gate.length ? "⛔" : "") + xy;   // trọng số x/y (⛔ = cổng chặn)
+    const lines = [sell ? "sell" : "buy", st2, nm, wn ? "#" + wn + (inO ? " ✔" : "") : inO ? "✔" : "", late ? `lần ${w.nth}` : ""].filter(Boolean);   // 9b-5c: từ tam giác ra ngoài: chiều → trọng số → kiểu lệnh → #số (+✔ đã vào) → «lần N» ngoài cùng
+    ctx.font = "600 9px 'IBM Plex Mono', monospace";
+    const lh = 10, bw = Math.max(...lines.map((q) => ctx.measureText(q).width)) + 8, bh = lines.length * lh + 2;
+    let ty = tipY + dir * 9;   // mép gần tam giác của cột chữ
+    for (let g = 0; g < 4; g++) {   // v23ae: cột trùng chỗ thì đẩy ra xa nến một nấc, không đè chữ lên nhau
+      const y0 = dir > 0 ? ty : ty - bh, r = { x0: x - bw / 2, x1: x + bw / 2, y0, y1: y0 + bh };
+      if (!boxes.some((q) => r.x0 < q.x1 && r.x1 > q.x0 && r.y0 < q.y1 && r.y1 > q.y0) || g === 3) { boxes.push(r); break; }
       ty += dir * (bh + 2);
     }
-    if (ty < 8 || ty > plotH - 8) continue;
-    // v23af: trả về kiểu cũ (gọn): chữ sáng có viền tối, KHÔNG có ô nền; màu trạng thái nằm ở tam giác
-    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(10,14,20,.9)"; ctx.strokeText(t, x, ty); ctx.fillStyle = col === "#9aa4b2" ? col : "#e6e9ee"; ctx.fillText(t, x, ty);
-    ov.tags.push({ x0: x - bw / 2 - 2, x1: x + bw / 2 + 2, y0: Math.min(tipY, ty - 8) - 2, y1: Math.max(tipY + dir * 7, ty + 8) + 2, k: "watch", tip: ofWatchTip(w) });
+    const yTop = dir > 0 ? ty : ty - bh; if (yTop < 2 || yTop + bh > plotH - 2) continue;
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(10,14,20,.9)";
+    lines.forEach((q, n) => { const yy = ty + dir * (n * lh + lh / 2 + 1); ctx.strokeText(q, x, yy); ctx.fillStyle = /^#|^✔/.test(q) ? "#f0b429" : /^lần/.test(q) ? "#9aa4b2" : n === 0 || inO ? col : col === "#9aa4b2" ? col : "#e6e9ee"; ctx.fillText(q, x, yy); });
+    ctx.font = "700 10.5px 'IBM Plex Mono', monospace";
+    ov.tags.push({ x0: x - bw / 2 - 2, x1: x + bw / 2 + 2, y0: Math.min(tipY, yTop) - 2, y1: Math.max(tipY + dir * 7, yTop + bh) + 2, k: "watch", tip: ofWatchTip(w) });
   }
   ctx.restore();
 }
