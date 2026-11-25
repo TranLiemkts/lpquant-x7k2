@@ -559,23 +559,24 @@ function drawOverlayBase() {
   }
 
   // v23am-8: nhãn tín hiệu 2 dòng tự vẽ (thư viện chart không xuống dòng được): dòng trên = điểm xác nhận (tỷ trọng), dòng dưới = buy/sell; mũi tên vẫn do chart vẽ
-  if ($("#lyMk") && $("#lyMk").checked && window.TVLB_MK_OF !== false && S.signals.length) {
+  if ($("#lyMk") && $("#lyMk").checked && window.TVLB_MK_OF !== false && (S.signals.length || (S.of9Sig || []).length)) {
     const tsc2 = chart.timeScale(), cc2 = S.candles;
     ctx.font = "500 8.5px 'IBM Plex Mono', monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.globalAlpha = 0.85;
     const sgBox = [];
-    for (const g of [...S.signals].reverse()) {   // mới nhất trước; nhãn chạm nhãn đã đặt thì bỏ (tránh chồng khi nhiều tín hiệu sát nhau)
+    for (const g of [...S.signals, ...(S.of9Sig || [])].sort((a, b) => b.time - a.time)) {   // 9b-5c: thêm lệnh 9A/9B   // mới nhất trước; nhãn chạm nhãn đã đặt thì bỏ (tránh chồng khi nhiều tín hiệu sát nhau)
       const k = cc2[g.i]; if (!k) continue;
       const x = tsc2.timeToCoordinate(g.time + TZ); if (x == null || x < 0 || x > plotW) continue;
       const sell = g.side === "SELL", yb = candleS.priceToCoordinate(sell ? k.high : k.low); if (yb == null) continue;
       const bsp = Number(tsc2.options().barSpacing) || 8, off = Math.max(21, Math.min(Math.max(bsp, 12), 30) * 0.7 + 14);   // v23am-11: mũi tên to theo mức zoom → đẩy chữ ra xa theo cỡ mũi tên
-      const y1 = sell ? yb - off - 10 : yb + off, y2 = sell ? yb - off : yb + off + 10;   // SELL: chữ nằm phía trên mũi tên xuống; BUY: phía dưới mũi tên lên
-      if (y1 < 2 || y2 > plotH - 2) continue;
-      const tx = `${g.tag ? g.tag + " " : ""}${g.score}/${g.max}`, hw = ctx.measureText(tx).width / 2 + 2;
-      if (sgBox.some((r) => x - hw < r.x1 && x + hw > r.x0 && Math.abs(y1 - r.y) < 24)) continue;
+      const y1 = sell ? yb - off - 10 : yb + off, y2 = sell ? yb - off : yb + off + 10, nOrd = S.ofNum && S.ofNum.get(ofKey(g)), y0 = sell ? y1 - 10 : y2 + 10;   // 9b-5c: dòng #số nằm xa mũi tên nhất   // SELL: chữ nằm phía trên mũi tên xuống; BUY: phía dưới mũi tên lên
+      if (Math.min(y0, y1) < 2 || Math.max(y0, y2) > plotH - 2) continue;
+      const tx = `${ofTagName(g)} ${g.virt ? "✔" : g.score + "/" + g.max}`, hw = ctx.measureText(tx).width / 2 + 2;
+      if (sgBox.some((r) => x - hw < r.x1 && x + hw > r.x0 && Math.abs(y1 - r.y) < 34)) continue;
       sgBox.push({ x0: x - hw, x1: x + hw, y: y1 });
       ctx.fillStyle = sell ? C.down : C.up;
       ctx.fillText(tx, x, y1);
       ctx.fillText(sell ? "sell" : "buy", x, y2);
+      if (nOrd) { ctx.font = "700 9px 'IBM Plex Mono', monospace"; ctx.fillStyle = "#f0b429"; ctx.fillText("#" + nOrd, x, y0); ctx.font = "500 8.5px 'IBM Plex Mono', monospace"; }   // 9b-5c: số thứ tự khớp thẻ «Lệnh hôm nay»
     }
     ctx.globalAlpha = 1;
   }
@@ -1332,7 +1333,7 @@ function ofEntries() {
 // v23am-15: CHỐT KÝ HIỆU NẾN QUAN SÁT "ĐỦ ĐIỀU KIỆN" (✓ x/y) của 9A/9B ngay khi vừa xuất hiện (≤ 2 nến trước), lưu theo ngày VN. Trước đây mọi ký hiệu tính lại từ mốc tường/Gamma HIỆN TẠI nên ✓ 3/3 biến mất khi cổng đổi.
 function ofWatchLatch(list) {
   const c = S.candles; if (!c || !c.length) return list;
-  const day = vnDate(c[c.length - 1].time), key = "tvlb.ow." + day;
+  const day = vnDate(c[c.length - 1].time), key = "tvlb.ow.v3." + day;   // 9b-5c: khóa mới → ký hiệu chốt theo luật cũ (kể cả bản 9b-5c đầu) bị xóa
   for (let q = localStorage.length - 1; q >= 0; q--) { const kk = localStorage.key(q); if (kk && kk.indexOf("tvlb.ow.") === 0 && kk !== key) localStorage.removeItem(kk); }
   const saved = JSON.parse(localStorage.getItem(key) || "[]").filter((x) => /^nw[ab]\d+[SB]$/.test(x.pid || "")), have = new Set(saved.map((x) => x.id));   // 9b-5c: bỏ ký hiệu chốt theo luật cũ (chiều theo giá hiện tại)
   let dirty = false;
@@ -1419,7 +1420,7 @@ function ofDrawWatch() {
   ctx.restore();
 }
 function drawOverlay() { try { const ws = `${window.TVLB_TOPN}|${window.TVLB_MINOR}|${window.TVLB_WALLSTYLE}|${$("#lyKey")?.checked}|${$("#lyGLD")?.checked}`; if (S._wallSig !== undefined && S._wallSig !== ws) { S._wallSig = ws; replaySignals(); } S._wallSig = ws; } catch (e) { }   // v23am: đổi menu tường → tính lại tín hiệu
-  try { ofSyncChk(S.ofPlans); S.of9Sig = ofEntries(); } catch (e) { S.of9Sig = []; } try { ofRefresh(); } catch (e) { /* khung đo vẫn vẽ theo luật tự nhiên */ } drawOverlayBase(); try { ofDrawWatch(); } catch (e) { S.watchErr = String(e && e.message || e); } }
+  try { ofSyncChk(S.ofPlans); S.of9Sig = ofEntries(); } catch (e) { S.of9Sig = []; } try { S.ofNum = ofOrderNums(); const sig = [...S.ofNum.keys()].join(","); if (sig !== S._numSig) { S._numSig = sig; setMarkers(); } } catch (e) { /* chỉ để đánh số */ } try { ofRefresh(); } catch (e) { /* khung đo vẫn vẽ theo luật tự nhiên */ } drawOverlayBase(); try { ofDrawWatch(); } catch (e) { S.watchErr = String(e && e.message || e); } }
 // 9b-5b: danh sách điều kiện chia 3 NHÓM có khung riêng: ① Hình thái nến (bắt buộc đủ hết) · ② Xác nhận theo menu (đủ số tối thiểu là được) · ③ Cổng (bắt buộc). Viền xanh = nhóm đã đạt, cam = chưa.
 function ofChkGroups(h) {
   const li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#26b384" : "#85909c"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join("");
@@ -1461,7 +1462,7 @@ function ofRender() {
     + kv("DXY", dxy == null ? "—" : `${dxy >= 0 ? "+" : ""}${Number(dxy).toFixed(3)}% (ngưỡng ${sc.dxy_thr_pct}%) · chỉ tính khi live`)
     + kv("Cấu hình", `xác nhận tối thiểu ${Number.isInteger(OFS.minConf) ? OFS.minConf : sc.min_confirm} · nghỉ ${sc.cooldown_bars} nến · chạm tường ≤ ${sc.touch_tol}$ · SL ± ${sc.sl_buffer}$`);
   const c = S.candles, sgK = new Set(), sg = [...(S.of9Sig || []), ...S.signals].filter((g) => { if (!c[g.i]) return false; const k = ofKey(g); if (sgK.has(k)) return false; sgK.add(k); return true; }).sort((a, b) => b.time - a.time);   // 9b-5b: khử trùng theo mã lệnh   // v23am-18: cả lệnh 9A/9B (trước đây không có trong danh sách này)
-  let W = []; try { W = ofWatchList(M).filter((w) => w.first); } catch (e) { /* bỏ qua */ }
+  let W = []; try { W = ofWatchCached(M).filter((w) => w.first); } catch (e) { /* bỏ qua */ }   // 9b-5c: cùng nguồn với chart (có số «lần», có ký hiệu đã chốt)
   ofRefresh();
   const stOf = (g) => (S.ofRes ? S.ofRes.get(ofKey(g)) : null);
   const stt = (g) => { const x = stOf(g); if (x && x.res) return x.res.status === "open" ? "đang chạy" : OF_ST_TXT[x.res.status] || x.res.status; return rrManage(g, c).t || "đang chạy"; };   // v23am-18: cùng luật với khung đo (hòa vốn, hết giờ 12:30 Chicago)
@@ -1491,7 +1492,7 @@ function ofRunListHtml(sg, stt, stOf) {
   const bar = `<div style="margin:0 0 6px">${chip("st", "all", `Tất cả (${cntSt("all", rf.k)})`)}${chip("st", "open", `● Đang chạy (${cntSt("open", rf.k)})`)}${chip("st", "closed", `Đã đóng (${cntSt("closed", rf.k)})`)}<br>`
     + chip("k", "all", `Mọi loại (${sg.length})`) + ["wall", "hg", "tl"].map((k) => chip("k", k, `${OF_KIND_TXT[k]} (${byK(k).length})`)).join("") + "</div>";
   const card = (g, small) => { const run = isRun(g), kd = ofKind(g), col = OF_COL[g.side];
-    return `<div style="border-left:3px solid ${col};padding:4px 8px;margin:0 0 ${small ? 5 : 8}px;border-radius:4px${small ? ";opacity:.85" : ""}"><div>${ofShortChip(OF_KIND_TXT[kd], "#9aa4b2")}<b style="color:${col}">${vnClock(g.time)} ${g.tag || ""} ${g.side}${g.virt ? " ✔ đủ điều kiện" : " " + g.score + "/" + g.max}</b> · <b>${stt(g)}</b>${g.rebuilt ? ' <span style="color:#ff8a65;font-size:10.5px" title="Lệnh dựng lại từ mốc tường HIỆN TẠI (lúc lệnh xuất hiện trình duyệt chưa mở hoặc chưa chốt): không ghi nhật ký, có thể biến mất khi tường đổi">· dựng lại, chưa chốt</span>' : ""}</div>`
+    return `<div style="border-left:3px solid ${col};padding:4px 8px;margin:0 0 ${small ? 5 : 8}px;border-radius:4px${small ? ";opacity:.85" : ""}"><div>${ofShortChip(OF_KIND_TXT[kd], "#9aa4b2")}${S.ofNum && S.ofNum.get(ofKey(g)) ? `<b style="color:#f0b429">#${S.ofNum.get(ofKey(g))}</b> ` : ""}<b style="color:${col}">${vnClock(g.time)} ${g.tag || ""} ${g.side}${g.virt ? " ✔ đủ điều kiện" : " " + g.score + "/" + g.max}</b> · <b>${stt(g)}</b>${g.rebuilt ? ' <span style="color:#ff8a65;font-size:10.5px" title="Lệnh dựng lại từ mốc tường HIỆN TẠI (lúc lệnh xuất hiện trình duyệt chưa mở hoặc chưa chốt): không ghi nhật ký, có thể biến mất khi tường đổi">· dựng lại, chưa chốt</span>' : ""}</div>`
       + `<div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div>`
       + (small ? ofStatusHtml(stOf(g)) : `<div class="muted">${g.type ? g.type.replace("[Options Flow] ", "") : g.tag === "9B" ? "9B · phá vỡ tường (Gamma âm)" : "9A · bật lại từ tường"}</div>${ofStatusHtml(stOf(g))}${ofTickLine(g)}`) + "</div>"; };
   const L = byK(rf.k), R = L.filter(isRun), D = L.filter((g) => !isRun(g)), hd = (t) => `<div style="font-weight:700;color:#f0b429;margin:6px 0 4px;font-size:11px">${t}</div>`;
@@ -1754,12 +1755,14 @@ function replaySignals() {
   }
   setMarkers();
 }
+function ofMkText(g) { try { const n = S.ofNum && S.ofNum.get(ofKey(g)); return (n ? `#${n} ` : "") + ofTagName(g); } catch (e) { return ""; } }
 function setMarkers() {
   const show = $("#lyMk").checked, smcOn = $("#lySMC")?.checked && S.smc;
   const mk = show ? S.signals.map((s) => ({
     time: s.time + TZ, position: s.side === "SELL" ? "aboveBar" : "belowBar", color: s.side === "SELL" ? C.down : C.up,
-    shape: s.side === "SELL" ? "arrowDown" : "arrowUp", size: 0.7, text: "",   // v23am-7: mũi tên nhỏ, chữ gọn (bỏ chữ BUY/SELL — hướng đã có ở mũi tên và màu)
+    shape: s.side === "SELL" ? "arrowDown" : "arrowUp", size: 0.7, text: "",   // 9b-5c: chữ nằm ở nhãn DỌC trên lớp phủ (#số / tên / sell-buy), không trải ngang
   })) : [];
+  if (show) for (const g of S.of9Sig || []) if (S.candles[g.i]) mk.push({ time: g.time + TZ, position: g.side === "SELL" ? "aboveBar" : "belowBar", color: g.side === "SELL" ? C.down : C.up, shape: g.side === "SELL" ? "arrowDown" : "arrowUp", size: 0.7, text: "" });   // 9b-5c: lệnh 9A/9B cũng có mũi tên; chữ ở nhãn dọc
   if (smcOn) {
     const c = S.candles;
     // nến quét thanh khoản (chỉ tại 4 loại thanh khoản của khung này, xét khi nến đã đóng)
@@ -2284,6 +2287,15 @@ const J_FINAL = ["tp1", "sl", "expired", "be", "timeout", "opp"];   // đã đó
 const ofName = (g) => g.tag || String(g.type || "OF").replace("[Options Flow] ", "").replace(/ \(.*$/, "").split(":")[0].trim();
 // 9b-5b: CHỈ 9A/9B là lệnh OF9. Tín hiệu HG/TL1/TL1·2 (evaluate) cũng có g.tag (nhãn nến, v23ak) nên trước đây bị coi là 9A → ghi nhật ký sai kind OF9 + trùng lệnh.
 function of9Tag(t) { return t === "9A" || t === "9B"; }
+// 9b-5c: số thứ tự #1, #2… của các lệnh HÔM NAY (9A/9B + HG/TL), xếp theo giờ; dùng chung cho mũi tên trên chart và thẻ «Lệnh hôm nay»
+function ofOrderNums() {
+  const c = S.candles, m = new Map(); if (!c || !c.length) return m;
+  const day = vnDate(c[c.length - 1].time), seen = new Set();
+  [...(S.of9Sig || []), ...(S.signals || [])].filter((g) => { if (!c[g.i] || vnDate(g.time) !== day) return false; const k = ofKey(g); if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a, b) => a.time - b.time || (a.side < b.side ? -1 : 1)).forEach((g, n) => m.set(ofKey(g), n + 1));
+  return m;
+}
+const ofTagName = (g) => g.tag || (/HEDGE/i.test(g.type || "") ? "HG" : "TL");
 const ofKey = (g) => (of9Tag(g.tag) ? "OF9|" + (g.id || `${g.tag}|${g.side}|${g.time}`) : `OF|${g.type}|${g.side}|${g.time}`);   // = id trong nhật ký (jFromOF dùng cùng công thức cho lệnh HG/TL)
 const chiMin = (t) => { const q = {}; for (const x of CHI_FMT.formatToParts(new Date(t * 1000))) q[x.type] = x.value; return (q.hour === "24" ? 0 : +q.hour) * 60 + +q.minute; };
 // số phút còn lại tới 12:30 Chicago (tính từ lúc vào lệnh t0; xấp xỉ, bỏ qua 2 ngày/năm đổi giờ mùa hè)
