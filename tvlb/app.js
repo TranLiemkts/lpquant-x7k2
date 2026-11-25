@@ -1441,6 +1441,36 @@ function ofChkGroups(h) {
     + (h.gate.length ? box(gOk, `③ CỔNG · bắt buộc · ${h.gOk}/${h.gate.length} ${gOk ? "✔" : "(chưa qua → đứng ngoài)"}`, li(h.gate)) : "");
 }
 const ofChkLines = (h) => ofChkGroups(h);
+// B9b5c-3: các dòng thêm cho «Bối cảnh thị trường» ở trang «Vào lệnh OF» (lấy từ bảng của trang «Vào lệnh» cũ). Chỉ để XEM, không đổi tín hiệu.
+function ofCtxExtra(M) {
+  const out = { gex: "—", tenor: "—", mag: "—", conf: "—", hedge: "—", wick: "—", div: "—", smc: "—" }, px = M.px, c = S.candles, fd = (d) => `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(2)}`;
+  const P = prim(), gc = opt("GC"), gl = opt("GLD");
+  try { const g = P?.net_gex, B = 1e9, Mi = 1e6;
+    const zone = g == null ? "" : g > 2 * B ? "Gamma dương MẠNH (dealer phanh mạnh)" : g >= 500 * Mi ? "Gamma dương (dealer phanh)" : g > -500 * Mi ? "TRUNG TÍNH (−500M…+500M: chờ hướng)" : g >= -2 * B ? "Gamma âm (dealer đạp ga, trending)" : "Gamma âm MẠNH (< −2B: không BUY dưới Flip)";
+    out.gex = `GC ${fmtK(gc?.net_gex)}$ · GLD ${fmtK(gl?.net_gex)}$${zone ? ` → <b>${zone}</b> <span class="muted">(Handbook Bảng A, theo ${P.source})</span>` : ""}`; } catch (e) { }
+  try { out.tenor = tenorWTxt(P) + (P?.tenor_w?.on ? " <span class=\"muted\">(chưa kiểm định)</span>" : ""); } catch (e) { }
+  try { const mg = P?.chart?.magnet;
+    if (mg != null) { const st = (P.strikes || []).reduce((b, x) => (x.chart != null && (b == null || Math.abs(x.chart - mg) < Math.abs(b.chart - mg)) ? x : b), null), gx = st?.net_gex;
+      out.mag = `${ofFm(mg)} — ${gx == null ? "chưa rõ hút/đẩy" : gx >= 0 ? `<b style="color:#26b384">Magnet HÚT (GEX dương ${fmtK(gx)})</b>` : `<b style="color:#ff6b6b">Magnet ĐẨY (GEX âm ${fmtK(gx)})</b>`} · cách ${fd(mg - px)}`; } else out.mag = "chưa có"; } catch (e) { }
+  try { const lv = [], ad = (x, n) => { if (x != null && isFinite(x)) lv.push({ x, n }); }, a = P?.chart || {}, gch = (P?.source === "GLD" ? gc : gl)?.chart || {}, og = P?.source === "GLD" ? "GC " : "GLD ";
+    ad(a.call_wall, "Call Wall"); ad(a.put_wall, "Put Wall"); ad(a.gamma_flip, "Flip"); ad(a.magnet, "Magnet"); ad(a.max_pain, "Max Pain"); ad(gch.call_wall, og + "Call Wall"); ad(gch.put_wall, og + "Put Wall"); ad(S.state?.volume_profile?.poc, "POC");
+    lv.sort((p, q) => p.x - q.x); const TOL = 3, cl = []; let cur = null;
+    lv.forEach((l) => { if (cur && l.x - cur[0].x <= TOL) cur.push(l); else { cur = [l]; cl.push(cur); } });
+    const best = cl.filter((g) => g.length >= 2).map((g) => ({ g, lo: g[0].x, hi: g[g.length - 1].x })).sort((p, q) => Math.abs((p.lo + p.hi) / 2 - px) - Math.abs((q.lo + q.hi) / 2 - px))[0];
+    out.conf = best ? `×${best.g.length} ${ofFm(best.lo)}–${ofFm(best.hi)}: ${best.g.map((l) => l.n).join(", ")} (cách ${fd((best.lo + best.hi) / 2 - px)}) <span class="muted">(gom mốc cách nhau ≤ ${TOL}$, giả định)</span>` : `không có 2 mốc nào cách nhau ≤ ${TOL}$`; } catch (e) { }
+  try { const zs = ((hedgeSt() || {}).zones || []).filter((z) => z.kind === "accel"), inz = zs.find((z) => px >= z.lo && px <= z.hi);
+    if (inz) out.hedge = `<b style="color:#ff6b6b">TRONG vùng Hedge −Γ ${ofFm(inz.lo)}–${ofFm(inz.hi)}</b>: biến động mở rộng, không bắt đáy/đỉnh`;
+    else { const nz = zs.map((z) => ({ z, d: px < z.lo ? z.lo - px : px - z.hi })).sort((p, q) => p.d - q.d)[0]; out.hedge = nz ? `ngoài vùng hedge lớn · gần nhất ${ofFm(nz.z.lo)}–${ofFm(nz.z.hi)} (cách ${nz.d.toFixed(2)}$)` : "ngoài vùng hedge lớn"; } } catch (e) { }
+  try { const k = M.k, up = k.high - Math.max(k.open, k.close), lo = Math.min(k.open, k.close) - k.low; out.wick = `râu ↑${up.toFixed(2)} ↓${lo.toFixed(2)} · thân ${Math.abs(k.close - k.open).toFixed(2)}`; } catch (e) { }
+  try { const d = divAt(c.length - 2); out.div = d.bear ? `<b style="color:#ff6b6b">PHÂN KỲ GIẢM</b>: giá lên đỉnh mới nhưng CVD không lên theo (mua yếu dần)` : d.bull ? `<b style="color:#26b384">PHÂN KỲ TĂNG</b>: giá xuống đáy mới nhưng CVD không xuống theo (bán yếu dần)` : "đỉnh/đáy giá và CVD cùng chiều (không phân kỳ)"; } catch (e) { }
+  try { const R = S.smc;
+    if (!R) out.smc = "chưa có (cần nến H4; bật nút SMC trên thanh đầu)";
+    else { const tfN = (smcCfg().tfName) || S.tf, h4 = R.frame ? (R.frame.dir === -1 ? "H4 ▼ giảm" : "H4 ▲ tăng") : "H4 chưa rõ";
+      const ev = (R.events || []).filter((e) => e.kind === "BOS" || e.kind === "CHoCH").slice(-1)[0], tf = ev ? `${tfN} ${ev.dir > 0 ? "▲" : "▼"} (${ev.kind}${c[ev.i] ? " " + vnClock(c[ev.i].time) : ""})` : `${tfN} chưa có BOS/CHoCH`;
+      const od = smcOrders().filter((o) => o.status === "pending" || o.status === "open").map((o) => `${o.name} ${o.side} ${o.status === "pending" ? "LIMIT" : "ĐANG CHẠY"} ${ofFm(o.entry)}`);
+      out.smc = `${h4} · ${tf} · ${od.length ? od.join(" · ") : "chưa có lệnh SMC chờ"}`; } } catch (e) { }
+  return out;
+}
 function ofRender() {
   const wn = $("#ofWarn"), T = $("#ofT"); let w = ""; try { w = ofWarnText(); } catch { /* chưa có cấu hình */ }
   if (wn) { wn.textContent = w ? "⚠ " + w : ""; wn.style.display = w ? "block" : "none"; }
@@ -1465,9 +1495,17 @@ function ofRender() {
       return `<div data-ofgo="${p.id}" title="Bấm để mở kế hoạch này ở tab «Kế hoạch mới». ${(ofStateTip(p) ? ofStateTip(p).replace(/<\/?(div|b|br)[^>]*>/g, " ").replace(/\s+/g, " ").trim() : full).replace(/"/g, "&quot;")}" style="display:grid;grid-template-columns:62px 60px 42px 26px 1fr;gap:3px;align-items:start;margin:3px 0;font-size:9px;line-height:1.25;cursor:pointer${OFV.focus === p.id ? ";outline:1px solid #f0b429;border-radius:3px" : ""}"><b style="color:${OF_COL[p.side]};font-size:9px;white-space:nowrap">${p.short}</b><span style="text-align:center">${ofBadge(p.state, p.side)}</span><span style="text-align:center">${ofChip(p)}</span><span style="color:${OF_COL[p.side]};font-weight:700;font-size:9px">${p.side}</span><span class="muted" style="font-size:9px">${sh}</span></div>`; }).join("")
     + `<div style="margin-top:8px"><b>Cổng kiểm</b>${M.gates.map(gate).join("")}</div>` + ofCondHtml(M);
   const kv = (a, b) => `<div class="muted">${a}</div><div>${b}</div>`, k = M.k, sc = M.sc, dxy = S.state?.macro?.DXY?.chg_n_pct;
-  $("#ofC").innerHTML = kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
+  const X = ofCtxExtra(M);   // B9b5c-3: thêm các dòng của bảng «Bối cảnh» trang «Vào lệnh» (đã bỏ trang đó)
+  $("#ofC").innerHTML = kv("Net GEX", X.gex)
     + kv("Gamma", M.flip == null ? "chưa rõ Flip" : `${M.negG ? "ÂM" : "DƯƠNG"} · Flip ${ofFm(M.flip)} · cách ${M.rgp.pctTxt}${M.rgp.far ? " (xa hơn 2,5%: B6 coi là ngày không rõ)" : ""}${M.flipNear ? " (sát giá ≤ " + ofFlipNear() + "$: đứng ngoài)" : ""}` + (M.blockG ? " → BUY bắt đáy bị chặn" : ""))
-    + kv(`Nến đóng ${vnClock(k.time)}`, `CVD dốc ${M.slope > 0 ? "lên ↑" : M.slope < 0 ? "xuống ↓" : "phẳng"} · Delta ${k.delta > 0 ? "+" : k.delta < 0 ? "−" : ""}${Math.abs(k.delta).toFixed(0)} · Volume ${M.avg > 0 ? (k.vol / M.avg).toFixed(2) : "?"}× SMA${sc.vol_sma} (cần ≥ ${sc.vol_spike_mult}×)`)
+    + kv("Hệ số kỳ hạn", X.tenor)
+    + kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
+    + kv("Magnet", X.mag)
+    + kv("Hội tụ gần nhất", X.conf)
+    + kv("Vùng Hedge", X.hedge)
+    + kv(`Nến đóng ${vnClock(k.time)}`, `${X.wick} · CVD dốc ${M.slope > 0 ? "lên ↑" : M.slope < 0 ? "xuống ↓" : "phẳng"} · Delta ${k.delta > 0 ? "+" : k.delta < 0 ? "−" : ""}${Math.abs(k.delta).toFixed(0)} · Volume ${M.avg > 0 ? (k.vol / M.avg).toFixed(2) : "?"}× SMA${sc.vol_sma} (cần ≥ ${sc.vol_spike_mult}×)`)
+    + kv("CVD", X.div)
+    + kv("SMC", X.smc)
     + kv("ΔOI gần nhất", M.doi ? `${M.doi.d_oi} tại strike ${M.doi.chart}` : `không có strike trong ${sc.doi_zone}$`)
     + kv("DXY", dxy == null ? "—" : `${dxy >= 0 ? "+" : ""}${Number(dxy).toFixed(3)}% (ngưỡng ${sc.dxy_thr_pct}%) · chỉ tính khi live`)
     + kv("Cấu hình", `xác nhận tối thiểu ${Number.isInteger(OFS.minConf) ? OFS.minConf : sc.min_confirm} · nghỉ ${sc.cooldown_bars} nến · chạm tường ≤ ${sc.touch_tol}$ · SL ± ${sc.sl_buffer}$`);
@@ -2903,4 +2941,22 @@ boot();
     };
     fix(); setInterval(fix, 2000);
   } catch (e) { /* chỉ là hiển thị */ }
+})();
+
+// B9b5c-3 (25/11): BỎ trang «Vào lệnh» (KH1–KH3, data-pg="3") theo yêu cầu. Code của trang nằm ở file khác nên ở đây chỉ ẨN nút + trang;
+// nếu đang mở trang đó thì tự chuyển sang «Vào lệnh OF». Bảng «Bối cảnh thị trường» của trang cũ đã chuyển sang «Vào lệnh OF» (ofCtxExtra).
+(function () {
+  const css = document.createElement("style");
+  css.textContent = '#pgbar button[data-pg="3"],.right > .page[data-pg="3"]{display:none!important}';
+  document.head.appendChild(css);
+  let n = 0;
+  const t = setInterval(() => {
+    const bar = document.querySelector("#pgbar"), b3 = bar && bar.querySelector('button[data-pg="3"]');
+    if (b3) {
+      b3.style.setProperty("display", "none", "important");   // để cột tiêu đề khi «Mở rộng» cũng bỏ qua nút này
+      const pg3 = document.querySelector('.right > .page[data-pg="3"]'), b6 = bar.querySelector('button[data-pg="6"]');
+      if ((b3.classList.contains("on") || (pg3 && !pg3.hidden)) && b6) b6.click();
+    }
+    if (++n > 60) clearInterval(t);
+  }, 1000);
 })();
