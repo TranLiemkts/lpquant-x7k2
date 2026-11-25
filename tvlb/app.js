@@ -4,6 +4,37 @@
    Lớp phủ (canvas) vẽ mốc GC bên trái, GLD bên phải, đường cong Net GEX ngay trên chart.
    SMC (smc.js): cấu trúc H4 + khung chart, OTE/Extreme, thanh khoản, nến quét, CL1 Buy/Sell hồi & CL2 thuận (KB1/KB2/KB3). */
 "use strict";
+// B9b5c-3 (25/11/2026): THIẾT LẬP MẶC ĐỊNH khi trình duyệt mở dashboard LẦN ĐẦU (chụp từ máy anh lúc 21:44 25/11).
+// Chỉ ghi khóa nào CHƯA có → trình duyệt đã có thiết lập riêng thì giữ nguyên. Bỏ: nhật ký lệnh, KH1–3 (trang «Vào lệnh» đã bỏ), tài khoản Paper.
+// Trang mở đầu = «Vào lệnh OF» (pg 6). Muốn quay về mặc định: F12 → Console → gõ  tvlbResetDefaults()  → Enter.
+const TVLB_DEFAULTS = {
+ "bildol.tf": "5m",
+ "bildol.primary": "GC",
+ "tvlb.layers": "{\"#lyGex\":true,\"#lySMC\":true,\"#lyKey\":true,\"#lyGLD\":true,\"#lyVP\":true,\"#lyMk\":true}",
+ "tvlb.of": "{\"minConf\":2,\"x_regime\":true,\"x_near\":true,\"boxMax\":5,\"boxRun\":false,\"session\":false,\"x_flipnear\":true}",
+ "tvlb.o3": "{\"thSt\":false,\"thSg\":false,\"sig\":false,\"kh\":false,\"box\":true,\"snd\":true,\"tg\":true,\"tout\":36,\"k\":{\"wall\":false,\"oh\":false,\"oht\":false,\"conf\":false,\"pro\":false,\"m\":false,\"sw\":false},\"minG\":\"C\",\"kh1\":false,\"kh2\":false,\"kh3\":false,\"tpm\":\"auto\",\"boxn\":3,\"slmax\":0,\"al\":{\"kh\":false,\"khz\":false,\"sig\":true,\"hedge\":true,\"div\":true,\"news\":true},\"sty\":\"beep\",\"vol\":60,\"diff\":true,\"minor\":false,\"topn\":5,\"wst\":2,\"wh\":true}",
+ "tvlb.tip": "{\"st\":true,\"sg\":true,\"of\":true,\"prem\":false,\"ext\":false,\"fib\":false,\"kb2\":false,\"liq\":false,\"tl\":true,\"hl\":false,\"bos\":false,\"swp\":false,\"form\":true,\"ord\":false,\"fill\":false}",
+ "tvlb.plus": "{\"tips\":true,\"fast\":true,\"cd\":true,\"grid\":false,\"compact\":false}",
+ "tvlb.p3": "true",
+ "tvlb.ofsz": "{\"t\":false,\"w\":false}",
+ "tvlb.ofrun": "{\"st\":\"closed\",\"k\":\"wall\"}",
+ "tvlb.menuopen": "{\"view\":true,\"hub\":false,\"tip\":false,\"of\":false,\"tp\":false}",
+ "tvlb.wide": "false",
+ "tvlb.layout": "{\"pg\":\"6\",\"max\":{\"4\":\"\",\"5\":\"\"}}"
+};
+(function () {
+  try {
+    if (localStorage.getItem("tvlb.defInit") === "1") return;
+    let n = 0;
+    for (const [k, v] of Object.entries(TVLB_DEFAULTS)) if (localStorage.getItem(k) == null) { localStorage.setItem(k, v); n++; }
+    localStorage.setItem("tvlb.defInit", "1");
+    if (n) location.reload();   // một lần duy nhất: để các file nạp trước app.js cũng đọc đúng thiết lập
+  } catch (e) { }
+})();
+window.tvlbResetDefaults = function () {
+  try { for (const k of Object.keys(TVLB_DEFAULTS)) localStorage.removeItem(k); localStorage.removeItem("tvlb.defInit"); } catch (e) { }
+  location.reload();
+};
 // 7n số 135: chế độ gọn (window.TVLB_COMPACT do tvlb_plus.js đặt)
 
 const $ = (s) => document.querySelector(s);
@@ -562,9 +593,11 @@ function drawOverlayBase() {
   if ($("#lyMk") && $("#lyMk").checked && window.TVLB_MK_OF !== false && S.signals.length) {
     const tsc2 = chart.timeScale(), cc2 = S.candles;
     ctx.font = "500 8.5px 'IBM Plex Mono', monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.globalAlpha = 0.85;
-    const sgBox = [];
+    const sgBox = [], wSet = new Set();
+    try { if (ofOn("watch")) for (const w of ofWatchCached()) if (w.first) wSet.add(w.j + "|" + w.p.side); } catch (e) { /* bỏ qua */ }   // B9b5c-3: nến đã có nhãn «nến quan sát» thì không vẽ thêm nhãn tín hiệu (trước đây 2 nhãn đè nhau)
     for (const g of [...S.signals].reverse()) {   // 9b-5c: lệnh 9A/9B dùng nhãn của nến quan sát (#số ✔), không vẽ lại ở đây để khỏi đè   // mới nhất trước; nhãn chạm nhãn đã đặt thì bỏ (tránh chồng khi nhiều tín hiệu sát nhau)
       const k = cc2[g.i]; if (!k) continue;
+      if (wSet.has(g.i + "|" + g.side)) continue;
       const x = tsc2.timeToCoordinate(g.time + TZ); if (x == null || x < 0 || x > plotW) continue;
       const sell = g.side === "SELL", yb = candleS.priceToCoordinate(sell ? k.high : k.low); if (yb == null) continue;
       const bsp = Number(tsc2.options().barSpacing) || 8, off = Math.max(21, Math.min(Math.max(bsp, 12), 30) * 0.7 + 14);   // v23am-11: mũi tên to theo mức zoom → đẩy chữ ra xa theo cỡ mũi tên
@@ -871,7 +904,7 @@ function ofModel() {
   const cw = L.call_wall, pw = L.put_wall, flip = L.gamma_flip, negG = flip != null && px < flip, blockG = ofOn("gamma") && negG;
   const rgp = regimePct(px, flip), noFlip = ofX("x_noflip"), flipFar = !noFlip && ofX("x_flipfar") && flip != null && rgp.far, flipNear = !noFlip && ofX("x_flipnear") && flip != null && Math.abs(px - flip) <= ofFlipNear(), flipOut = flipFar || flipNear, regX = ofX("x_regime") && flip != null;   // TVLB B9b1
   const tfOk = (TF_SEC[S.tf] || 0) >= 300, sessOn = sc.session_only && ofOn("session"), inS = inUsSession(c[c.length - 1].time);
-  const since = i - S.lastSigIdx, cdOk = since > sc.cooldown_bars, gatesOk = tfOk && (!sessOn || inS) && !flipOut;
+  const since = i - S.lastSigIdx, cdOk = since > sc.cooldown_bars || since === 0, gatesOk = tfOk && (!sessOn || inS) && !flipOut;
   const gates = [[tfOk, "Khung nến ≥ M5 (đang " + S.tf + ")"], [!sessOn || inS, sessOn ? (inS ? "Trong phiên Mỹ 19:00-23:00 VN" : "Ngoài phiên Mỹ 19:00-23:00 VN") : "Không lọc phiên"], [!flipOut, flipNear ? `Flip chỉ cách giá ${Math.abs(px - flip).toFixed(1).replace(".", ",")}$ (≤ ${ofFlipNear()}$): vùng chuyển Gamma, đứng ngoài («Cách dùng Flip» đang lọc Flip gần)` : flipFar ? `Flip cách giá ${rgp.pctTxt}: ngày "không rõ", đứng ngoài («Cách dùng Flip» đang lọc Flip xa, B6)` : "Không lọc theo khoảng cách Flip"], [cdOk, cdOk ? "Hết nghỉ sau tín hiệu trước" : "Đang nghỉ " + (sc.cooldown_bars - since + 1) + " nến sau tín hiệu trước"]];
   const plans = [];
   const add = (o) => {
@@ -929,7 +962,7 @@ function ofModel() {
       return { j, k: kk, prev: pv, p2: q2, slope: sl, d0: divAt(j), d1: divAt(j - 1), dUp: dx >= sc.dxy_thr_pct, dDn: dx <= -sc.dxy_thr_pct, vSp: vs, dFlat: !!dd && dd.d_oi <= 0, dBig: !!dd && Math.abs(dd.d_oi) >= sc.doi_big,
         bf: hist ? bigFlowAt(j, sc.cvd_slope_bars) : bigFlow(sc.cvd_slope_bars), swp: (S.smc?.sweeps || []).some((w) => w.i >= j - 2 && w.i <= j),
         bod: c.slice(j - 10, j).reduce((a, x) => a + Math.abs(x.close - x.open), 0) / 10, lo3: Math.min(kk.low, pv.low, q2.low), hi3: Math.max(kk.high, pv.high, q2.high),
-        a: hist ? j : j - 2, b: hist ? Math.min(j + 2, c.length - 2) : j, inS: hist ? inUsSession(kk.time) : inS, cdOk: hist ? !S.signals.some((g) => g.i <= j && j - g.i <= sc.cooldown_bars) : cdOk };
+        a: hist ? j : j - 2, b: hist ? Math.min(j + 2, c.length - 2) : j, inS: hist ? inUsSession(kk.time) : inS, cdOk: hist ? !S.signals.some((g) => g.i < j && j - g.i <= sc.cooldown_bars) : cdOk };   // B9b5c-3: bỏ «g.i === j» (trước đây tín hiệu ra ở nến này lại chặn nến quan sát của chính nó → ⛔ sai)
     };
     const chkFor = (p, X) => {
       const { k, prev, p2, slope, d0, d1, dUp, dDn, vSp, dFlat, dBig, bf, swp, bod, lo3, hi3, inS, cdOk } = X;   // X.a..X.b = cửa sổ nến (9A)
@@ -1412,7 +1445,8 @@ function ofDrawWatch() {
     // 9b-5c: nhãn XẾP DỌC (mẫu nhãn lệnh HG), mỗi dòng một ý
     const xy = ofSimple(w.chk).replace(/^(đủ|⛔) /, ""), nm = /^nw/.test(w.p.id) ? (/^nwa/.test(w.p.id) ? "9A" : "9B") : /^(ts|tb)/.test(w.p.id) ? "TL1·2" : "TL1";
     const st2 = (w.chk.gOk < w.chk.gate.length ? "⛔" : "") + xy;   // trọng số x/y (⛔ = cổng chặn)
-    const lines = [sell ? "sell" : "buy", st2, nm, wn ? "#" + wn + (inO ? " ✔" : "") : inO ? "✔" : "", late ? `lần ${w.nth}` : ""].filter(Boolean);   // 9b-5c: từ tam giác ra ngoài: chiều → trọng số → kiểu lệnh → #số (+✔ đã vào) → «lần N» ngoài cùng
+    const ofSg = $("#lyMk") && $("#lyMk").checked && window.TVLB_MK_OF !== false ? (S.signals || []).find((g) => g.i === w.j && g.side === w.p.side) : null;   // B9b5c-3: tín hiệu Option Flow trùng nến → gộp thành 1 dòng «OF ✔ x/y» trong cùng cột nhãn
+    const lines = [sell ? "sell" : "buy", st2, nm, ofSg ? `OF ✔ ${ofSg.score}/${ofSg.max}` : "", wn ? "#" + wn + (inO ? " ✔" : "") : inO ? "✔" : "", late ? `lần ${w.nth}` : ""].filter(Boolean);   // 9b-5c: từ tam giác ra ngoài: chiều → trọng số → kiểu lệnh → #số (+✔ đã vào) → «lần N» ngoài cùng
     ctx.font = "600 9px 'IBM Plex Mono', monospace";
     const lh = 10, bw = Math.max(...lines.map((q) => ctx.measureText(q).width)) + 8, bh = lines.length * lh + 2;
     let ty = tipY + dir * 9;   // mép gần tam giác của cột chữ
@@ -1423,7 +1457,7 @@ function ofDrawWatch() {
     }
     const yTop = dir > 0 ? ty : ty - bh; if (yTop < 2 || yTop + bh > plotH - 2) continue;
     ctx.lineWidth = 3; ctx.strokeStyle = "rgba(10,14,20,.9)";
-    lines.forEach((q, n) => { const yy = ty + dir * (n * lh + lh / 2 + 1); ctx.strokeText(q, x, yy); ctx.fillStyle = q === st2 ? "#ffffff" : inO ? col : "#8a93a0"; ctx.fillText(q, x, yy); });   // 9b-5c: trọng số x/y luôn TRẮNG; lệnh đã vào: chữ xanh da trời (buy) / đỏ (sell); chưa thỏa / không vào: xám
+    lines.forEach((q, n) => { const yy = ty + dir * (n * lh + lh / 2 + 1); ctx.strokeText(q, x, yy); ctx.fillStyle = q === st2 ? "#ffffff" : inO || (ofSg && q.startsWith("OF ✔")) ? (sell ? "#ff5252" : "#4fc3f7") : "#8a93a0"; ctx.fillText(q, x, yy); });   // 9b-5c: trọng số x/y luôn TRẮNG; lệnh đã vào: chữ xanh da trời (buy) / đỏ (sell); chưa thỏa / không vào: xám
     ctx.font = "700 10.5px 'IBM Plex Mono', monospace";
     ov.tags.push({ x0: x - bw / 2 - 2, x1: x + bw / 2 + 2, y0: Math.min(tipY, yTop) - 2, y1: Math.max(tipY + dir * 7, yTop + bh) + 2, k: "watch", tip: ofWatchTip(w) });
   }
