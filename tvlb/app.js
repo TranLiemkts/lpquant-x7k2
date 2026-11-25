@@ -657,7 +657,7 @@ function drawOverlayBase() {
   }
   if ($("#lySMC")?.checked && S.smc) drawSMC(ctx, plotW, plotH);
   { const rg = P ? regimePct(P.underlying, P.gamma_flip) : null;
-    $("#chartInfo").textContent = P ? `${P.source} · ${P.strikes.length} strikes · Σ ${fmtK(P.net_gex)} · ${rg.pct == null ? "?" : rg.far ? `? không rõ (${rg.pctTxt} Flip)` : `${rg.pct >= 0 ? "+Γ" : "−Γ"} ${rg.pctTxt} Flip`} · mốc chưa kiểm định` : "Chưa có dữ liệu Options";
+    $("#chartInfo").textContent = P ? `${P.source} · ${P.strikes.length} strikes · Σ ${fmtK(P.net_gex)} · ${rg.pct == null ? "?" : `${rg.pct >= 0 ? "+Γ" : "−Γ"} ${rg.pctTxt} Flip`} · mốc chưa kiểm định` : "Chưa có dữ liệu Options";
     if (window.TVLB_COMPACT && P) { const el = $("#chartInfo"); el.textContent = el.textContent.replace(/ · \d+ strikes/, "").replace("mốc chưa kiểm định", "chưa kiểm định"); } }   // 7o số 141: chế độ gọn rút gọn ô thông tin
 }
 
@@ -1242,7 +1242,7 @@ function ofDirWhy(p) {
 }
 function ofStateTip(p) {
   const col = OF_COL[p.side] || "#f0b429", sec = (t, b) => (b ? `<div style="margin-top:5px;padding-top:4px;border-top:1px solid #2b3440"><b style="color:#f3d38c">${t}</b><br>${b}</div>` : "");
-  const sel = /^nw/.test(p.id) ? "Chọn 9A hay 9B theo Gamma: giá TRÊN Flip (Gamma dương) → 9A; giá DƯỚI Flip (Gamma âm) → 9B; ô «Cách dùng Flip» lọc Flip xa và Flip cách > 2,5%, hoặc lọc Flip gần và Flip cách ≤ ngưỡng $ → «không rõ»: hiện 9A nhưng đứng ngoài. Chọn «Không lọc» thì Flip xa bao nhiêu cũng chọn 9A/9B theo dấu Gamma; «Bỏ hẳn Flip» thì luôn xét 9A. Đây là bản nháp B10b, chưa kiểm định." : "";
+  const sel = /^nw/.test(p.id) ? "Chọn 9A hay 9B theo Gamma: giá TRÊN Flip (Gamma dương) → 9A; giá DƯỚI Flip (Gamma âm) → 9B; Flip XA không chặn (anh Nam 25/11); chỉ khi Flip cách giá ≤ ngưỡng $ (vùng chuyển Gamma) thì đứng ngoài cả 2 hướng. Ngưỡng là tham số chưa có số từ anh Nam, chưa kiểm định." : "";
   return `<div style="font-weight:700;color:${col};margin-bottom:3px">${p.name}</div><div>Trạng thái: <b>${p.state}</b>${p.dist != null && p.dist > 0 ? ` · cách vùng ${p.dist.toFixed(1)}$` : ""}</div>`
     + sec("Ý nghĩa trạng thái", ofStateWhy(p)) + sec("Hướng lệnh", ofDirWhy(p)) + sec("Chọn 9A / 9B", sel)
     + `<div style="margin-top:5px;color:#9aa4b2">Số x/y xem ở ký hiệu trên nến và thẻ chi tiết.</div>`;
@@ -1551,7 +1551,7 @@ function ofRender() {
   const kv = (a, b) => `<div class="muted">${a}</div><div>${b}</div>`, k = M.k, sc = M.sc, dxy = S.state?.macro?.DXY?.chg_n_pct;
   const X = ofCtxExtra(M);   // B9b5c-3: thêm các dòng của bảng «Bối cảnh» trang «Vào lệnh» (đã bỏ trang đó)
   $("#ofC").innerHTML = kv("Net GEX", X.gex)
-    + kv("Gamma", M.flip == null ? "chưa rõ Flip" : `${M.negG ? "ÂM" : "DƯƠNG"} · Flip ${ofFm(M.flip)} · cách ${M.rgp.pctTxt}${M.rgp.far ? " (xa hơn 2,5%: B6 coi là ngày không rõ)" : ""}${M.flipNear ? " (sát giá ≤ " + ofFlipNear() + "$: đứng ngoài)" : ""}` + (M.blockG ? " → BUY bắt đáy bị chặn" : ""))
+    + kv("Gamma", M.flip == null ? "chưa rõ Flip" : `${M.negG ? "ÂM" : "DƯƠNG"} · Flip ${ofFm(M.flip)} · cách ${M.rgp.pctTxt}${M.rgp.far ? " (Flip xa: chế độ ổn định, KHÔNG chặn lệnh — anh Nam 25/11)" : ""}${M.flipNear ? " (sát giá ≤ " + ofFlipNear() + "$: đứng ngoài)" : ""}` + (M.blockG ? " → BUY bắt đáy bị chặn" : ""))
     + kv("Hệ số kỳ hạn", X.tenor)
     + kv("Giá / Tường", `${ofFm(M.px)} · Call Wall ${ofFm(M.cw)} (cách ${Math.abs(M.cw - M.px).toFixed(1)}$) · Put Wall ${ofFm(M.pw)} (cách ${Math.abs(M.pw - M.px).toFixed(1)}$)`)
     + kv("Magnet", X.mag)
@@ -2043,7 +2043,7 @@ function regimePct(p, flip) {
   const fx = (v) => Number(v).toFixed(1).replace(".", ","), farTxt = fx(FLIP_FAR_PCT);
   if (p == null || flip == null || !(flip > 0)) return { cls: "unk", pct: null, far: false, pctTxt: "", farTxt, short: "không rõ (không có Flip)" };
   const pct = ((p - flip) / flip) * 100, far = Math.abs(pct) > FLIP_FAR_PCT, pctTxt = `${pct >= 0 ? "+" : "−"}${fx(Math.abs(pct))}%`;
-  return { cls: far ? "unk" : pct >= 0 ? "pos" : "neg", pct, far, pctTxt, farTxt, short: far ? `không rõ (Flip cách ${fx(Math.abs(pct))}%)` : `${pct >= 0 ? "Long γ" : "Short γ"} ${pctTxt}` };
+  return { cls: pct >= 0 ? "pos" : "neg", pct, far, pctTxt, farTxt, short: `${pct >= 0 ? "Long γ" : "Short γ"} ${pctTxt}` };
 }
 window.regimePct = regimePct;
 // Ngày giao dịch CME (MM/DD/YYYY) cũ hơn phiên lẽ ra đã có? Phiên "đã có" = ngày làm việc của (bây giờ − 23h30 UTC) (settle đăng xong khoảng 23:03 UTC theo bước 4).
