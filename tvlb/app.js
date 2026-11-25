@@ -922,7 +922,7 @@ function ofModel() {
   try {
     const minC = Number.isInteger(OFS.minConf) ? OFS.minConf : sc.min_confirm;
     const mkCtx = (j, hist) => {
-      const kk = c[j], pv = c[j - 1], q2 = c[j - 2], dx = S.state?.macro?.DXY?.chg_n_pct ?? 0;
+      const kk = c[j], pv = c[j - 1], q2 = c[j - 2], dx = !hist || j >= c.length - 3 ? (S.state?.macro?.DXY?.chg_n_pct ?? 0) : 0;   // 9b-5c (số 233): DXY HIỆN TẠI chỉ áp cho nến mới (≤ 2 nến trước, đúng cửa sổ chốt); nến cũ không có DXY lịch sử → không tính, để ✓/lệnh của nến cũ không nhảy theo DXY bây giờ
       const av = c.slice(j - sc.vol_sma, j).reduce((a, x) => a + x.vol, 0) / sc.vol_sma, sl = kk.cvd - c[j - sc.cvd_slope_bars].cvd, dd = nearDoi(kk.close);
       const vs = av > 0 && kk.vol >= sc.vol_spike_mult * av;
       return { j, k: kk, prev: pv, p2: q2, slope: sl, d0: divAt(j), d1: divAt(j - 1), dUp: dx >= sc.dxy_thr_pct, dDn: dx <= -sc.dxy_thr_pct, vSp: vs, dFlat: !!dd && dd.d_oi <= 0, dBig: !!dd && Math.abs(dd.d_oi) >= sc.doi_big,
@@ -934,7 +934,7 @@ function ofModel() {
       const { k, prev, p2, slope, d0, d1, dUp, dDn, vSp, dFlat, dBig, bf, swp, bod, lo3, hi3, inS, cdOk } = X;   // X.a..X.b = cửa sổ nến (9A)
       const id = p.id, sell = p.side === "SELL", nw = /^nw/.test(id), lvl = (p.lo + p.hi) / 2;
       if (/^hg/.test(id) && p.side === "BOTH") return { ok: 0, tot: 0, shape: [], conf: [], gate: [], need: 0, note: "giá đang TRONG vùng: chưa có điểm vào, chờ giá ra khỏi vùng rồi quay lại" };
-      let shape = [], conf = [], revIdx = null;
+      let shape = [], conf = [], revIdx = null, appr9 = null;
       if (id === "ts") { shape = [[k.high >= cw - tol, `Nến chạm vùng (cao nhất ≥ ${ofFm(cw - tol)})`], [k.close < cw, "Nến đóng dưới tường"], [k.close < k.open, "Nến giảm"]]; conf = [["Phân kỳ CVD âm", d0.bear || d1.bear], ["CVD dốc xuống", slope < 0], ["DXY tăng", dUp], ["Volume spike", vSp], ["Vol↑ mà ΔOI≤0", vSp && dFlat], ["ΔOI≥1500 tại vùng", dBig]]; }
       else if (id === "tb") { shape = [[k.low <= pw + tol, `Nến chạm vùng (thấp nhất ≤ ${ofFm(pw + tol)})`], [k.close > pw, "Nến đóng trên tường"], [k.close > k.open, "Nến tăng"]]; conf = [["Phân kỳ CVD dương", d0.bull || d1.bull], ["CVD dốc lên", slope > 0], ["DXY giảm", dDn], ["Volume spike", vSp], ["Vol↑ mà ΔOI≤0", vSp && dFlat], ["ΔOI≥1500 tại vùng", dBig]]; }
       else if (id === "bd") { shape = [[k.close < pw - tol, `Nến đóng dưới ${ofFm(pw - tol)}`], [prev.close >= pw - tol, "Nến trước còn ở trên"]]; conf = [["CVD dốc xuống", slope < 0], ["Delta nến âm", k.delta < 0], ["DXY tăng", dUp], ["Volume spike", vSp]]; }
@@ -953,13 +953,14 @@ function ofModel() {
         // nó phải nằm đúng phía. Trước đây không kiểm → nến PHÁ tường từ trên xuống bị tính là "9A SELL bật lại" (lệnh 22:10 ngày 24/11).
         let appr = false; if (f >= 0) for (let m = f - 1; m >= Math.max(0, f - 24); m--) { const cl = c[m].close; if (cl < p.lo || cl > p.hi) { appr = sell ? cl < p.lo : cl > p.hi; break; } }
         if (!appr && st === "rev") st = "wrongside";
+        appr9 = f >= 0 ? appr : null;   // 9b-5c (số 239): cho ofWatchList biết lần chạm này thuộc chiều nào
         revIdx = st === "rev" ? r : null;   // v23ai: nến xác nhận quay ngược (để vẽ khung vào lệnh ở nến kế)
         const rvTxt = "Có nến đóng quay ngược ≥ 0,10% từ tường (trong 1–3 nến kể từ nến chạm" + (st === "rev" ? `; đạt ở nến thứ ${r - f + 1}` : st === "wait" ? `; mới ${X.b - f + 1} nến, còn chờ` : st === "expired" ? "; đã hết 3 nến mà chưa có" : "") + ")";
         shape = [[f >= 0, "Chạm vùng ±0,10% quanh tường"], [f >= 0 && appr, sell ? "Giá đi LÊN tới tường (trước lần chạm, nến đóng gần nhất ngoài vùng nằm DƯỚI vùng)" : "Giá đi XUỐNG tới tường (trước lần chạm, nến đóng gần nhất ngoài vùng nằm TRÊN vùng)"], [st === "rev", rvTxt], [f >= 0 && st !== "through", "Chưa đóng xuyên quá 0,10% qua tường (trước nến quay ngược)"]];
         // v23s: xác nhận theo MENU (cùng bộ với bẫy TL1·2; B10b gốc không có xác nhận, đây là phần gắn thêm theo yêu cầu: điều kiện phải theo menu)
         conf = sell ? [["Phân kỳ CVD âm", d0.bear || d1.bear], ["CVD dốc xuống", slope < 0], ["DXY tăng", dUp], ["Volume spike", vSp], ["Vol↑ mà ΔOI≤0", vSp && dFlat], ["ΔOI≥1500 tại vùng", dBig]] : [["Phân kỳ CVD dương", d0.bull || d1.bull], ["CVD dốc lên", slope > 0], ["DXY giảm", dDn], ["Volume spike", vSp], ["Vol↑ mà ΔOI≤0", vSp && dFlat], ["ΔOI≥1500 tại vùng", dBig]];
       }
-      else if (/^nwb/.test(id)) { shape = [[sell ? k.close <= lvl * 0.9985 : k.close >= lvl * 1.0015, "Nến đóng vượt tường ≥ 0,15%"], [Math.abs(k.close - k.open) > bod, "Thân nến lớn hơn trung bình 10 nến trước"]];
+      else if (/^nwb/.test(id)) { shape = [[sell ? k.close <= lvl * 0.9985 : k.close >= lvl * 1.0015, "Nến đóng vượt tường ≥ 0,15%"], [(() => { for (let m = X.j - 1; m >= Math.max(0, X.j - 24); m--) { const cl = c[m].close; if (sell ? cl <= lvl * 0.9985 : cl >= lvl * 1.0015) return false; if (sell ? cl > lvl : cl < lvl) return true; } return false; })(), sell ? "Lần phá đầu: trước đó giá còn đóng TRÊN tường, chưa nến nào đóng dưới quá 0,15%" : "Lần phá đầu: trước đó giá còn đóng DƯỚI tường, chưa nến nào đóng trên quá 0,15%"], [Math.abs(k.close - k.open) > bod, "Thân nến lớn hơn trung bình 10 nến trước"]];   // 9b-5c (số 239): thêm ô «lần phá đầu»: lùi tối đa 24 nến, gặp nến đóng phía bên kia tường trước khi gặp nến đã vượt 0,15% (cho phép phá 2 bước, vd 25/11 18:25→18:35); trước đây nến đóng cùng phía (chưa hề phá) cũng bị tính là phá
         conf = sell ? [["CVD dốc xuống", slope < 0], ["Delta nến âm", k.delta < 0], ["DXY tăng", dUp], ["Volume spike", vSp]] : [["CVD dốc lên", slope > 0], ["Delta nến dương", k.delta > 0], ["DXY giảm", dDn], ["Volume spike", vSp]];   // v23s: xác nhận theo menu
       }
       if ((bf && (nw || ["ts", "tb", "bd", "sq"].includes(id))) || (/^hg/.test(id) && bf)) conf.push([sell ? "Lệnh lớn bán ròng" : "Lệnh lớn mua ròng", sell ? bf.d < 0 : bf.d > 0]);
@@ -973,10 +974,11 @@ function ofModel() {
       const cOk = conf.filter((x) => x[1]).length, need = minC;   // v23v: đúng như engine (score >= minConf): ít ô tick hơn mức tối thiểu thì KHÔNG BAO GIỜ đủ
       // v23t: số x/y hiển thị bên ngoài = các ô XÁC NHẬN đang tick trong menu (không cộng hình thái + cổng như v23s). Hình thái và cổng vẫn bắt buộc: "full" = đủ cả ba.
       const shOk = shape.filter((x) => x[0]).length, gOk = gate.filter((x) => x[0]).length, xOk = Math.min(cOk, need), full = shOk === shape.length && cOk >= need && gOk === gate.length;
-      return { shape, conf, gate, need, cOk, xOk, shOk, gOk, full, time: k.time, revIdx, cj: X.j, ok: shOk + xOk + gOk, tot: shape.length + need + gate.length };   // v23v: ok/tot chỉ để biết có dữ liệu; hiển thị luôn dùng ofSum(h)
+      return { shape, conf, gate, need, cOk, xOk, shOk, gOk, full, time: k.time, revIdx, cj: X.j, appr: appr9, ok: shOk + xOk + gOk, tot: shape.length + need + gate.length };   // v23v: ok/tot chỉ để biết có dữ liệu; hiển thị luôn dùng ofSum(h)
     };
     liveX = mkCtx(i, false); plans.forEach((p) => { p.chk = chkFor(p, liveX); });
-    watchAt = (j) => { const X = mkCtx(j, true); return plans.map((p) => ({ p, chk: chkFor(p, X) })); };
+    const twC = {}, twin = (p, sd) => twC[p.id + sd] || (twC[p.id + sd] = { ...p, id: p.id + sd[0], base: p.id, side: sd });   // 9b-5c (số 239): bản SELL (…S) và BUY (…B) của mỗi tường 9A/9B
+    watchAt = (j) => { const X = mkCtx(j, true), out = []; for (const p of plans) { if (/^nw/.test(p.id)) { for (const sd of ["SELL", "BUY"]) { const q = twin(p, sd); out.push({ p: q, chk: chkFor(q, X) }); } } else out.push({ p, chk: chkFor(p, X) }); } return out; };
   } catch (e) { /* bỏ qua */ }
   return { px, cw, pw, flip, negG, blockG, rgp, flipFar, flipNear, flipOut, tol, gates, gatesOk, plans, k, avg, slope, doi, sc, watchAt, xc: liveX };
 }
@@ -1229,7 +1231,7 @@ function ofWatchList(M0) {
     const k = c[j];
     for (const { p, chk } of M.watchAt(j)) {
       if (!p.on || /^hg/.test(p.id) || !chk || !chk.tot) continue;
-      const ev = /^(ts|tb|nwa)/.test(p.id) ? k.high >= p.lo && k.low <= p.hi : chk.shape.length >= 2 && chk.shape[0][0] && chk.shape[1][0];
+      const tch = k.high >= p.lo && k.low <= p.hi, ev = /^(ts|tb)/.test(p.id) ? tch : /^nwa/.test(p.id) ? tch && chk.appr === true : chk.shape.length >= 2 && chk.shape.every((x) => x[0]);   // 9b-5c (số 239): 9A chỉ ghi ở chiều có hướng đi tới đúng; 9B phải đủ cả ô «nến trước ở phía bên kia»
       const was1 = was[p.id]; was[p.id] = ev;
       // v23ah: nến chạm lại trong cửa sổ 3 nến kể từ nến "first" của cùng kế hoạch chỉ là CHẤM, không thành đợt mới (không thêm tam giác/nhãn thứ hai)
       const inWin = /^(ts|tb|nwa)/.test(p.id) && lastF[p.id] != null && j - lastF[p.id] <= 2, isFirst = ev && !was1 && !inWin;
@@ -1332,12 +1334,12 @@ function ofWatchLatch(list) {
   const c = S.candles; if (!c || !c.length) return list;
   const day = vnDate(c[c.length - 1].time), key = "tvlb.ow." + day;
   for (let q = localStorage.length - 1; q >= 0; q--) { const kk = localStorage.key(q); if (kk && kk.indexOf("tvlb.ow.") === 0 && kk !== key) localStorage.removeItem(kk); }
-  const saved = JSON.parse(localStorage.getItem(key) || "[]"), have = new Set(saved.map((x) => x.id));
+  const saved = JSON.parse(localStorage.getItem(key) || "[]").filter((x) => /^nw[ab]\d+[SB]$/.test(x.pid || "")), have = new Set(saved.map((x) => x.id));   // 9b-5c: bỏ ký hiệu chốt theo luật cũ (chiều theo giá hiện tại)
   let dirty = false;
   for (const w of list) {
     if (!w.first || !w.chk || !w.chk.full || !/^nw/.test(w.p.id) || c.length - 1 - w.j > 2) continue;
     const id = w.p.id + "|" + w.time; if (have.has(id)) continue;
-    saved.push({ id, time: w.time, pid: w.p.id, side: w.p.side, short: w.p.short, lo: w.p.lo, hi: w.p.hi, chk: w.chk, tot: w.tot }); have.add(id); dirty = true;
+    saved.push({ id, time: w.time, pid: w.p.id, base: w.p.base, side: w.p.side, short: w.p.short, lo: w.p.lo, hi: w.p.hi, chk: w.chk, tot: w.tot }); have.add(id); dirty = true;
   }
   if (dirty) localStorage.setItem(key, JSON.stringify(saved));
   const present = new Set(list.filter((w) => w.first).map((w) => w.p.id + "|" + w.time)), out = list.slice();
@@ -1345,7 +1347,7 @@ function ofWatchLatch(list) {
     if (present.has(sv.id)) continue;
     let j = -1; for (let q = c.length - 1; q >= 0; q--) if (c[q].time === sv.time) { j = q; break; }
     if (j < 0) continue;
-    const plan = (S.ofPlans || []).find((p) => p.id === sv.pid) || { id: sv.pid, side: sv.side, short: sv.short, lo: sv.lo, hi: sv.hi, on: true };
+    const plan = (S.ofPlans || []).find((p) => p.id === sv.pid) || { id: sv.pid, base: sv.base || sv.pid.replace(/[SB]$/, ""), side: sv.side, short: sv.short, lo: sv.lo, hi: sv.hi, on: true };
     out.push({ j, time: sv.time, p: plan, chk: sv.chk, tot: sv.tot, first: true, latched: true });
   }
   out.sort((x, y) => x.j - y.j);
@@ -1357,17 +1359,18 @@ function ofWatchCached(M0) {
   if (S.watchC && S.watchC.key === key && now - S.watchC.t < 5000) return S.watchC.list;
   let list = []; try { list = ofWatchList(M0 || ofModel()); S.watchErr = null; } catch (e) { S.watchErr = String(e && e.message || e); }
   try { list = ofWatchLatch(list); } catch (e) { /* giữ list gốc */ }
+  try { const cnt = {}, ft = {}; for (const w of list) if (w.first && /^nw/.test(w.p.id)) { cnt[w.p.id] = (cnt[w.p.id] || 0) + 1; w.nth = cnt[w.p.id]; if (w.nth === 1) ft[w.p.id] = w.time; w.firstT = ft[w.p.id]; } } catch (e) { /* chỉ để hiển thị */ }   // 9b-5c (số 239): lần thứ mấy của tường + chiều này trong ngày (ofEntries chỉ lấy lần 1)
   S.watchC = { key, t: now, list }; S.watchN = list.filter((w) => w.first).length; return list;
 }
 // gán x/y của MỖI kế hoạch = lần theo dõi gần nhất hôm nay (cùng nguồn với ký hiệu trên nến); gọi cả từ ofRender lẫn lúc vẽ overlay để hai nơi không lệch nhau
 // v23am-18: kế hoạch 9A/9B đã đủ điều kiện (✔) thì trạng thái là "ĐÃ VÀO" (trước đây vẫn ghi CHỜ vì trạng thái chỉ nhìn khoảng cách giá tới vùng)
 function ofMarkEntered(plans) {
-  for (const p of plans || []) if (/^nw/.test(p.id) && p.chk && p.chk.full && p.chk.time && p.on && !p.blocked) p.state = "ĐÃ VÀO";
+  for (const p of plans || []) { if (!/^nw/.test(p.id) || !p.on || p.blocked) continue; const lv = (p.lo + p.hi) / 2; if ((S.of9Sig || []).some((g) => g.side === p.side && g.wall != null && Math.abs(g.wall - lv) <= lv * 0.0005)) p.state = "ĐÃ VÀO"; }   // 9b-5c (số 239): trước đây cứ có nến ✔ là ghi ĐÃ VÀO dù không có lệnh
 }
 function ofSyncChk(plans, M0) {
   if (!plans || !ofOn("watch")) { (plans || []).forEach((p) => { if (p.live !== undefined) { p.chk = p.live; } }); return; }
-  try { const last = {}; for (const w of ofWatchCached(M0)) if (w.first) last[w.p.id] = w;
-    plans.forEach((p) => { if (p.live === undefined) p.live = p.chk; p.chk = last[p.id] ? last[p.id].chk : (p.live && !p.live.tot ? p.live : null); }); ofMarkEntered(plans); } catch (e) { /* giữ số cũ */ }
+  try { const last = {}; for (const w of ofWatchCached(M0)) if (w.first) last[(w.p.base || w.p.id) + "|" + w.p.side] = w;   // 9b-5c: theo tường gốc + chiều
+    plans.forEach((p) => { if (p.live === undefined) p.live = p.chk; p.chk = last[p.id + "|" + p.side] ? last[p.id + "|" + p.side].chk : (p.live && !p.live.tot ? p.live : null); }); ofMarkEntered(plans); } catch (e) { /* giữ số cũ */ }
 }
 function ofWatchTip(w) {
   const h = w.chk, col = w.chk.full ? (w.p.side === "SELL" ? "#ef5350" : "#26a69a") : ofColH(w.chk), li = (a, rev) => a.map((x) => { const ok = rev ? x[1] : x[0], t = rev ? x[0] : x[1]; return `<div style="color:${ok ? "#7be0b0" : "#9aa4b2"}">${ok ? "✔" : "✘"} ${t}</div>`; }).join("");
@@ -1390,7 +1393,7 @@ function ofDrawWatch() {
     const k = c[w.j]; if (!k) continue; const x = tsc.timeToCoordinate(w.time + TZ); if (x == null || x < 0 || x > plotW) continue;
     const sell = w.p.side === "SELL", ye = candleS.priceToCoordinate(sell ? k.high : k.low); if (ye == null) continue;
     const n = per[w.j] = (per[w.j] || 0) + 1; if (n > 3) continue;
-    const col = w.chk.full ? (sell ? "#ef5350" : "#26a69a") : ofColH(w.chk), dy = 3 + (n - 1) * 22, tipY = ye + (sell ? -dy : dy), dir = sell ? -1 : 1;
+    const late = /^nw/.test(w.p.id) && w.nth > 1, col = late ? "#9aa4b2" : w.chk.full ? (sell ? "#ef5350" : "#26a69a") : ofColH(w.chk), dy = 3 + (n - 1) * 22, tipY = ye + (sell ? -dy : dy), dir = sell ? -1 : 1;
     ctx.fillStyle = col;
     if (!w.first) { ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(x, tipY + dir * 3, 2.2, 0, 7); ctx.fill(); ctx.globalAlpha = 1; continue; }   // nến tiếp theo trong cùng đợt chạm: chỉ chấm nhỏ
     // tam giác nhỏ chỉ vào nến (SELL: ▼ phía trên nến · BUY: ▲ phía dưới nến) + số x/y; chi tiết khi rê chuột
@@ -1401,7 +1404,7 @@ function ofDrawWatch() {
       const x2 = tsc.timeToCoordinate(c[jj].time + TZ), y2 = candleS.priceToCoordinate(sell ? c[jj].high : c[jj].low); if (x2 == null || y2 == null || x2 < 0 || x2 > plotW) continue;
       ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(x2, y2 + (sell ? -dy : dy) + dir * 3, 2.2, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
     }
-    const t = (nAt[w.j] > 1 ? w.p.short.replace(/ TƯỜNG( GẦN)?/, "") + " " : "") + ofSimple(w.chk), tw = ctx.measureText(t).width, bw = tw + 10, bh = 16;
+    const t = (late ? `lần ${w.nth} ` : "") + (nAt[w.j] > 1 ? w.p.short.replace(/ TƯỜNG( GẦN)?/, "") + " " : "") + ofSimple(w.chk), tw = ctx.measureText(t).width, bw = tw + 10, bh = 16;
     let ty = tipY + dir * 16;
     for (let g = 0; g < 4; g++) {   // v23ae: nhãn trùng chỗ thì đẩy ra xa nến một nấc, không đè chữ lên nhau
       const r = { x0: x - bw / 2, x1: x + bw / 2, y0: ty - bh / 2, y1: ty + bh / 2 };
@@ -1468,7 +1471,7 @@ function ofRender() {
     + `<button type="button" data-oftab="run" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "run" ? "#f0b429" : "transparent"};color:${OFV.tab === "run" ? "#1b1407" : "inherit"};cursor:pointer">Lệnh hôm nay (${sg.length}${run ? " · " + run + " đang chạy" : ""})</button>`
     + `<button type="button" data-oftab="watch" style="margin:0 6px 6px 0;padding:3px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.2);background:${OFV.tab === "watch" ? "#f0b429" : "transparent"};color:${OFV.tab === "watch" ? "#1b1407" : "inherit"};cursor:pointer">Nến quan sát (${W.length})</button>`;
   const watchHtml = `<div class="muted" style="font-size:10.5px;margin-bottom:6px">◉ trên chart = nến chạm vùng / đóng xuyên tường của một kế hoạch. x/y tính trên chính nến đó, theo mốc tường và chế độ Gamma HIỆN TẠI. Chỉ để quan sát, chưa kiểm định.</div>`
-    + (W.slice().reverse().map((w) => `<div style="border-left:3px solid ${OF_COL[w.p.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[w.p.side]}">${vnClock(w.time)} ${w.p.short} ${w.p.side}</b> <a href="#" data-ofgo="${w.p.id}" style="font-size:10.5px;color:#f0b429">→ xem kế hoạch</a> · <b>${ofSimple(w.chk)}</b> <span class="muted" style="font-size:10.5px" title="x/y = (ô hình thái đạt + ô xác nhận tính, tối đa bằng số cần) / (số ô hình thái + số xác nhận cần). Cổng (vd Khung nến ≥ M5) không tính vào x/y.">= hình thái ${w.chk.shOk}/${w.chk.shape.length} + xác nhận ${w.chk.xOk}/${w.chk.need} (đang có ${w.chk.cOk})</span>${w.chk.full ? " · <b style=\"color:#26b384\">ĐỦ</b>" : ofCandleOk(w.chk) && w.chk.gOk < w.chk.gate.length ? " · <b style=\"color:#f0b429\">nến đã thỏa, cổng chưa qua</b>" : ""}${w.p.blocked ? ` · <span class="muted">bị chặn: ${w.p.why || ""}</span>` : ""}</div><div class="muted" style="font-size:10.5px">Kế hoạch: ${w.p.name}</div>${ofNextStep(w)}<div style="font-size:11px;margin-left:6px">${ofChkLines(w.chk)}</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"><div style="flex:1 1 200px;min-width:0"><b style="font-size:10.5px">Mẫu luật cần có</b>${ofIllu(w.p, true)}</div><div style="flex:1 1 200px;min-width:0"><b style="font-size:10.5px">Thực tế (nến quanh lần chạm)</b>${ofRealMini(w)}</div></div><div class="muted" style="font-size:10px">Hình mẫu không theo tỉ lệ giá; hình thực tế theo giá thật. Xanh = nến tăng, đỏ = nến giảm.</div></div>`).join("") || '<span class="muted">Hôm nay chưa có nến nào chạm vùng / đóng xuyên tường của kế hoạch nào.</span>');
+    + (W.slice().reverse().map((w) => `<div style="border-left:3px solid ${OF_COL[w.p.side]};padding:4px 8px;margin:0 0 8px;border-radius:4px"><div><b style="color:${OF_COL[w.p.side]}">${vnClock(w.time)} ${w.p.short} ${w.p.side}</b> <a href="#" data-ofgo="${w.p.base || w.p.id}" style="font-size:10.5px;color:#f0b429">→ xem kế hoạch</a> · <b>${ofSimple(w.chk)}</b> <span class="muted" style="font-size:10.5px" title="x/y = (ô hình thái đạt + ô xác nhận tính, tối đa bằng số cần) / (số ô hình thái + số xác nhận cần). Cổng (vd Khung nến ≥ M5) không tính vào x/y.">= hình thái ${w.chk.shOk}/${w.chk.shape.length} + xác nhận ${w.chk.xOk}/${w.chk.need} (đang có ${w.chk.cOk})</span>${w.chk.full ? " · <b style=\"color:#26b384\">ĐỦ</b>" : ofCandleOk(w.chk) && w.chk.gOk < w.chk.gate.length ? " · <b style=\"color:#f0b429\">nến đã thỏa, cổng chưa qua</b>" : ""}${w.p.blocked ? ` · <span class="muted">bị chặn: ${w.p.why || ""}</span>` : ""}</div><div class="muted" style="font-size:10.5px">Kế hoạch: ${w.p.name}</div>${ofNextStep(w)}<div style="font-size:11px;margin-left:6px">${ofChkLines(w.chk)}</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"><div style="flex:1 1 200px;min-width:0"><b style="font-size:10.5px">Mẫu luật cần có</b>${ofIllu(w.p, true)}</div><div style="flex:1 1 200px;min-width:0"><b style="font-size:10.5px">Thực tế (nến quanh lần chạm)</b>${ofRealMini(w)}</div></div><div class="muted" style="font-size:10px">Hình mẫu không theo tỉ lệ giá; hình thực tế theo giá thật. Xanh = nến tăng, đỏ = nến giảm.</div></div>`).join("") || '<span class="muted">Hôm nay chưa có nến nào chạm vùng / đóng xuyên tường của kế hoạch nào.</span>');
   // 9b-5b: thứ tự thẻ: kế hoạch GẦN NHẤT trước, rồi theo khoảng cách tới vùng; kế hoạch bị lọc (ĐỨNG NGOÀI) xuống cuối. Mỗi thẻ có mã ngắn giống nhãn chart và danh sách bên trái.
   const liveS = live.slice().sort((a, b) => (near && a === near ? -1 : near && b === near ? 1 : 0) || ((a.blocked ? 1 : 0) - (b.blocked ? 1 : 0)) || ((a.dist == null ? 1e9 : a.dist) - (b.dist == null ? 1e9 : b.dist)));
   $("#ofP").innerHTML = OFV.tab === "new"
@@ -1522,6 +1525,7 @@ function ofPlanPics(p) {
 function ofNextStep(w) {
   const h = w.chk; if (!h || !h.tot) return "";
   const box = (t, col) => `<div style="font-size:10.5px;margin:3px 0;padding:3px 6px;border-radius:4px;background:rgba(255,255,255,.04);color:${col}">${t}</div>`;
+  if (h.full && /^nw/.test(w.p.id) && w.nth > 1) return box(`✔ Nến đạt đủ điều kiện nhưng KHÔNG vào lệnh: ${w.p.short} ${w.p.side} đã có lần đầu hôm nay lúc ${vnClock(w.firstT)} (luật: mỗi tường, mỗi chiều chỉ tính lần đầu trong ngày).`, "#9aa4b2");   // 9b-5c (số 239)
   if (h.full) return box("✔ ĐỦ điều kiện tại nến này: lệnh vào ở giá MỞ nến kế (xem tab «Lệnh hôm nay»).", "#26b384");
   if (w.p.blocked) return box(`⛔ Kế hoạch đang bị lọc (ĐỨNG NGOÀI): ${w.p.why || ""}. Dù nến đạt cũng không vào lệnh.`, "#ff8a65");
   const sh = h.shape.filter((x) => !x[0]).map((x) => x[1]);
