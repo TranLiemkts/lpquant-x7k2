@@ -657,7 +657,7 @@ function drawOverlayBase() {
   }
   if ($("#lySMC")?.checked && S.smc) drawSMC(ctx, plotW, plotH);
   { const rg = P ? regimePct(P.underlying, P.gamma_flip) : null;
-    $("#chartInfo").textContent = P ? `${P.source} · ${P.strikes.length} strikes · Σ ${fmtK(P.net_gex)} · ${rg.pct == null ? "?" : `${rg.pct >= 0 ? "+Γ" : "−Γ"} ${rg.pctTxt} Flip`}${(() => { const A = bangA(); return A ? ` · Bảng A ${A.short}` : ""; })()} · mốc chưa kiểm định` : "Chưa có dữ liệu Options";
+    $("#chartInfo").textContent = P ? `${P.source} · ${P.strikes.length} strikes · ${(() => { const A = bangA(); return A ? `Net GEX tổng GC+GLD ${fmtK(A.g)} (${P.source} ${fmtK(P.net_gex)})` : `Σ ${P.source} ${fmtK(P.net_gex)}`; })()} · ${rg.pct == null ? "?" : `${rg.pct >= 0 ? "+Γ" : "−Γ"} ${rg.pctTxt} Flip`}${(() => { const A = bangA(); return A ? ` · Bảng A ${A.short}` : ""; })()} · mốc chưa kiểm định` : "Chưa có dữ liệu Options";
     if (window.TVLB_COMPACT && P) { const el = $("#chartInfo"); el.textContent = el.textContent.replace(/ · \d+ strikes/, "").replace("mốc chưa kiểm định", "chưa kiểm định"); } }   // 7o số 141: chế độ gọn rút gọn ô thông tin
 }
 
@@ -2143,7 +2143,7 @@ function renderKpis() {
   const P = prim(), gld = opt("GLD"), iv = P?.strikes?.find((s) => s.iv)?.iv;
   const atmIv = (() => { const o = gld || P; if (!o) return null; const p = o.underlying; const s = o.strikes.reduce((b, x) => (b == null || Math.abs(x.strike - p) < Math.abs(b.strike - p) ? x : b), null); return s?.iv; })();
   $("#kpis").innerHTML = `<span>— Vol / Risk <b>${atmIv ? (atmIv * 100).toFixed(1) + "% IV" : "—"}</b></span>
-    <span>— XAU / GLD <b>×${fmt(gld?.ratio, 3)}</b></span><span>— Net GEX <b>${fmtK(P?.net_gex)}</b></span>
+    <span>— XAU / GLD <b>×${fmt(gld?.ratio, 3)}</b></span><span>— Net GEX tổng <b>${(() => { const A = bangA(); return A ? fmtK(A.g) : fmtK(P?.net_gex); })()}</b>${P?.net_gex != null ? ` <span class="muted">(${P.source} ${fmtK(P.net_gex)})</span>` : ""}</span>
     <span>— Regime <b>${P?.gamma_flip == null ? "—" : regimePct(P.underlying, P.gamma_flip).short}</b>${(() => { const A = bangA(); return A ? ` · Bảng A <b>${A.short}</b>` : ""; })()}</span>
     <span>— Hệ số kỳ hạn <b>${tenorWTxt(P)}</b></span>`;
   void iv;
