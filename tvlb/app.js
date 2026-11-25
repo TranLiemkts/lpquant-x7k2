@@ -1398,7 +1398,7 @@ function ofDrawWatch() {
     const k = c[w.j]; if (!k) continue; const x = tsc.timeToCoordinate(w.time + TZ); if (x == null || x < 0 || x > plotW) continue;
     const sell = w.p.side === "SELL", ye = candleS.priceToCoordinate(sell ? k.high : k.low); if (ye == null) continue;
     const n = per[w.j] = (per[w.j] || 0) + 1; if (n > 3) continue;
-    const late = /^nw/.test(w.p.id) && w.nth > 1, inO = ofEntW(w), wn = ofNumW(w), col = inO ? (sell ? "#ef5350" : "#26a69a") : "#7d8794", dy = 3 + (n - 1) * 22, tipY = ye + (sell ? -dy : dy), dir = sell ? -1 : 1;
+    const late = /^nw/.test(w.p.id) && w.nth > 1, inO = ofEntW(w), wn = ofNumW(w), col = inO ? (sell ? "#ff5252" : "#4fc3f7") : "#7d8794", dy = 3 + (n - 1) * 22, tipY = ye + (sell ? -dy : dy), dir = sell ? -1 : 1;
     ctx.fillStyle = col;
     if (!w.first) { ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(x, tipY + dir * 3, 2.2, 0, 7); ctx.fill(); ctx.globalAlpha = 1; continue; }   // nến tiếp theo trong cùng đợt chạm: chỉ chấm nhỏ
     // tam giác nhỏ chỉ vào nến (SELL: ▼ phía trên nến · BUY: ▲ phía dưới nến) + số x/y; chi tiết khi rê chuột
@@ -1423,7 +1423,7 @@ function ofDrawWatch() {
     }
     const yTop = dir > 0 ? ty : ty - bh; if (yTop < 2 || yTop + bh > plotH - 2) continue;
     ctx.lineWidth = 3; ctx.strokeStyle = "rgba(10,14,20,.9)";
-    lines.forEach((q, n) => { const yy = ty + dir * (n * lh + lh / 2 + 1); ctx.strokeText(q, x, yy); ctx.fillStyle = inO ? (/^#/.test(q) ? "#f0b429" : col) : "#8a93a0"; ctx.fillText(q, x, yy); });   // 9b-5c: đã vào = sáng theo chiều (mã số vàng); chưa thỏa / không vào = xám hết
+    lines.forEach((q, n) => { const yy = ty + dir * (n * lh + lh / 2 + 1); ctx.strokeText(q, x, yy); ctx.fillStyle = q === st2 ? "#ffffff" : inO ? col : "#8a93a0"; ctx.fillText(q, x, yy); });   // 9b-5c: trọng số x/y luôn TRẮNG; lệnh đã vào: chữ xanh da trời (buy) / đỏ (sell); chưa thỏa / không vào: xám
     ctx.font = "700 10.5px 'IBM Plex Mono', monospace";
     ov.tags.push({ x0: x - bw / 2 - 2, x1: x + bw / 2 + 2, y0: Math.min(tipY, yTop) - 2, y1: Math.max(tipY + dir * 7, yTop + bh) + 2, k: "watch", tip: ofWatchTip(w) });
   }
