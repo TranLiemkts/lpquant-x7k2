@@ -850,15 +850,17 @@ const ofOn = (k) => OFS[k] !== false;
 const ofX = (k) => OFS[k] === true;
 const ofFlipNear = () => (Number.isFinite(OFS.flipNear) && OFS.flipNear > 0 ? OFS.flipNear : 20);   // v23ab: ngưỡng $ cho ô "Flip GẦN giá" (giả thuyết, chọn theo ý bạn 10-20$)
 // 9b-4: ô chọn «Cách dùng Flip» thay 3 ô tick. Đọc từ 3 cờ cũ (x_noflip thắng 2 cờ kia, đúng như code chạy trước đây); logic tín hiệu KHÔNG đổi.
-const OF_FLIP_OPTS = [["off", "Không lọc: chọn 9A/9B theo dấu Gamma, Flip xa mấy cũng được"], ["far", "Flip xa (> 2,5%) thì đứng ngoài (theo B6)"], ["near", "Flip gần giá (≤ ngưỡng $) thì đứng ngoài"], ["both", "Flip xa HOẶC gần thì đứng ngoài"], ["noflip", "Bỏ hẳn Flip: luôn xét 9A (TRÁI B10b, chỉ để thử)"]];
-function ofFlipMode() { if (ofX("x_noflip")) return "noflip"; const f = ofX("x_flipfar"), n = ofX("x_flipnear"); return f && n ? "both" : f ? "far" : n ? "near" : "off"; }
+const OF_FLIP_OPTS = [["near", "Flip GẦN giá (≤ ngưỡng $) thì đứng ngoài (anh Nam 25/11, mặc định)"], ["off", "Không lọc Flip (chỉ để so)"]];
+// B9b5c-3: anh Nam 25/11 — Flip XA không phải lý do chặn; vùng nhạy là GẦN Flip. Bỏ các chế độ «Flip xa», «xa hoặc gần», «bỏ hẳn Flip» (chuyển máy đang dùng chúng về «gần»).
+(function () { let ch = false; if (OFS.x_noflip || OFS.x_flipfar) { delete OFS.x_noflip; delete OFS.x_flipfar; OFS.x_flipnear = true; ch = true; } if (!OFS.b10bMig) { if (OFS.x_flipnear === undefined) OFS.x_flipnear = true; OFS.x_regime = true; OFS.b10bMig = 1; ch = true; } if (ch) try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch (e) { } })();
+function ofFlipMode() { return ofX("x_flipnear") ? "near" : "off"; }
 const ofFlipTxt = () => (OF_FLIP_OPTS.find((o) => o[0] === ofFlipMode()) || ["", "?"])[1].split(":")[0].replace(/ \(.*$/, "");
 const OF_FILTERS = [
   ["x_noflip", "BỎ HẲN FLIP: không dùng Flip để chọn 9A/9B và không chặn theo Flip; tường gần luôn xét kiểu 9A (bật lại: tường trên giá = SELL, dưới giá = BUY). TRÁI với bản nháp B10b (Gamma âm = 9B); chỉ để THỬ, chưa kiểm định"],
-  ["x_flipnear", "Flip GẦN giá (cách ≤ ngưỡng $ ở dòng dưới) thì ĐỨNG NGOÀI: giá đang ở vùng chuyển Gamma, chưa rõ dương hay âm (theo lời anh Nam; GIẢ THUYẾT, chưa kiểm định)"],
+  ["x_flipnear", "Flip GẦN giá (cách ≤ ngưỡng $ ở dòng dưới) thì ĐỨNG NGOÀI: vùng chuyển Gamma (anh Nam 25/11; độ rộng vùng anh chưa cho số → tham số, chưa kiểm định)"],
   ["x_flipfar", "Ngày Flip xa (cách giá > 2,5%) thì ĐỨNG NGOÀI (theo B6; chờ xác nhận câu 4)"],
-  ["x_near", "Hiện thêm TƯỜNG GẦN theo B10b: top 3 OI trong ±2,5% quanh giá mở ngày (xấp xỉ, THAM KHẢO, chưa kiểm định; chờ xác nhận câu 3)"],
-  ["x_regime", "Bẫy chỉ khi Gamma DƯƠNG, Thủng/Squeeze chỉ khi Gamma ÂM (theo B1; chờ xác nhận câu 5)"],
+  ["x_near", "Hiện thêm TƯỜNG GẦN theo B10b: top 3 OI trong ±2,5% quanh giá mở ngày (anh Nam chốt ở biên bản niêm phong; xấp xỉ, chưa kiểm định)"],
+  ["x_regime", "Bẫy chỉ khi Gamma DƯƠNG, Thủng/Squeeze chỉ khi Gamma ÂM (anh Nam B1, 23/11: Positive đánh đảo chiều, Negative đánh theo hướng phá)"],
 ];
 const OF_GROUPS = [
   ["g_tl1", "TL1 · Thủng Put Wall / Squeeze Call Wall (đi theo xu hướng)"],
@@ -1013,7 +1015,9 @@ function ofModel() {
       if (ofX("x_flipnear")) gate.push([!flipNear, "Flip không sát giá (> " + ofFlipNear() + "$)"]);
       if (typeof p.blocked === "boolean" && !nw) gate.push([!p.blocked, "Chế độ Gamma cho phép"]);   // v23u: 9A/9B bị chặn vì Flip xa đã có dòng cổng Flip riêng, không lặp lại
       if (nw && flip == null) gate.push([false, "Có mốc Gamma Flip"]);
-      const cOk = conf.filter((x) => x[1]).length, need = minC;   // v23v: đúng như engine (score >= minConf): ít ô tick hơn mức tối thiểu thì KHÔNG BAO GIỜ đủ
+      if (nw && OFS.b10bTime !== false) { const cm = chiMin(k.time + (TF_SEC[S.tf] || 300)); gate.push([!(cm >= 690 && cm < 1200), "Trong giờ vào lệnh B10b (không vào từ 11:30 Chicago tới khi có OI mới, xấp xỉ 20:00 Chicago)"]); }   // B9b5c-3
+      if (nw && !ofX("x_nwconf")) conf = [];   // B9b5c-3: B10b của anh Nam cho 9A/9B KHÔNG dùng ô xác nhận nào (chỉ hình thái nến); bật «x_nwconf» để thêm lại
+      const cOk = conf.filter((x) => x[1]).length, need = nw && !ofX("x_nwconf") ? 0 : minC;   // v23v: đúng như engine (score >= minConf): ít ô tick hơn mức tối thiểu thì KHÔNG BAO GIỜ đủ
       // v23t: số x/y hiển thị bên ngoài = các ô XÁC NHẬN đang tick trong menu (không cộng hình thái + cổng như v23s). Hình thái và cổng vẫn bắt buộc: "full" = đủ cả ba.
       const shOk = shape.filter((x) => x[0]).length, gOk = gate.filter((x) => x[0]).length, xOk = Math.min(cOk, need), full = shOk === shape.length && cOk >= need && gOk === gate.length;
       return { shape, conf, gate, need, cOk, xOk, shOk, gOk, full, time: k.time, revIdx, cj: X.j, appr: appr9, ok: shOk + xOk + gOk, tot: shape.length + need + gate.length };   // v23v: ok/tot chỉ để biết có dữ liệu; hiển thị luôn dùng ofSum(h)
@@ -1354,6 +1358,11 @@ function ofEntries() {
     out.push({ i: idx, time: c[idx].time, side: w.p.side, entry: e, sl: e * (sell ? 1.003 : 0.997), tp1: wl.length ? wl[0] : e * (sell ? 0.994 : 1.006), tp2: wl.length > 1 ? wl[1] : null, tag: /^nwa/.test(w.p.id) ? "9A" : "9B", score: 0, max: 0, virt: true, wkey: w.p.id + "|" + w.time,
       wall: (w.p.lo + w.p.hi) / 2, gam: M0 && M0.flip != null ? (M0.negG ? -1 : 1) : null, flip: M0 && M0.flip != null ? M0.flip : null });   // 9b-5: tường, dấu Gamma và Flip lúc vào lệnh (cho gợi ý + nhật ký)
   }
+  // B9b5c-3: B10b của anh Nam — tối đa 1 lệnh mỗi PHÍA (BUY/SELL) mỗi phiên và 2 lệnh mỗi ngày (tính cả lệnh đã chốt hôm nay); lệnh sau bị bỏ
+  if (OFS.b10bCap !== false) { out.sort((x, y) => x.i - y.i); let sv0 = []; try { sv0 = JSON.parse(localStorage.getItem("tvlb.of9." + day0) || "[]"); } catch (e) { }
+    const used = {}, ids = new Set(); for (const g of sv0) { if (ids.has(g.id)) continue; ids.add(g.id); used[g.side] = (used[g.side] || 0) + 1; }
+    for (let q = 0; q < out.length; q++) { const g = out[q], id = `${g.tag}|${g.side}|${g.time}`; if (ids.has(id)) continue; const tot = (used.BUY || 0) + (used.SELL || 0);
+      if ((used[g.side] || 0) >= 1 || tot >= 2) { out.splice(q, 1); q--; continue; } used[g.side] = (used[g.side] || 0) + 1; ids.add(id); } }
   // v23am-14: CHỐT LỆNH 9A/9B ngay khi vừa xuất hiện (≤ 2 nến trước), lưu theo ngày VN. Trước đây mọi thứ tính lại từ mốc tường/Gamma HIỆN TẠI nên lệnh đã vào bị biến mất khi Magnet/cổng đổi.
   try {
     const day = day0, key = "tvlb.of9." + day;
@@ -1651,12 +1660,13 @@ function ofInitUI() {
     ${H("① Bật nhóm tín hiệu")}${["g_tl1", "g_trap", "g_hedge"].map((k) => row(k, txt(OF_GROUPS, k), [k])).join("")}${xrow("x_near", txt(OF_FILTERS, "x_near") + " → nguồn tường cho 9A/9B")}
     <div class="muted" style="font-size:10.5px;margin:2px 0 0">Lưu ý: HG lấy TP theo tường ĐANG HIỂN THỊ, nên bật/tắt nút GC Levels / GLD Levels trên thanh đầu cũng đổi TP của HG.</div>
     ${H("② Bộ lọc đứng ngoài", "không đạt thì KHÔNG ra lệnh (cả BUY lẫn SELL)")}${row("session", txt(OF_GROUPS, "session"), ["session"])}${row(gm[0], gm[1], gm[2])}${xrow("x_regime", txt(OF_FILTERS, "x_regime"))}
-    <div class="muted" style="margin:4px 0 2px">Cách dùng Flip (chọn 9A/9B và đứng ngoài):</div>${sel("ofFlip", OF_FLIP_OPTS, ofFlipMode())}
+    <div class="muted" style="margin:4px 0 2px">Lọc Flip (anh Nam 25/11: Flip XA không chặn; chỉ đứng ngoài khi Flip GẦN giá):</div>${sel("ofFlip", OF_FLIP_OPTS, ofFlipMode())}
     <div class="muted" style="margin:2px 0 4px">Ngưỡng «Flip gần giá»: ${sel("ofFN", [5, 10, 15, 20, 30, 50].map((n) => [n, n + "$"]), ofFlipNear())} (chỉ dùng khi chọn có Flip gần; mặc định 20$, chưa kiểm định)</div>
     <div class="muted" style="margin:2px 0 4px">Tỉ lệ lời/lỗ tối thiểu (TP1 ÷ SL) của TL1·TL2·HG: ${sel("ofRR", [0, 0.5, 1, 1.5, 2].map((n) => [n, n === 0 ? "0 (tắt)" : String(n)]), Number(OFS.minRR) || 0)} (thấp hơn thì KHÔNG ra tín hiệu)</div>
     <div class="muted" style="margin:2px 0 4px">R:R tối thiểu riêng cho nhóm HG (TP1 = tường đang hiển thị kế tiếp): ${sel("ofRRh", [0, 1, 1.5, 2, 2.5, 3].map((n) => [n, n === 0 ? "0 (tắt)" : String(n)]), hgRRmin())} (mặc định 2 = lời ≥ 2 × lỗ)</div>
     ${H("③ Điều kiện xác nhận", "nến phải đạt ít nhất «Số xác nhận tối thiểu» trong các ô đang tick (x/y trên chart)")}
     <div class="muted" style="margin:2px 0 4px">Số xác nhận tối thiểu: ${sel("ofMin", [0, 1, 2, 3, 4].map((n) => [n, String(n)]), Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm)} (mặc định 2)</div>
+    <div class="muted" style="font-size:10.5px;margin:2px 0 4px">9A/9B theo B10b của anh Nam: KHÔNG dùng ô xác nhận (chỉ hình thái nến) · vào lệnh tới 11:30 Chicago · tối đa 1 lệnh mỗi phía, 2 lệnh mỗi ngày. Các ô bên dưới áp cho TL1 · TL2 · HG.</div>${xrow("x_nwconf", "Vẫn bắt 9A/9B đạt ô xác nhận theo menu (KHÔNG có trong B10b, chỉ để so)")}
     <div class="muted" style="margin:2px 0 4px">Bộ xác nhận: ${sel("ofPreset", [["custom", "Tùy chỉnh (tự tick)"], ["doc", "Chỉ theo tài liệu (TL2)"], ["all", "Bật tất cả"]], ofPresetNow())}</div>
     <div class="sub" style="margin-top:6px;color:#26b384">📄 Theo tài liệu anh Nam (TL2)</div>${OF_CONDS.filter(([k]) => OF_DOC.includes(k)).map(([k, t, n]) => row(k, t, n.map((x) => "c:" + x))).join("")}
     <div class="sub" style="margin-top:6px;color:#f0b429">🔧 Dashboard tự thêm (không có trong TL1/TL2)</div>${OF_CONDS.filter(([k]) => k !== "gamma" && !OF_DOC.includes(k)).map(([k, t, n]) => row(k, t, n.map((x) => "c:" + x))).join("")}
@@ -1675,7 +1685,7 @@ function ofInitUI() {
     <div class="sub" style="margin-top:10px">Hộp lệnh KH · TVLB+ · backtest</div>`;
   const onChg = (e) => {
     if (e.target.id === "ofFlip") { for (const k of ["x_noflip", "x_flipfar", "x_flipnear"]) delete OFS[k]; const m = e.target.value;   // 9b-4: 1 ô chọn thay 3 ô tick (giữ nguyên 3 cờ cũ bên dưới)
-      if (m === "noflip") OFS.x_noflip = true; if (m === "far" || m === "both") OFS.x_flipfar = true; if (m === "near" || m === "both") OFS.x_flipnear = true;
+      if (m === "near") OFS.x_flipnear = true; else delete OFS.x_flipnear;
       try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } replaySignals(); ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofOpp" || e.target.id === "ofAdv") { if (e.target.id === "ofOpp") OFS.oppRule = e.target.value; else OFS.advOff = e.target.value === "0"; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } ofRefresh(true); ofRender(); drawOverlay(); return; }
     if (e.target.id === "ofBE" || e.target.id === "ofTE") { OFS[e.target.id === "ofBE" ? "beOff" : "teOff"] = e.target.value === "0"; try { localStorage.setItem(OF_LS, JSON.stringify(OFS)); } catch { } ofRender(); drawOverlay(); return; }
