@@ -1488,6 +1488,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
 #vgBody .lots input{width:100%!important;min-width:0!important;padding:3px 5px!important}#vgBody .lots input[type=date]{width:128px!important}#vgBody .lots td.pl,#vgBody .lots td.sp{white-space:normal!important;font-size:12px}#vgBody .lots td:nth-child(4){width:118px}#vgBody .lots td:nth-child(3){width:64px}
 #vgBody .lots tr.sum td,#vgBody .ivs tr.sum td{border-top:2px solid #3a4552;font-weight:700;color:#fff}
 #vgBody .ivs tr[data-k]{cursor:pointer}#vgBody .ivs tr[data-k]:hover td{background:#18202a}#vgBody .ivs tr.cur td{background:#2a2412}
+#vgBody #vgS td{white-space:nowrap;font-size:12px;padding:4px 5px!important}#vgBody #vgS td:first-child{white-space:normal;width:30%!important}#vgBody #vgS .mu{font-size:10.5px}
 #vgBody .x{cursor:pointer;color:#ef5350;font-weight:700;padding:0 6px}
 #vgBody .card{border:1px solid #2b3440;border-radius:8px;padding:8px 10px;margin:0 0 10px;background:#11161d}
 #vgBody .note{color:#7d8796;font-size:11.5px;margin-top:8px;text-align:left}
@@ -1538,7 +1539,8 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       </div>
       <table class="vt"><thead><tr><th>Thông số</th><th id="vgWho">Giá trị thực tế</th></tr></thead><tbody id="vgT"></tbody></table>
       <div class="vgr" style="justify-content:center!important"><button type="button" class="btn" id="vgOn"></button><button type="button" class="btn" id="vgBeOn"></button></div>
-      <div id="vgM" style="margin:4px 0 2px;text-align:center"></div>`;
+      <div id="vgM" style="margin:4px 0 2px;text-align:center"></div>
+      <table class="vt" style="margin-top:8px!important"><tbody id="vgS"></tbody></table>`;
     const q = (s) => b.querySelector(s);
     const setEd = (o) => { edOpen = o; q("#vgEd").style.setProperty("display", o ? "block" : "none", "important"); q("#vgEdB").classList.toggle("on", o); q("#vgEdB").textContent = o ? "✎ Đang nhập liệu · bấm để đóng" : "✎ Nhập liệu"; };
     setEd(edOpen);
@@ -1619,6 +1621,13 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     const on = page.querySelector("#vgOn"), bo = page.querySelector("#vgBeOn");
     if (on) { on.textContent = V.on ? "📏 Thanh đo trên chart: BẬT" : "📏 Bật thanh đo trên chart"; on.classList.toggle("on", !!V.on); }
     if (bo) { bo.textContent = V.be ? "Mốc hoà vốn trên chart: BẬT" : "Mốc hoà vốn trên chart: TẮT"; bo.classList.toggle("on", !!V.be); }
+    const SS = page.querySelector("#vgS");   // giá thế giới đi ±X USD → giá vàng VN đổi bao nhiêu / chỉ (chênh lệch giữ nguyên)
+    if (SS) { const st = [10, 50, 100, 150], k = V.rate * CHI;
+      const h = `<tr><td style="background:#232a6b!important;color:#fff">Giá thế giới đi ±</td>${st.map((d) => `<td style="background:#232a6b;color:#fff;font-weight:700">${d}$</td>`).join("")}</tr>`
+        + `<tr><td>Giá vàng VN / chỉ đổi</td>${st.map((d) => `<td class="yl">±${vnd(d * k)}</td>`).join("")}</tr>`
+        + (t.chi ? `<tr><td>Danh mục ${esc(I.name)} (${t.chi.toLocaleString("vi-VN")} chỉ) đổi</td>${st.map((d) => `<td class="og">±${vnd(d * k * t.chi)}</td>`).join("")}</tr>` : "")
+        + (cur != null && p != null ? `<tr><td>Giá vàng VN / chỉ nếu XAU tăng</td>${st.map((d) => `<td class="up">${vnd(toV(p + d))}<br><span class="mu">XAU ${usd(p + d)}</span></td>`).join("")}</tr><tr><td>Giá vàng VN / chỉ nếu XAU giảm</td>${st.map((d) => `<td class="dn">${vnd(toV(p - d))}<br><span class="mu">XAU ${usd(p - d)}</span></td>`).join("")}</tr>` : "");
+      SS.innerHTML = h; }
     const M = page.querySelector("#vgM");
     if (M) M.innerHTML = V.on && V.ly != null ? `Thanh đo ở <b class="yl">${usd(V.ly)} USD</b> = <b class="up">${vnd(toV(V.ly))}/chỉ</b>${t.chi ? ` · nếu giá về đây, ${esc(I.name)}: ${plTxt((toV(V.ly) - t.avg) * t.chi, t.von)}` : ""}` : "";
   }
