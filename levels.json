@@ -1,10 +1,10 @@
 {
  "schema": "lpquant.levels.v1",
- "built": "26/11/2026 17:39",
- "build_ms": 1795688637890,
- "spot": 3560.2,
+ "built": "26/11/2026 22:32",
+ "build_ms": 1795706192962,
+ "spot": 3567.61,
  "basis": 12.0,
- "gld_mult": 10.8725,
+ "gld_mult": 10.8951,
  "gld": 327.45,
  "rf": 0.041550002098083495,
  "default_set": "month",
@@ -16,8 +16,8 @@
    "rank": "oi",
    "gex": {
     "cme": -20.15,
-    "gld": -124.28,
-    "at_spot": -145.05
+    "gld": -131.85,
+    "at_spot": -152.63
    },
    "hedge": [],
    "levels": [
@@ -73,8 +73,8 @@
      "key": "FLIP",
      "name": "Gamma Flip",
      "pool": "GC+GLD",
-     "xau": 3716.64,
-     "strike": 3728.64,
+     "xau": 3717.64,
+     "strike": 3729.64,
      "hard": null,
      "doi": null,
      "gex": null,
@@ -113,11 +113,11 @@
    "key": "GCW",
    "name": "Call Wall",
    "pool": "GLD",
-   "xau": 3642.29,
+   "xau": 3649.86,
    "strike": 335.0,
    "hard": 100,
    "doi": 670,
-   "gex": 1.4259,
+   "gex": 1.4316,
    "oi": 2677,
    "side": "c"
   },
@@ -125,20 +125,20 @@
    "key": "GPW",
    "name": "Put Wall",
    "pool": "GLD",
-   "xau": 3533.56,
+   "xau": 3540.91,
    "strike": 325.0,
    "hard": 100,
    "doi": 51,
-   "gex": -36.9633,
+   "gex": -39.5782,
    "oi": 9242,
    "side": "p"
   }
  ],
  "macro": {
   "DXY": {
-   "v": 103.733,
-   "chg": 0.063,
-   "pct": 0.06
+   "v": 103.749,
+   "chg": 0.079,
+   "pct": 0.08
   },
   "US10Y": {
    "v": 4.848,
