@@ -1336,7 +1336,7 @@ function ofStateTip(p) {
   const col = OF_COL[p.side] || "#f0b429", sec = (t, b) => (b ? `<div style="margin-top:5px;padding-top:4px;border-top:1px solid #2b3440"><b style="color:#f3d38c">${t}</b><br>${b}</div>` : "");
   const sel = /^nw/.test(p.id) ? "Chọn 9A hay 9B theo Gamma: giá TRÊN Flip (Gamma dương) → 9A; giá DƯỚI Flip (Gamma âm) → 9B; Flip XA không chặn (anh Nam 25/11). Giá trong VÙNG ĐỆM quanh Flip (% / ATR / $, ở menu ②) thì xét theo LOẠI lệnh: 9A bật lại đứng ngoài (mặc định); 9B theo xu hướng KHÔNG chặn (mặc định, vì B10b coi chính Flip là mốc để đánh 9B). Chế độ theo Bảng A (tổng GC+GLD) chỉ hiện ở «Bối cảnh» để so, không dùng chọn 9A/9B. Độ rộng vùng đệm là tham số chưa có số từ anh Nam, chưa kiểm định." : "";
   return `<div style="font-weight:700;color:${col};margin-bottom:3px">${p.name}</div><div>Trạng thái: <b>${p.state}</b>${p.dist != null && p.dist > 0 ? ` · cách vùng ${p.dist.toFixed(1)}$` : ""}</div>`
-    + sec("Ý nghĩa trạng thái", ofStateWhy(p)) + sec("Hướng lệnh", ofDirWhy(p)) + sec("Chọn 9A / 9B", sel)
+    + sec("Ý nghĩa trạng thái", ofStateWhy(p)) + sec("Hướng lệnh", ofDirWhy(p)) + sec(p.gx ? "Chọn 9C / 9D (thử nghiệm)" : "Chọn 9A / 9B", p.gx ? "9C/9D dùng ĐÚNG luật chọn của 9A/9B (9C ≈ 9A bật lại, 9D ≈ 9B theo hướng phá), chỉ khác tường lấy từ top 3 OI của nguồn phụ (GLD nếu nguồn chính là GC). 🧪 THỬ NGHIỆM: chưa kiểm chứng, không gộp thống kê với 9A/9B. " + sel : sel)
     + `<div style="margin-top:5px;color:#9aa4b2">Số x/y xem ở ký hiệu trên nến và thẻ chi tiết.</div>`;
 }
 function ofChkHtml(p) {
@@ -1651,7 +1651,8 @@ function of3Q(M) {
     : M.negG ? (lv === 0 ? "<b>Nghiêng 9B</b>: theo hướng phá, không bắt đáy/đỉnh · lực yếu → chờ nến phá rõ."
       : `<b>9B</b>: theo hướng phá, không bắt đáy/đỉnh${lv === 2 ? " · Net GEX &lt; −2B: không BUY dưới Flip" : ""}.`)
     : (lv === 0 ? "<b>Nghiêng 9A</b>: bật lại tại tường · lực yếu → chờ nến xác nhận." : "<b>9A</b>: bật lại tại tường, có nến xác nhận.");
-  return { l1, l2, l3, l4, d4: D4 };
+  const l4x = ofX("x_gld9") ? ' <span style="color:#ce93d8">· 9C/9D🧪 (tường GLD, thử nghiệm) theo cùng luật: ' + (M.flipNear ? "đứng ngoài 9C, chỉ 9D khi phá rõ" : M.negG ? "nghiêng 9D" : "nghiêng 9C") + ".</span>" : "";
+  return { l1, l2, l3, l4: l4 + l4x, d4: D4 };
 }
 function ofRender() {
   const wn = $("#ofWarn"), T = $("#ofT"); let w = ""; try { w = ofWarnText(); } catch { /* chưa có cấu hình */ }
@@ -1724,7 +1725,7 @@ function ofRunListHtml(sg, stt, stOf) {
   const byK = (k) => sg.filter((g) => k === "all" || ofKind(g) === k), cntSt = (st, k) => byK(k).filter((g) => (st === "all" ? true : st === "open" ? isRun(g) : !isRun(g))).length;
   const chip = (key, val, txt) => { const on = rf[key] === val; return `<button type="button" data-ofrf="${key}:${val}" style="margin:0 4px 4px 0;padding:1px 8px;border-radius:10px;font-size:10.5px;border:1px solid ${on ? "#f0b429" : "rgba(255,255,255,.2)"};background:${on ? "#f0b429" : "transparent"};color:${on ? "#1b1407" : "inherit"};cursor:pointer">${txt}</button>`; };
   const bar = `<div style="margin:0 0 6px">${chip("st", "all", `Tất cả (${cntSt("all", rf.k)})`)}${chip("st", "open", `● Đang chạy (${cntSt("open", rf.k)})`)}${chip("st", "closed", `Đã đóng (${cntSt("closed", rf.k)})`)}<br>`
-    + chip("k", "all", `Mọi loại (${sg.length})`) + ["wall", "hg", "tl"].map((k) => chip("k", k, `${OF_KIND_TXT[k]} (${byK(k).length})`)).join("") + "</div>";
+    + chip("k", "all", `Mọi loại (${sg.length})`) + ["wall", "gld", "hg", "tl"].filter((k) => k !== "gld" || ofX("x_gld9") || byK(k).length).map((k) => chip("k", k, `${OF_KIND_TXT[k]} (${byK(k).length})`)).join("") + "</div>";
   const card = (g, small) => { const run = isRun(g), kd = ofKind(g), col = OF_COL[g.side];
     return `<div style="border-left:3px solid ${col};padding:4px 8px;margin:0 0 ${small ? 5 : 8}px;border-radius:4px${small ? ";opacity:.85" : ""}"><div>${ofShortChip(OF_KIND_TXT[kd], "#9aa4b2")}${ofNumOf(g) ? `<b style="color:#f0b429">#${ofNumOf(g)}</b> ` : ""}<b style="color:${col}">${vnClock(g.time)} ${g.tag || ""} ${g.side}${g.virt ? " ✔ đủ điều kiện" : " " + g.score + "/" + g.max}</b> · <b>${stt(g)}</b>${g.rebuilt ? ' <span style="color:#ff8a65;font-size:10.5px" title="Lệnh dựng lại từ mốc tường HIỆN TẠI (lúc lệnh xuất hiện trình duyệt chưa mở hoặc chưa chốt): không ghi nhật ký, có thể biến mất khi tường đổi">· dựng lại, chưa chốt</span>' : ""}</div>`
       + `<div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div>`
@@ -1787,7 +1788,7 @@ function ofInitUI() {
   const H = (t, s) => `<div class="sub" style="margin-top:10px">${t}</div>${s ? `<div class="muted" style="font-size:10.5px;margin:0 0 3px">${s}</div>` : ""}`;
   const sel = (id, opts, cur) => `<select id="${id}" style="font-size:12px">${opts.map(([v, t]) => `<option value="${v}"${cur === v ? " selected" : ""}>${t}</option>`).join("")}</select>`;
   const gm = OF_CONDS.find(([k]) => k === "gamma");
-  d.innerHTML = `<summary style="cursor:pointer;font-weight:600">Cài đặt Option Flow (TL1 · TL2 · HG · 9A/9B)</summary>
+  d.innerHTML = `<summary style="cursor:pointer;font-weight:600">Cài đặt Option Flow (TL1 · TL2 · HG · 9A/9B · 9C/9D🧪)</summary>
     <div id="ofWarn" style="display:none;color:#ff6b6b;font-weight:600;margin:4px 0"></div>
     <div class="muted" style="margin:2px 0 4px">Bảng theo dõi ở trang "Vào lệnh OF" bên phải. Nhóm ① ② ③ làm ĐỔI tín hiệu; nhóm ④ chỉ đổi cách vẽ. Khung đo SL/TP và quản lý lệnh nằm ở mục «📏 TP / SL».</div>
     ${H("① Bật nhóm tín hiệu")}${["g_tl1", "g_trap", "g_hedge"].map((k) => row(k, txt(OF_GROUPS, k), [k])).join("")}${xrow("x_near", txt(OF_FILTERS, "x_near") + " → nguồn tường cho 9A/9B")}
@@ -1818,7 +1819,7 @@ function ofInitUI() {
     <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Nâng cao</summary>${row("wfreeze", "Khóa tỉ lệ quy đổi theo ngày ở TRÌNH DUYỆT (dự phòng). Máy chủ từ 9b-3 đã khóa ratio, nên ô này chỉ có tác dụng khi máy chủ không gửi mã khóa (ratio_lock_id)", ["wfreeze"])}</details>`;
   // 9b-4: khối «Khung đo Option Flow» đặt lên đầu mục «📏 TP / SL» của menu TVLB+ (tvlb_tinhieu.js); không tìm thấy mục đó thì để cuối khung này.
   const tpBox = document.createElement("div"); tpBox.id = "ofTpBox"; tpBox.style.cssText = "font-size:12px";
-  tpBox.innerHTML = `<div class="sub">Khung đo Option Flow (TL1 · TL2 · HG · 9A/9B)</div>${row("rr", "Vẽ khung đo SL/TP cho tín hiệu Option Flow hôm nay", ["rr"])}
+  tpBox.innerHTML = `<div class="sub">Khung đo Option Flow (TL1 · TL2 · HG · 9A/9B · 9C/9D🧪)</div>${row("rr", "Vẽ khung đo SL/TP cho tín hiệu Option Flow hôm nay", ["rr"])}
     <div class="muted" style="margin:2px 0 4px">Số khung: ${sel("ofBoxMax", [[0, "tất cả"], [3, "3 khung mới nhất"], [5, "5 khung mới nhất"], [8, "8 khung mới nhất"], [12, "12 khung mới nhất"]], OFS.boxMax == null ? 8 : +OFS.boxMax)} ${sel("ofBoxRun", [[0, "cả lệnh đã xong"], [1, "chỉ lệnh đang chạy"]], OFS.boxRun === true ? 1 : 0)}</div>
     <div class="muted" style="margin:2px 0 4px">Dời SL về hòa vốn khi lời +1R: ${sel("ofBE", [[1, "Bật"], [0, "Tắt"]], OFS.beOff === true ? 0 : 1)}</div>
     <div class="muted" style="margin:2px 0 4px">Đóng lệnh lúc 12:30 Chicago: ${sel("ofTE", [[1, "Bật"], [0, "Tắt"]], OFS.teOff === true ? 0 : 1)} (giả thuyết, chưa backtest)</div>
@@ -2539,7 +2540,7 @@ function jUpsert(e) {
   if (jSig(m) === jSig(o)) return null;
   S.journal[i] = m; return m;
 }
-const OF9_FIXED_JS = ["t", "kind", "name", "type", "side", "entry", "sl", "tp1", "tp2", "tf", "tag", "wall", "gam", "flip", "oppRule", "score", "from"];
+const OF9_FIXED_JS = ["t", "kind", "name", "type", "side", "entry", "sl", "tp1", "tp2", "tf", "tag", "wall", "gam", "flip", "oppRule", "score", "from", "alt"];
 const jR = (e, exit) => { const d = e.side === "BUY" ? 1 : -1, risk = (e.entry - e.sl) * d; return risk > 0 ? ((exit - e.entry) * d) / risk : null; };
 function jFromOF(s) {
   return { id: `OF|${s.type}|${s.side}|${s.time}`, t: s.time, kind: "OF", name: s.type.replace("[Options Flow] ", "").replace(/ \(.*\)$/, "").split(":")[0],
@@ -2784,7 +2785,7 @@ function ofRunHeadHtml(list) {   // 9b-5b: đếm trên ĐÚNG danh sách thẻ 
   let h = `<div class="muted" style="${sm}">Đang chạy: <b>${run.length}</b>${run.length ? ` (BUY ${b.length} · SELL ${s.length})` : ""} · luật lệnh ngược chiều: <b>${OPP_RULES[ofOppRule()].split(":")[0]}</b> (đổi ở menu «📏 TP / SL»).</div>`;
   if (b.length && s.length) h += `<div style="${sm};color:#ff8a65">⚠ Đang có CẢ lệnh BUY lẫn SELL chạy cùng lúc: thống kê và rủi ro bị lệch (hai lệnh triệt tiêu nhau). ${ofOppRule() === "warn" ? "Luật hiện tại chỉ cảnh báo." : ""}</div>`;
   const w = STATIC ? (S.w9file && S.w9file.row) : S.w9 && { mode: S.w9.mode, ref: S.w9.ref, walls: S.w9.walls };
-  if (w && w.walls && w.walls.length) h += `<div class="muted" style="${sm}">Tường ${w.mode || "9A"} ${STATIC && S.w9file && S.w9file.day ? "ngày " + S.w9file.day : "hôm nay"} (top 3 OI trong ±2,5% quanh giá mở ngày ${w.ref != null ? ofFm(w.ref) : "—"}): ${w.walls.map((x) => ofFm(x.lvl)).join(" · ")}${STATIC ? " (máy tính ghi lúc " + vnClock(S.w9file.row.ts) + ")" : " (đã ghi vào máy chủ)"}</div>`;
+  if (w && w.walls && w.walls.length) h += `<div class="muted" style="${sm}">Tường ${w.mode || "9A"} ${STATIC && S.w9file && S.w9file.day ? "ngày " + S.w9file.day : "hôm nay"} (top 3 OI trong ±2,5% quanh giá mở ngày ${w.ref != null ? ofFm(w.ref) : "—"}): ${(() => { const isF = (x) => x.kind === "flip" || x.id === "nwbf", isG = (x) => x.kind === "gld9" || /^nw[ab][5-7]$/.test(x.id || ""); const m = w.walls.filter((x) => !isF(x) && !isG(x)), g = w.walls.filter(isG), f = w.walls.filter(isF); return m.map((x) => ofFm(x.lvl)).join(" · ") + (f.length ? " · Flip (9B tại Flip): " + f.map((x) => ofFm(x.lvl)).join(" · ") : "") + (g.length ? '<br><span style="color:#ce93d8">Tường 9C/9D ' + (g[0].src || "GLD") + " 🧪 thử nghiệm: " + g.map((x) => ofFm(x.lvl)).join(" · ") + "</span>" : ""); })()}${STATIC ? " (máy tính ghi lúc " + vnClock(S.w9file.row.ts) + ")" : " (đã ghi vào máy chủ)"}</div>`;
   if (STATIC) {
     const on = localStorage.getItem("tvlb.follow") !== "0", si = S.setInfo;
     h += `<div class="muted" style="${sm}">📱 Cài đặt: <b>${on ? "theo máy tính" : "riêng điện thoại"}</b>${on && si && si.t ? " · bản " + new Date(si.t).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" }) : ""} <button type="button" data-offollow="1" style="cursor:pointer;font-size:10.5px;border:1px solid #2b3440;background:#141a22;color:#9aa4b2;border-radius:4px;padding:1px 6px">${on ? "Ngừng theo máy tính" : "Theo máy tính"}</button></div>`;
