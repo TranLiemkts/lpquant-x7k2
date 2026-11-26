@@ -951,8 +951,8 @@ function ofWarnText() {
 }
 const OFV = { tab: "new", focus: null, rf: (() => { try { return Object.assign({ st: "all", k: "all" }, JSON.parse(localStorage.getItem("tvlb.ofrun") || "{}")); } catch { return { st: "all", k: "all" }; } })() };   // 9b-5b: rf = bộ lọc tab «Lệnh hôm nay» (nhớ qua F5); focus = kế hoạch đang được chọn để xem
 // 9b-5b: loại lệnh để lọc tab «Lệnh hôm nay»: wall = tường 9A/9B · hg = HG Hedge · tl = TL1 / TL1·2
-const ofKind = (g) => (g.tag === "9A" || g.tag === "9B" ? "wall" : g.tag === "HG" || /HEDGE/i.test(g.type || "") ? "hg" : "tl");
-const OF_KIND_TXT = { wall: "Tường 9A/9B", hg: "HG Hedge", tl: "TL1 / TL1·2" };
+const ofKind = (g) => (g.tag === "9C" || g.tag === "9D" ? "gld" : g.tag === "9A" || g.tag === "9B" ? "wall" : g.tag === "HG" || /HEDGE/i.test(g.type || "") ? "hg" : "tl");
+const OF_KIND_TXT = { wall: "Tường 9A/9B", gld: "9C/9D GLD (thử nghiệm)", hg: "HG Hedge", tl: "TL1 / TL1·2" };
 const ofShortChip = (t, col) => `<span style="display:inline-block;font-size:9.5px;font-weight:700;padding:0 5px;margin-right:4px;border-radius:3px;border:1px solid ${col};color:${col}">${t}</span>`;
 const ofFm = (v) => (v == null || !isFinite(v) ? "—" : Number(v).toFixed(2));
 function ofModel() {
@@ -1008,6 +1008,25 @@ function ofModel() {
           cond: brk ? "nến M5 đóng vượt tường ≥ 0,15% và thân nến lớn hơn trung bình 10 nến M5 trước, vào ở giá mở nến kế" : "chạm vùng ±0,10% quanh tường, trong 3 nến M5 có 1 nến đóng quay ngược ≥ 0,10% từ tường (chưa đóng xuyên quá 0,10%), vào ở giá mở nến kế · chỉ lần chạm đầu trong phiên",
           sl: "0,30% từ giá vào", tp1: "tường đang hiển thị kế tiếp (cách giá vào ≥ 1R); không có thì 0,60% từ giá vào", tp2: null, cancel: "hết 12:30 Chicago (đóng lệnh); lời +1R thì dời SL về hòa vốn" });
       });
+      // UI3: 9C/9D = TƯỜNG GẦN của nguồn PHỤ (GLD khi Wall chính = GC), cùng luật 9A/9B (top 3 OI trong ±2,5% quanh giá mở ngày, cùng chế độ Flip, SL/TP, BE, 12:30 Chicago).
+      // THỬ NGHIỆM, CHƯA KIỂM CHỨNG (GLD chưa từng kiểm ở bước 6/8). Công tắc OFS.x_gld9, mặc định TẮT. id nwa5..7 / nwb5..7 (số ≥ 5) để dùng chung toàn bộ luật 9A/9B; đánh dấu p.gx.
+      // Bỏ strike nguồn phụ nằm trong ±0,10% của một tường 9A/9B (trùng mức, tránh 2 lệnh cùng chỗ). Không chiếm suất B10b (1 lệnh/phía, 2 lệnh/ngày) của 9A/9B.
+      if (ofX("x_gld9")) try {
+        const o2 = opt(o.source === "GLD" ? "GC" : "GLD");
+        if (o2 && o2.strikes && o2.strikes.length) {
+          const r2 = ofRatio0(o2, o2.source), frz2 = ofOn("wfreeze") && o2.ratio > 0 && r2 > 0, cv2 = (s) => (frz2 && s.strike != null ? s.strike * r2 : s.chart);
+          const nm2 = o2.source || "GLD", lv1 = top3.map((s) => cv(s));
+          const top3b = o2.strikes.filter((s) => cv2(s) > 0 && Math.abs(cv2(s) / ref - 1) <= 0.025 && !lv1.some((l) => Math.abs(cv2(s) / l - 1) <= 0.001)).sort((a, b) => (b.call_oi + b.put_oi) - (a.call_oi + a.put_oi)).slice(0, 3);
+          top3b.forEach((s, n) => {
+            const lvl = cv2(s), up = lvl > px, brk = !noFlip && !unclear && negG, side = brk ? (up ? "BUY" : "SELL") : (up ? "SELL" : "BUY"), oi = s.call_oi + s.put_oi, bl = unclear || nwBlk(brk);
+            add({ id: (brk ? "nwb" : "nwa") + (n + 5), gx: true, src: nm2, short: brk ? "9D " + nm2 : "9C " + nm2, name: `${brk ? "9D phá vỡ (Gamma âm)" : unclear ? "9C bật lại (chưa có Flip)" : noFlip ? "9C bật lại (bỏ Flip)" : "9C bật lại (Gamma dương)"} · tường ${nm2} ${s.strike ?? ""} ≈ ${ofFm(lvl)} (OI ${fmtK(oi)}) · THỬ NGHIỆM, CHƯA KIỂM CHỨNG`, side, on: true, blocked: bl,
+              why: flip == null ? "Chưa có mốc Gamma Flip nên không phân loại được 9C/9D" : `Giá trong vùng đệm Flip (≤ ${fbL.w.toFixed(1).replace(".", ",")}$): công tắc đứng ngoài của loại lệnh này đang bật`, lo: lvl * 0.999, hi: lvl * 1.001,
+              cond: (brk ? "nến M5 đóng vượt tường ≥ 0,15% và thân nến lớn hơn trung bình 10 nến M5 trước, vào ở giá mở nến kế" : "chạm vùng ±0,10% quanh tường, trong 3 nến M5 có 1 nến đóng quay ngược ≥ 0,10% từ tường (chưa đóng xuyên quá 0,10%), vào ở giá mở nến kế · chỉ lần chạm đầu trong phiên") + ` · luật giống ${brk ? "9B" : "9A"}, tường lấy từ ${nm2} · THỬ NGHIỆM`,
+              sl: "0,30% từ giá vào", tp1: "tường đang hiển thị kế tiếp (cách giá vào ≥ 1R); không có thì 0,60% từ giá vào", tp2: null, cancel: "hết 12:30 Chicago (đóng lệnh); lời +1R thì dời SL về hòa vốn" });
+            try { if (S.w9) S.w9.walls.push({ id: (brk ? "nwb" : "nwa") + (n + 5), lvl: +lvl.toFixed(2), strike: s.strike ?? null, oi, c_oi: s.call_oi, p_oi: s.put_oi, kind: "gld9", src: nm2 }); } catch { }
+          });
+        }
+      } catch { /* nguồn phụ lỗi: bỏ qua, không ảnh hưởng 9A/9B */ }
       // B9b5d: «9B HỒI TEST» (break and retest) — KHÔNG có trong B10b, CHƯA KIỂM CHỨNG, chỉ để SO SÁNH; công tắc OFS.x_nwrt (mặc định TẮT).
       // Ngày Gamma âm: tường đã bị PHÁ (nến đóng vượt ≥ 0,15%) trước đó trong ngày, giá quay lại chạm tường từ phía đã phá sang rồi bị đẩy đi tiếp theo hướng phá → vào theo hướng phá.
       // Hình thái mượn của 9A (chạm ±0,10%, ≤ 3 nến M5 có nến đóng quay đi ≥ 0,10%, chưa đóng xuyên ngược 0,10%) + ô «trước đó đã phá». Anh Nam 25/11 23:39: chiều SELL thuận đà giảm hợp Gamma âm nếu CÓ XÁC NHẬN; không giải thích bằng Magnet.
@@ -1306,6 +1325,7 @@ function ofStateWhy(p) {
 }
 function ofDirWhy(p) {
   if (/^nwr/.test(p.id)) return "9B HỒI TEST (so sánh, chưa kiểm chứng): tường đã bị phá, giá quay lại chạm rồi bị đẩy đi tiếp → đánh THEO hướng phá. Tường TRÊN giá (đã phá xuống) = SELL, DƯỚI giá (đã phá lên) = BUY.";
+  if (p.gx) return (/^nwa/.test(p.id) ? "9C" : "9D") + " = luật " + (/^nwa/.test(p.id) ? "9A (bật lại, đánh NGƯỢC)" : "9B (phá vỡ, đi THEO hướng phá)") + " nhưng tường lấy từ " + (p.src || "GLD") + " (quy đổi sang giá chart). THỬ NGHIỆM, CHƯA KIỂM CHỨNG: GLD chưa từng được kiểm ở bước 6/8.";
   if (/^nwa/.test(p.id)) return "9A (bật lại): giá chạm tường rồi bị đẩy quay lại → đánh NGƯỢC. Tường nằm TRÊN giá = SELL, nằm DƯỚI giá = BUY.";
   if (/^nwb/.test(p.id)) return "9B (phá vỡ): giá đóng vượt qua tường → đi THEO hướng phá. Tường TRÊN giá = BUY (phá lên), tường DƯỚI giá = SELL (phá xuống).";
   if (p.id === "ts" || p.id === "tb") return "Bẫy: giá chọc qua tường rồi đóng ngược lại → đánh NGƯỢC. Call Wall = SELL, Put Wall = BUY.";
@@ -1408,7 +1428,7 @@ function ofJournalOrders(c, day, used) {
     if (e.kind !== "OF9" || !of9Tag(e.tag || e.name) || vnDate(e.t) !== day || e.entry == null || e.sl == null) continue;
     const id = String(e.id).replace(/^OF9\|/, ""); if (used && used.has(id)) continue;
     const ix = ofIdxAt(c, e.t); if (ix < 0) continue;
-    res.push({ i: ix, time: e.t, side: e.side, entry: e.entry, sl: e.sl, tp1: e.tp1 ?? null, tp2: e.tp2 ?? null, tag: e.tag || e.name, n2: e.alt === "lan2" || /LẦN 2/.test(e.type || "") || undefined, rt: e.alt === "retest" || /HỒI TEST/.test(e.type || "") || undefined, id, wall: e.wall, gam: e.gam, flip: e.flip, score: 0, max: 0, virt: true, latched: true, fromJ: true });
+    res.push({ i: ix, time: e.t, side: e.side, entry: e.entry, sl: e.sl, tp1: e.tp1 ?? null, tp2: e.tp2 ?? null, tag: e.tag || e.name, gx: of9X(e.tag || e.name) || undefined, n2: e.alt === "lan2" || /LẦN 2/.test(e.type || "") || undefined, rt: e.alt === "retest" || /HỒI TEST/.test(e.type || "") || undefined, id, wall: e.wall, gam: e.gam, flip: e.flip, score: 0, max: 0, virt: true, latched: true, fromJ: true });
   }
   return res;
 }
@@ -1428,15 +1448,15 @@ function ofEntries() {
     if (idx == null || !c[idx + 1]) continue;
     const sell = w.p.side === "SELL", e = c[idx + 1].open, rk = e * 0.003;
     const wl = shownLevels().filter((x) => (sell ? x <= e - rk : x >= e + rk)).sort((a, b) => (sell ? b - a : a - b));   // v23am-17: TP1 = tường đang hiển thị kế tiếp cách giá vào ≥ 1R (không có thì quay về 0,60% cũ); TP2 = tường sau đó
-    out.push({ i: idx, time: c[idx].time, side: w.p.side, entry: e, sl: e * (sell ? 1.003 : 0.997), tp1: wl.length ? wl[0] : e * (sell ? 0.994 : 1.006), tp2: wl.length > 1 ? wl[1] : null, tag: /^nwa/.test(w.p.id) ? "9A" : "9B", n2: n2 || undefined, rt: rt || undefined, score: 0, max: 0, virt: true, wkey: w.p.id + "|" + w.time,
+    out.push({ i: idx, time: c[idx].time, side: w.p.side, entry: e, sl: e * (sell ? 1.003 : 0.997), tp1: wl.length ? wl[0] : e * (sell ? 0.994 : 1.006), tp2: wl.length > 1 ? wl[1] : null, tag: /^nwa/.test(w.p.id) ? (w.p.gx ? "9C" : "9A") : (w.p.gx ? "9D" : "9B"), gx: w.p.gx || undefined, n2: n2 || undefined, rt: rt || undefined, score: 0, max: 0, virt: true, wkey: w.p.id + "|" + w.time,
       wall: (w.p.lo + w.p.hi) / 2, gam: M0 && M0.flip != null ? (M0.negG ? -1 : 1) : null, flip: M0 && M0.flip != null ? M0.flip : null });   // 9b-5: tường, dấu Gamma và Flip lúc vào lệnh (cho gợi ý + nhật ký)
   }
   // B9b5c-3: B10b của anh Nam — tối đa 1 lệnh mỗi PHÍA (BUY/SELL) mỗi phiên và 2 lệnh mỗi ngày (tính cả lệnh đã chốt hôm nay); lệnh sau bị bỏ
   if (ofOn("b10bCap") || ofOn("b10bOne")) { out.sort((x, y) => x.i - y.i); let sv0 = []; try { sv0 = JSON.parse(localStorage.getItem("tvlb.of9." + day0) || "[]"); } catch (e) { }
-    const used = {}, ids = new Set(), acc = []; for (const g of sv0) { if (ids.has(g.id)) continue; ids.add(g.id); if (g.n2 || g.rt) continue; used[g.side] = (used[g.side] || 0) + 1; acc.push({ ...g, i: ofIdxAt(c, g.time) }); }   // B9b5d: lệnh «lần 2» là nhánh SO SÁNH riêng: không chiếm suất B10b
+    const used = {}, ids = new Set(), acc = []; for (const g of sv0) { if (ids.has(g.id)) continue; ids.add(g.id); if (g.n2 || g.rt || of9X(g.tag)) continue; used[g.side] = (used[g.side] || 0) + 1; acc.push({ ...g, i: ofIdxAt(c, g.time) }); }   // B9b5d: lệnh «lần 2» là nhánh SO SÁNH riêng: không chiếm suất B10b
     // B9b5d: B10b «không mở lệnh mới nếu đang có lệnh mở» (chỉ xét lệnh 9A/9B). Lệnh cũ còn mở khi nến vào lệnh mới (g.i + 1) mở cửa = chưa chốt (j == null) hoặc chốt ở nến ≥ g.i + 1. Tắt: OFS.b10bOne = false.
     const stillOpen = (g) => ofOn("b10bOne") && acc.some((a) => { if (!(a.i >= 0) || a.i >= g.i || a.entry == null || a.sl == null) return false; const r = rrNatural(a, c, false); return r.j == null || r.j > g.i; });
-    for (let q = 0; q < out.length; q++) { const g = out[q], id = `${g.tag}|${g.side}|${g.time}`; if (ids.has(id) || g.n2 || g.rt) continue; const tot = (used.BUY || 0) + (used.SELL || 0);
+    for (let q = 0; q < out.length; q++) { const g = out[q], id = `${g.tag}|${g.side}|${g.time}`; if (ids.has(id) || g.n2 || g.rt || g.gx) continue; const tot = (used.BUY || 0) + (used.SELL || 0);
       if ((ofOn("b10bCap") && ((used[g.side] || 0) >= 1 || tot >= 2)) || stillOpen(g)) { out.splice(q, 1); q--; continue; } used[g.side] = (used[g.side] || 0) + 1; ids.add(id); acc.push(g); } }
   // v23am-14: CHỐT LỆNH 9A/9B ngay khi vừa xuất hiện (≤ 2 nến trước), lưu theo ngày VN. Trước đây mọi thứ tính lại từ mốc tường/Gamma HIỆN TẠI nên lệnh đã vào bị biến mất khi Magnet/cổng đổi.
   try {
@@ -1465,7 +1485,7 @@ function ofWatchLatch(list) {
   for (const w of list) {
     if (!w.first || !w.chk || !w.chk.full || !/^nw/.test(w.p.id) || c.length - 1 - w.j > 2) continue;
     const id = w.p.id + "|" + w.time; if (have.has(id)) continue;
-    saved.push({ id, time: w.time, pid: w.p.id, base: w.p.base, side: w.p.side, short: w.p.short, lo: w.p.lo, hi: w.p.hi, chk: w.chk, tot: w.tot }); have.add(id); dirty = true;
+    saved.push({ id, time: w.time, pid: w.p.id, base: w.p.base, gx: w.p.gx || undefined, side: w.p.side, short: w.p.short, lo: w.p.lo, hi: w.p.hi, chk: w.chk, tot: w.tot }); have.add(id); dirty = true;
   }
   if (dirty) localStorage.setItem(key, JSON.stringify(saved));
   const present = new Set(list.filter((w) => w.first).map((w) => w.p.id + "|" + w.time)), out = list.slice();
@@ -1473,7 +1493,7 @@ function ofWatchLatch(list) {
     if (present.has(sv.id)) continue;
     let j = -1; for (let q = c.length - 1; q >= 0; q--) if (c[q].time === sv.time) { j = q; break; }
     if (j < 0) continue;
-    const plan = (S.ofPlans || []).find((p) => p.id === sv.pid) || { id: sv.pid, base: sv.base || sv.pid.replace(/[SB]$/, ""), side: sv.side, short: sv.short, lo: sv.lo, hi: sv.hi, on: true };
+    const plan = (S.ofPlans || []).find((p) => p.id === sv.pid) || { id: sv.pid, base: sv.base || sv.pid.replace(/[SB]$/, ""), side: sv.side, short: sv.short, gx: sv.gx || undefined, lo: sv.lo, hi: sv.hi, on: true };
     out.push({ j, time: sv.time, p: plan, chk: sv.chk, tot: sv.tot, first: true, latched: true });
   }
   out.sort((x, y) => x.j - y.j);
@@ -1535,7 +1555,7 @@ function ofDrawWatch() {
       ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.arc(x2, y2 + (sell ? -dy : dy) + dir * 3, 2.2, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
     }
     // 9b-5c: nhãn XẾP DỌC (mẫu nhãn lệnh HG), mỗi dòng một ý
-    const xy = ofSimple(w.chk).replace(/^(đủ|⛔) /, ""), nm = /^nw/.test(w.p.id) ? (/^nwa/.test(w.p.id) ? "9A" : /^nwr/.test(w.p.id) ? "9B·HT" : "9B") : /^(ts|tb)/.test(w.p.id) ? "TL1·2" : "TL1";
+    const xy = ofSimple(w.chk).replace(/^(đủ|⛔) /, ""), nm = /^nw/.test(w.p.id) ? (/^nwa/.test(w.p.id) ? (w.p.gx ? "9C" : "9A") : /^nwr/.test(w.p.id) ? "9B·HT" : (w.p.gx ? "9D" : "9B")) : /^(ts|tb)/.test(w.p.id) ? "TL1·2" : "TL1";
     const st2 = (w.chk.gOk < w.chk.gate.length ? "⛔" : "") + xy;   // trọng số x/y (⛔ = cổng chặn)
     const ofSg = $("#lyMk") && $("#lyMk").checked && window.TVLB_MK_OF !== false ? (S.signals || []).find((g) => g.i === w.j && g.side === w.p.side) : null;   // B9b5c-3: tín hiệu Option Flow trùng nến → gộp thành 1 dòng «OF ✔ x/y» trong cùng cột nhãn
     const lines = [sell ? "sell" : "buy", st2, nm, ofSg ? `OF ✔ ${ofSg.score}/${ofSg.max}` : "", wn ? "#" + wn + (inO ? " ✔" : "") : inO ? "✔" : "", late ? `lần ${w.nth}` : ""].filter(Boolean);   // 9b-5c: từ tam giác ra ngoài: chiều → trọng số → kiểu lệnh → #số (+✔ đã vào) → «lần N» ngoài cùng
@@ -1708,7 +1728,7 @@ function ofRunListHtml(sg, stt, stOf) {
   const card = (g, small) => { const run = isRun(g), kd = ofKind(g), col = OF_COL[g.side];
     return `<div style="border-left:3px solid ${col};padding:4px 8px;margin:0 0 ${small ? 5 : 8}px;border-radius:4px${small ? ";opacity:.85" : ""}"><div>${ofShortChip(OF_KIND_TXT[kd], "#9aa4b2")}${ofNumOf(g) ? `<b style="color:#f0b429">#${ofNumOf(g)}</b> ` : ""}<b style="color:${col}">${vnClock(g.time)} ${g.tag || ""} ${g.side}${g.virt ? " ✔ đủ điều kiện" : " " + g.score + "/" + g.max}</b> · <b>${stt(g)}</b>${g.rebuilt ? ' <span style="color:#ff8a65;font-size:10.5px" title="Lệnh dựng lại từ mốc tường HIỆN TẠI (lúc lệnh xuất hiện trình duyệt chưa mở hoặc chưa chốt): không ghi nhật ký, có thể biến mất khi tường đổi">· dựng lại, chưa chốt</span>' : ""}</div>`
       + `<div>Vào ${ofFm(g.entry)} · SL ${ofFm(g.sl)} · TP1 ${ofFm(g.tp1)}${g.tp2 != null ? " · TP2 " + ofFm(g.tp2) : ""}</div>`
-      + (small ? ofStatusHtml(stOf(g)) : `<div class="muted">${g.type ? g.type.replace("[Options Flow] ", "") : g.tag === "9B" ? "9B · phá vỡ tường (Gamma âm)" : "9A · bật lại từ tường"}</div>${ofStatusHtml(stOf(g))}${ofTickLine(g)}`) + "</div>"; };
+      + (small ? ofStatusHtml(stOf(g)) : `<div class="muted">${g.type ? g.type.replace("[Options Flow] ", "") : g.tag === "9D" ? "9D · phá vỡ tường GLD (Gamma âm) · THỬ NGHIỆM" : g.tag === "9C" ? "9C · bật lại từ tường GLD · THỬ NGHIỆM" : g.tag === "9B" ? "9B · phá vỡ tường (Gamma âm)" : "9A · bật lại từ tường"}</div>${ofStatusHtml(stOf(g))}${ofTickLine(g)}`) + "</div>"; };
   const L = byK(rf.k), R = L.filter(isRun), D = L.filter((g) => !isRun(g)), hd = (t) => `<div style="font-weight:700;color:#f0b429;margin:6px 0 4px;font-size:11px">${t}</div>`;
   let body = "";
   if (rf.st !== "closed") body += (rf.st === "all" ? hd(`● ĐANG CHẠY (${R.length})`) : "") + (R.map((g) => card(g, false)).join("") || '<div class="muted" style="margin-bottom:6px">Không có lệnh đang chạy.</div>');
@@ -1785,6 +1805,7 @@ function ofInitUI() {
     ${row("b10bCap", "Tối đa 1 lệnh mỗi phía (BUY/SELL) và 2 lệnh mỗi ngày, tính cả lệnh đã chốt hôm nay", ["b10bCap"])}${row("b10bOne", "Không mở lệnh 9A/9B mới khi lệnh 9A/9B trước còn đang mở", ["b10bOne"])}
     ${xrow("x_nw2", '<b style="color:#ffb74d">Cho phép LẦN 2</b> (cú chạm/phá thứ 2, 3… cùng tường cùng chiều trong ngày) — KHÔNG theo B10b, CHƯA KIỂM CHỨNG, chỉ để SO SÁNH; mặc định TẮT. Lệnh lần 2 ghi riêng (nhãn «LẦN 2», nhật ký alt = lan2), không chiếm suất 1 lệnh/phía · 2 lệnh/ngày')}
     ${xrow("x_nwrt", '<b style="color:#ffb74d">9B HỒI TEST</b> (phá tường rồi quay lại chạm, bị đẩy đi tiếp → vào theo hướng phá; chỉ ngày Gamma âm) — KHÔNG có trong B10b, CHƯA KIỂM CHỨNG, chỉ để SO SÁNH; mặc định TẮT. Ghi riêng (nhãn «HỒI TEST», nhật ký alt = retest), không chiếm suất B10b')}
+    ${xrow("x_gld9", '<b style="color:#ce93d8">9C/9D tường GLD — THỬ NGHIỆM</b>: thêm top 3 tường của nguồn phụ (GLD) trong ±2,5% quanh giá mở ngày, luật y hệt 9A/9B (9C = bật lại như 9A, 9D = phá vỡ như 9B). CHƯA KIỂM CHỨNG (GLD chưa từng kiểm ở bước 6/8); mặc định TẮT. Ghi riêng (nhãn 9C/9D, nhật ký alt = gld), không chiếm suất 1 lệnh/phía · 2 lệnh/ngày; bỏ tường GLD trùng ±0,10% với tường 9A/9B')}
     ${row("b10bF9B", "9B tại Gamma Flip: Flip cũng là một mốc để đánh 9B phá vỡ (B10b: «tường gần hoặc Gamma Flip»; chỉ ngày Gamma âm)", ["b10bF9B"])}
     ${H("③ Điều kiện xác nhận", "nến phải đạt ít nhất «Số xác nhận tối thiểu» trong các ô đang tick (x/y trên chart)")}
     <div class="muted" style="margin:2px 0 4px">Số xác nhận tối thiểu: ${sel("ofMin", [0, 1, 2, 3, 4].map((n) => [n, String(n)]), Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg.signals.min_confirm)} (mặc định 2)</div>
@@ -2545,7 +2566,9 @@ const ofOppRule = () => (OFS.oppRule === "newer" || OFS.oppRule === "older" ? OF
 const J_FINAL = ["tp1", "sl", "expired", "be", "timeout", "opp"];   // đã đóng thật (skip = lệnh bị bỏ, tách riêng)
 const ofName = (g) => g.tag || String(g.type || "OF").replace("[Options Flow] ", "").replace(/ \(.*$/, "").split(":")[0].trim();
 // 9b-5b: CHỈ 9A/9B là lệnh OF9. Tín hiệu HG/TL1/TL1·2 (evaluate) cũng có g.tag (nhãn nến, v23ak) nên trước đây bị coi là 9A → ghi nhật ký sai kind OF9 + trùng lệnh.
-function of9Tag(t) { return t === "9A" || t === "9B"; }
+function of9Tag(t) { return t === "9A" || t === "9B" || t === "9C" || t === "9D"; }
+// UI3: 9C/9D = 9A/9B nhưng tường lấy từ nguồn PHỤ (GLD khi Wall chính = GC). THỬ NGHIỆM, CHƯA KIỂM CHỨNG; công tắc OFS.x_gld9 (mặc định TẮT).
+const of9X = (t) => t === "9C" || t === "9D";
 // 9b-5c: số thứ tự #1, #2… của các lệnh HÔM NAY (9A/9B + HG/TL), xếp theo giờ; dùng chung cho mũi tên trên chart và thẻ «Lệnh hôm nay»
 function ofOrderNums() {   // 9b-5c: MỘT dãy số #1, #2… theo giờ cho mọi NẾN QUAN SÁT hôm nay (kể cả chưa đạt) và lệnh HG/TL; lệnh 9A/9B mang số của nến quan sát sinh ra nó
   const c = S.candles, m = new Map(), ent = new Set(); S.ofIn = ent; if (!c || !c.length) return m;
@@ -2661,9 +2684,10 @@ function ofJournalPost() {
     const e = { id: key, t: g.time, kind: is9 ? "OF9" : "OF", status, be: !!res.be, opp: st.opp || undefined, oppBy: st.oppBy || undefined };
     if (status !== "open") { e.closeT = closeT; e.exit = exit; e.r = r == null ? null : +r.toFixed(3); }
     if (is9 && !e0) {
-      Object.assign(e, { name: g.tag, type: (g.tag === "9B" ? "9B phá vỡ tường (Gamma âm)" : "9A bật lại từ tường") + (g.rt ? " · HỒI TEST · SO SÁNH, KHÔNG có trong B10b, CHƯA KIỂM CHỨNG" : "") + (g.n2 ? " · LẦN 2 · SO SÁNH, KHÔNG theo B10b, CHƯA KIỂM CHỨNG" : ""), alt: g.rt ? "retest" : g.n2 ? "lan2" : undefined, side: g.side, entry: g.entry, sl: g.sl, tp1: g.tp1, tp2: g.tp2 ?? null, tf: S.tf, tag: g.tag, wall: g.wall, gam: g.gam, flip: g.flip,
+      Object.assign(e, { name: g.tag, type: (g.tag === "9D" ? "9D phá vỡ tường GLD (Gamma âm) · THỬ NGHIỆM, CHƯA KIỂM CHỨNG" : g.tag === "9C" ? "9C bật lại từ tường GLD · THỬ NGHIỆM, CHƯA KIỂM CHỨNG" : g.tag === "9B" ? "9B phá vỡ tường (Gamma âm)" : "9A bật lại từ tường") + (g.rt ? " · HỒI TEST · SO SÁNH, KHÔNG có trong B10b, CHƯA KIỂM CHỨNG" : "") + (g.n2 ? " · LẦN 2 · SO SÁNH, KHÔNG theo B10b, CHƯA KIỂM CHỨNG" : ""), alt: g.rt ? "retest" : g.n2 ? "lan2" : of9X(g.tag) ? "gld" : undefined, side: g.side, entry: g.entry, sl: g.sl, tp1: g.tp1, tp2: g.tp2 ?? null, tf: S.tf, tag: g.tag, wall: g.wall, gam: g.gam, flip: g.flip,
         score: "✔ đủ điều kiện", oppRule: rule, from: cc.length - 1 - g.i <= 2 ? "live" : "ls", note: cc.length - 1 - g.i <= 2 ? undefined : "nhập từ bộ nhớ trình duyệt (không phải lúc lệnh xuất hiện)" });
-      if (g.rt) e.note = "lệnh 9B HỒI TEST (công tắc so sánh, không có trong B10b, chưa kiểm chứng): KHÔNG gộp với lệnh B10b khi thống kê";
+      if (of9X(g.tag)) e.note = "lệnh " + g.tag + " (tường GLD, công tắc THỬ NGHIỆM, chưa kiểm chứng): KHÔNG gộp với lệnh 9A/9B khi thống kê";
+      else if (g.rt) e.note = "lệnh 9B HỒI TEST (công tắc so sánh, không có trong B10b, chưa kiểm chứng): KHÔNG gộp với lệnh B10b khi thống kê";
       else if (g.n2) e.note = "lệnh LẦN 2 (công tắc so sánh, không theo B10b, chưa kiểm chứng): KHÔNG gộp với lệnh B10b khi thống kê";
       if (status === "skip") e.note = (e.note ? e.note + " · " : "") + "bỏ: đang có lệnh ngược chiều (luật «bỏ lệnh mới»)";
     }
@@ -2679,7 +2703,7 @@ async function ofWallsLoad() { if (!STATIC) return; try { S.w9file = await (awai
 const OF_ST_TXT = { open: "đang chạy", tp1: "✓ chạm TP1", sl: "✗ chạm SL", be: "↔ hòa vốn (SL đã dời)", timeout: "⏱ hết 12:30 Chicago", opp: "⇄ đóng vì lệnh ngược chiều", skip: "bỏ (có lệnh ngược chiều)", expired: "hết hạn" };
 function ofTickLine(g) {   // số 220: thẻ lệnh ghi rõ các ô tick dùng cho loại lệnh này
   if (!of9Tag(g.tag)) return "";   // 9b-5b: chỉ 9A/9B (HG/TL dùng danh sách ô riêng của evaluate)
-  const sell = g.side === "SELL", nm = g.tag === "9A" ? (sell ? ["Phân kỳ CVD âm", "CVD dốc xuống", "DXY tăng", "Volume spike", "Vol↑ mà ΔOI≤0", "ΔOI≥1500 tại vùng", "Lệnh lớn bán ròng"] : ["Phân kỳ CVD dương", "CVD dốc lên", "DXY giảm", "Volume spike", "Vol↑ mà ΔOI≤0", "ΔOI≥1500 tại vùng", "Lệnh lớn mua ròng"])
+  const sell = g.side === "SELL", nm = (g.tag === "9A" || g.tag === "9C") ? (sell ? ["Phân kỳ CVD âm", "CVD dốc xuống", "DXY tăng", "Volume spike", "Vol↑ mà ΔOI≤0", "ΔOI≥1500 tại vùng", "Lệnh lớn bán ròng"] : ["Phân kỳ CVD dương", "CVD dốc lên", "DXY giảm", "Volume spike", "Vol↑ mà ΔOI≤0", "ΔOI≥1500 tại vùng", "Lệnh lớn mua ròng"])
     : (sell ? ["CVD dốc xuống", "Delta nến âm", "DXY tăng", "Volume spike", "Lệnh lớn bán ròng"] : ["CVD dốc lên", "Delta nến dương", "DXY giảm", "Volume spike", "Lệnh lớn mua ròng"]);
   const on = nm.filter((n) => ofOn("c:" + n)), need = Number.isInteger(OFS.minConf) ? OFS.minConf : S.cfg?.signals?.min_confirm;
   return `<div class="muted" style="font-size:10.5px">Điều kiện xác nhận theo menu HIỆN TẠI: đang tick <b>${on.length}/${nm.length}</b> ô dùng cho ${g.tag} ${g.side} (cần ≥ ${need})${on.length ? ": " + on.join(", ") : ""} · ${g.tag === "9A" ? "«Delta nến» và «Nến quét» KHÔNG áp dụng cho 9A; «Lệnh lớn» chỉ có khi live" : "«Nến quét» KHÔNG áp dụng cho 9B; «Lệnh lớn» chỉ có khi live"}.</div>`;
