@@ -1503,11 +1503,11 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     const bar = document.querySelector("#pgbar"), aside = document.querySelector(".right");
     if (!bar || !aside || !bar.querySelector('[data-pg="st"]')) { if (++tries < 40) setTimeout(initTab, 700); return; }
     if (bar.querySelector('[data-pg="vnd"]')) return;
-    const btn = document.createElement("button"); btn.type = "button"; btn.dataset.pg = "vnd"; btn.className = "v3btn"; btn.textContent = "🇻🇳 Vàng VNĐ";
+    const btn = document.createElement("button"); btn.type = "button"; btn.dataset.pg = "vnd"; btn.className = "v3btn"; btn.textContent = "Vàng VNĐ";
     btn.title = "Quy đổi giá vàng thế giới ra VNĐ / chỉ, thanh đo kéo trên chart, lời / lỗ vàng đã mua";
     bar.appendChild(btn);
     page = document.createElement("div"); page.className = "page"; page.dataset.pg = "vnd"; page.hidden = true;
-    page.innerHTML = `<section class="panel" style="height:100%;overflow:auto"><header><h2>🇻🇳 Vàng VNĐ · quy đổi & lời lỗ</h2><span class="muted small">1 chỉ = 3,75 g · 1 ounce = 31,1035 g</span></header><div class="vgp" id="vgBody"></div></section>`;
+    page.innerHTML = `<section class="panel" style="height:100%;overflow:auto"><header><h2>Vàng VNĐ · quy đổi & lời lỗ</h2><span class="muted small">1 chỉ = 3,75 g · 1 ounce = 31,1035 g</span></header><div class="vgp" id="vgBody"></div></section>`;
     aside.insertBefore(page, aside.querySelector("#pineOut") || null);
     btn.addEventListener("click", () => { aside.querySelectorAll(":scope > .page").forEach((pg) => { pg.hidden = pg !== page; }); bar.querySelectorAll("button[data-pg]").forEach((b) => b.classList.toggle("on", b === btn)); build(); });
     bar.addEventListener("click", (e) => { const b = e.target.closest("button[data-pg]"); if (b && b !== btn) { page.hidden = true; btn.classList.remove("on"); } }, true);
@@ -1673,7 +1673,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
 (function () {
   "use strict";
   if (window.__tvlbPgPhone) return; window.__tvlbPgPhone = 1;
-  const SHORT = [[/^\s*Strike/i, "Strike·AI"], [/^\s*Hedge/i, "Hedge"], [/^\s*Vào lệnh/i, "Vào lệnh"], [/^\s*Tín hiệu/i, "Tín hiệu"], [/^\s*Backtest/i, "Backtest"], [/Sổ tay/i, "📘 Sổ tay"], [/Vàng VNĐ/i, "🇻🇳 Vàng"]];
+  const SHORT = [[/^\s*Strike/i, "Strike·AI"], [/^\s*Hedge/i, "Hedge"], [/^\s*Vào lệnh/i, "Vào lệnh"], [/^\s*Tín hiệu/i, "Tín hiệu"], [/^\s*Backtest/i, "Backtest"], [/Sổ tay/i, "📘 Sổ tay"], [/Vàng VNĐ/i, "Vàng VNĐ"]];
   const css = document.createElement("style");
   css.textContent = `#pgbar.pgPhone{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:4px!important;flex-wrap:wrap!important;width:100%!important;overflow:visible!important}
 #pgbar.pgPhone button{width:100%!important;min-width:0!important;padding:6px 3px!important;font-size:12.5px!important;line-height:1.25!important;text-align:center!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;margin:0!important}`;
