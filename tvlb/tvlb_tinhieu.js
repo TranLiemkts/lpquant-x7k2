@@ -1437,3 +1437,152 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
   }
   let kick = () => { };
 })();
+
+/* va_145 (26/11/2026): tab «🇻🇳 Vàng VNĐ» — quy đổi giá vàng thế giới (XAUUSD) ra VNĐ / chỉ,
+   thanh đo kéo trên chart (kéo tới đâu quy đổi tới đó), thống kê vàng đã mua và lời / lỗ.
+   Công thức: 1 chỉ = 3,75 g · 1 ounce (troy) = 31,1034768 g → VNĐ/chỉ = XAU × tỷ giá × 3,75 ÷ 31,1034768 + chênh lệch SJC/vật chất. */
+(function () {
+  "use strict";
+  if (window.__tvlbVnd) return; window.__tvlbVnd = 1;
+  const KEY = "tvlb.vnd", CHI = 3.75 / 31.1034768;
+  const V = Object.assign({ rate: 25825, prem: 0, lots: [{ chi: 1.5, gia: 12990000 }], on: false, ly: null, be: true },
+    (() => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { return {}; } })());
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(V)); } catch (e) { } };
+  const vnd = (x) => (x == null || !isFinite(x) ? "—" : Math.round(x).toLocaleString("vi-VN") + " đ");
+  const usd = (x) => (x == null || !isFinite(x) ? "—" : Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const toV = (xau) => xau * V.rate * CHI + (+V.prem || 0);           // XAU (USD/oz) → VNĐ/chỉ
+  const toX = (v) => (v - (+V.prem || 0)) / (V.rate * CHI);            // VNĐ/chỉ → XAU
+  const px = () => { try { const v = lastPrice(); if (v != null) return v; } catch (e) { } try { const c = S.candles; return c[c.length - 1].close; } catch (e) { return null; } };
+  const tot = () => { let c = 0, m = 0; (V.lots || []).forEach((l) => { const a = +l.chi || 0, g = +l.gia || 0; if (a > 0 && g > 0) { c += a; m += a * g; } }); return { chi: c, von: m, avg: c ? m / c : null }; };
+  const num = (s) => { const n = parseFloat(String(s).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".")); return isFinite(n) ? n : 0; };
+
+  // ───────── CSS ─────────
+  const css = document.createElement("style");
+  css.textContent = `.vgp{font:13px/1.5 'IBM Plex Sans',sans-serif;color:#d7dde5;padding:4px 6px}
+.vgp table.vt{border-collapse:collapse;width:100%;margin:0 0 10px}
+.vgp .vt th{background:#232a6b;color:#fff;font-weight:700;padding:6px 8px;border:1px solid #39407d}
+.vgp .vt td{padding:6px 8px;border:1px solid #2b3440;text-align:center}.vgp .vt td:first-child{font-weight:600;color:#cfd6df;background:#151b23}
+.vgp .big{font-size:20px;font-weight:700}.vgp .up{color:#26c281}.vgp .dn{color:#ef5350}.vgp .yl{color:#ffd54f}.vgp .og{color:#ff9800}
+.vgp h4{margin:12px 0 6px;font-size:11.5px;letter-spacing:.08em;color:#9aa6b2;text-transform:uppercase}
+.vgp .row{display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap}.vgp .row label{flex:1 1 170px;color:#cfd6df}
+.vgp input{width:150px;background:#0f141a;color:#fff;border:1px solid #3a4552;border-radius:5px;padding:5px 8px;font:500 13px 'IBM Plex Mono',monospace;text-align:right}
+.vgp .btn{cursor:pointer;border:1px solid #3a4552;background:#1a212b;color:#cfd6df;border-radius:6px;padding:6px 10px;font:600 12.5px 'IBM Plex Sans',sans-serif}
+.vgp .btn:hover{border-color:#e0a83a;color:#fff}.vgp .btn.on{background:#e0a83a;color:#111;border-color:#e0a83a}
+.vgp table.lots{border-collapse:collapse;width:100%}.vgp .lots td,.vgp .lots th{padding:4px 6px;border-bottom:1px solid #222a35;text-align:right}.vgp .lots th{color:#9aa6b2;font-weight:600;font-size:11.5px}
+.vgp .lots input{width:120px}.vgp .lots .x{cursor:pointer;color:#ef5350;font-weight:700;padding:0 6px}
+.vgp .note{color:#7d8796;font-size:11.5px;margin-top:8px}
+#vgLine{position:absolute;left:0;height:0;border-top:2px solid #ff5a6e;z-index:9;display:none;pointer-events:none}
+#vgLine .h{position:absolute;right:0;top:-12px;height:22px;pointer-events:auto;cursor:ns-resize;display:flex;align-items:center;gap:6px;padding:0 8px;background:#ff5a6e;color:#fff;border-radius:4px;font:700 12px 'IBM Plex Sans',sans-serif;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+#vgLine .g{position:absolute;left:0;right:0;top:-6px;height:12px;pointer-events:auto;cursor:ns-resize}
+#vgBe{position:absolute;left:0;height:0;border-top:1px dashed #ffd54f;z-index:8;display:none;pointer-events:none}
+#vgBe span{position:absolute;left:6px;top:-18px;color:#ffd54f;font:600 11px 'IBM Plex Sans',sans-serif;background:rgba(11,14,18,.75);padding:0 4px;border-radius:3px}`;
+  document.head.appendChild(css);
+
+  // ───────── tab + trang ─────────
+  let page = null, tries = 0;
+  function initTab() {
+    const bar = document.querySelector("#pgbar"), aside = document.querySelector(".right");
+    if (!bar || !aside || !bar.querySelector('[data-pg="st"]')) { if (++tries < 40) setTimeout(initTab, 700); return; }
+    if (bar.querySelector('[data-pg="vnd"]')) return;
+    const btn = document.createElement("button"); btn.type = "button"; btn.dataset.pg = "vnd"; btn.className = "v3btn"; btn.textContent = "🇻🇳 Vàng VNĐ";
+    btn.title = "Quy đổi giá vàng thế giới ra VNĐ / chỉ, thanh đo kéo trên chart, lời / lỗ vàng đã mua";
+    bar.appendChild(btn);
+    page = document.createElement("div"); page.className = "page"; page.dataset.pg = "vnd"; page.hidden = true;
+    page.innerHTML = `<section class="panel" style="height:100%;overflow:auto"><header><h2>🇻🇳 Vàng VNĐ · quy đổi & lời lỗ</h2><span class="muted small">1 chỉ = 3,75 g · 1 ounce = 31,1035 g</span></header><div class="vgp" id="vgBody"></div></section>`;
+    aside.insertBefore(page, aside.querySelector("#pineOut") || null);
+    btn.addEventListener("click", () => { aside.querySelectorAll(":scope > .page").forEach((pg) => { pg.hidden = pg !== page; }); bar.querySelectorAll("button[data-pg]").forEach((b) => b.classList.toggle("on", b === btn)); build(); });
+    bar.addEventListener("click", (e) => { const b = e.target.closest("button[data-pg]"); if (b && b !== btn) { page.hidden = true; btn.classList.remove("on"); } }, true);
+  }
+
+  function build() {
+    const b = page && page.querySelector("#vgBody"); if (!b) return;
+    b.innerHTML = `<table class="vt"><thead><tr><th>Thông số</th><th>Giá trị thực tế</th></tr></thead><tbody id="vgT"></tbody></table>
+      <div class="row"><button type="button" class="btn" id="vgOn"></button><button type="button" class="btn" id="vgBeOn"></button></div>
+      <div id="vgM" style="margin:4px 0 2px"></div>
+      <h4>Cấu hình giá Việt Nam</h4>
+      <div class="row"><label>Tỷ giá USD/VNĐ</label><input id="vgRate" inputmode="decimal"><button type="button" class="btn" id="vgGet" title="Lấy tỷ giá tham khảo trên mạng (tỷ giá liên ngân hàng, có thể lệch tỷ giá ngân hàng bạn dùng)">🌐 Lấy tỷ giá</button></div>
+      <div class="row"><label>Chênh lệch SJC / vật chất (VNĐ/chỉ)</label><input id="vgPrem" inputmode="decimal"></div>
+      <h4>Vàng đã mua (mỗi dòng = một lần mua)</h4>
+      <table class="lots"><thead><tr><th style="text-align:left">#</th><th>Số chỉ</th><th>Giá mua (VNĐ/chỉ)</th><th>Lời / lỗ</th><th></th></tr></thead><tbody id="vgL"></tbody></table>
+      <div class="row"><button type="button" class="btn" id="vgAdd">＋ Thêm lần mua</button></div>
+      <div class="note">• Giá VNĐ/chỉ = XAU × tỷ giá × 3,75 ÷ 31,1035 + chênh lệch. Đây là giá quy đổi từ giá thế giới, KHÔNG phải giá mua/bán niêm yết của tiệm vàng (giá tiệm thường cao hơn — nhập phần chênh vào ô “Chênh lệch” để khớp).<br>• Lời / lỗ = (giá VNĐ/chỉ hiện tại − giá mua) × số chỉ; chưa trừ chênh lệch mua–bán của tiệm.<br>• Thanh đo: bấm nút để hiện thanh đỏ trên chart, nắm nhãn đỏ bên phải kéo lên / xuống. Thanh vàng nét đứt = giá XAU hoà vốn.</div>`;
+    const q = (s) => b.querySelector(s);
+    q("#vgRate").value = V.rate; q("#vgPrem").value = V.prem;
+    q("#vgRate").addEventListener("input", (e) => { V.rate = num(e.target.value) || V.rate; save(); upd(); });
+    q("#vgPrem").addEventListener("input", (e) => { V.prem = num(e.target.value); save(); upd(); });
+    q("#vgOn").onclick = () => { V.on = !V.on; if (V.on && V.ly == null) V.ly = px(); save(); upd(); };
+    q("#vgBeOn").onclick = () => { V.be = !V.be; save(); upd(); };
+    q("#vgAdd").onclick = () => { V.lots.push({ chi: 1, gia: Math.round(toV(px() || 0) / 1000) * 1000 }); save(); lots(); upd(); };
+    q("#vgGet").onclick = async (e) => { const bt = e.currentTarget; bt.textContent = "… đang lấy";
+      try { const r = await (await fetch("https://open.er-api.com/v6/latest/USD")).json(); const v = r && r.rates && r.rates.VND; if (!v) throw 0;
+        V.rate = Math.round(v); q("#vgRate").value = V.rate; save(); upd(); bt.textContent = "✓ " + V.rate.toLocaleString("vi-VN"); }
+      catch (err) { bt.textContent = "❌ Không lấy được, nhập tay"; }
+      setTimeout(() => { bt.textContent = "🌐 Lấy tỷ giá"; }, 3000); };
+    lots(); upd();
+  }
+  function lots() {
+    const tb = page && page.querySelector("#vgL"); if (!tb) return;
+    tb.innerHTML = (V.lots || []).map((l, i) => `<tr data-i="${i}"><td style="text-align:left">${i + 1}</td><td><input data-f="chi" value="${l.chi}" inputmode="decimal" style="width:70px"></td><td><input data-f="gia" value="${Math.round(l.gia).toLocaleString("vi-VN")}" inputmode="decimal"></td><td class="pl"></td><td><span class="x" title="Xoá dòng này">✕</span></td></tr>`).join("")
+      || `<tr><td colspan="5" style="text-align:center;color:#7d8796">Chưa có lần mua nào.</td></tr>`;
+    tb.querySelectorAll("input").forEach((inp) => inp.addEventListener("input", () => { const i = +inp.closest("tr").dataset.i; V.lots[i][inp.dataset.f] = inp.dataset.f === "chi" ? parseFloat(inp.value.replace(",", ".")) || 0 : num(inp.value); save(); upd(); }));
+    tb.querySelectorAll(".x").forEach((x) => x.onclick = () => { V.lots.splice(+x.closest("tr").dataset.i, 1); save(); lots(); upd(); });
+  }
+  const plTxt = (pl, base) => `<span class="${pl >= 0 ? "up" : "dn"}">${pl >= 0 ? "+" : "−"}${vnd(Math.abs(pl))}${base ? ` (${pl >= 0 ? "+" : "−"}${Math.abs((100 * pl) / base).toFixed(2)}%)` : ""}</span>`;
+  function upd() {
+    if (!page || page.hidden) return;
+    const T = page.querySelector("#vgT"); if (!T) return;
+    const p = px(), cur = p != null ? toV(p) : null, t = tot(), val = cur != null ? cur * t.chi : null, pl = val != null && t.chi ? val - t.von : null, be = t.avg ? toX(t.avg) : null;
+    T.innerHTML = [
+      ["XAUUSD (Ounce)", `<span class="yl">${usd(p)} USD</span>`],
+      ["Tỷ giá USD/VNĐ", `<span class="yl">${Math.round(V.rate).toLocaleString("vi-VN")} đ</span>`],
+      ["Vàng VNĐ / Chỉ", `<span class="big up">${vnd(cur)}</span>`],
+      ["Vàng VNĐ / Lượng (10 chỉ)", vnd(cur != null ? cur * 10 : null)],
+      ["Số vàng đầu tư", `<span class="og">${t.chi ? t.chi.toLocaleString("vi-VN") + " chỉ" : "—"}</span>`],
+      ["Giá mua vào TB (VNĐ/chỉ)", `<span class="og">${vnd(t.avg)}</span>`],
+      ["Tổng vốn", vnd(t.von || null)],
+      ["Giá trị hiện tại", vnd(t.chi ? val : null)],
+      ["Lợi nhuận", pl == null ? "—" : `<span class="big">${plTxt(pl, t.von)}</span>`],
+      ["Giá XAU hoà vốn", be ? `${usd(be)} USD <span class="muted">(${p != null ? (be >= p ? "cần tăng " : "đang trên ") + usd(Math.abs(be - p)) + "$" : ""})</span>` : "—"],
+    ].map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
+    page.querySelectorAll("#vgL tr[data-i]").forEach((tr) => { const l = V.lots[+tr.dataset.i], c = tr.querySelector(".pl"); if (!l || !c) return; c.innerHTML = cur != null && l.chi && l.gia ? plTxt((cur - l.gia) * l.chi, l.gia * l.chi) : "—"; });
+    const on = page.querySelector("#vgOn"), bo = page.querySelector("#vgBeOn");
+    if (on) { on.textContent = V.on ? "📏 Thanh đo trên chart: BẬT" : "📏 Bật thanh đo trên chart"; on.classList.toggle("on", !!V.on); }
+    if (bo) { bo.textContent = V.be ? "Mốc hoà vốn trên chart: BẬT" : "Mốc hoà vốn trên chart: TẮT"; bo.classList.toggle("on", !!V.be); }
+    const M = page.querySelector("#vgM");
+    if (M) M.innerHTML = V.on && V.ly != null ? `Thanh đo ở <b class="yl">${usd(V.ly)} USD</b> = <b class="up">${vnd(toV(V.ly))}/chỉ</b>${t.chi ? ` · nếu giá về đây: ${plTxt((toV(V.ly) - t.avg) * t.chi, t.von)}` : ""}` : "";
+  }
+
+  // ───────── thanh đo + mốc hoà vốn trên chart ─────────
+  let line = null, beL = null, drag = false;
+  function initLine() {
+    const wrap = document.querySelector("#chartWrap");
+    if (!wrap || typeof candleS === "undefined" || typeof chart === "undefined") { setTimeout(initLine, 700); return; }
+    line = document.createElement("div"); line.id = "vgLine"; line.innerHTML = '<div class="h"></div>'; wrap.appendChild(line);
+    beL = document.createElement("div"); beL.id = "vgBe"; beL.innerHTML = "<span></span>"; wrap.appendChild(beL);
+    const h = line.querySelector(".h");
+    const start = (e) => { e.stopPropagation(); if (e.cancelable && e.type !== "pointerdown") e.preventDefault(); drag = true; };
+    [h].forEach((el) => { el.addEventListener("pointerdown", start); el.addEventListener("mousedown", (e) => e.stopPropagation()); el.addEventListener("touchstart", start, { passive: false }); });
+    const mv = (e) => { if (!drag) return; const t = e.touches ? e.touches[0] : e, r = wrap.getBoundingClientRect(); const v = candleS.coordinateToPrice(t.clientY - r.top); if (v != null && isFinite(v)) { V.ly = v; place(); upd(); } if (e.cancelable && e.type === "touchmove") e.preventDefault(); };
+    window.addEventListener("pointermove", mv, true); window.addEventListener("touchmove", mv, { capture: true, passive: false });
+    const up = () => { if (drag) { drag = false; save(); } };
+    window.addEventListener("pointerup", up, true); window.addEventListener("touchend", up, true);
+    const loop = () => { place(); requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+  }
+  let lastK = "";
+  function place() {
+    if (!line) return;
+    let w = 0; try { w = chart.timeScale().width(); } catch (e) { } if (!w) w = line.parentElement.clientWidth - 70;
+    const t = tot(), be = t.avg ? toX(t.avg) : null;
+    const yl = V.on && V.ly != null ? candleS.priceToCoordinate(V.ly) : null, yb = V.be && be != null ? candleS.priceToCoordinate(be) : null;
+    const k = [w, yl, yb, V.ly, be, V.rate, V.prem].join("|"); if (k === lastK) return; lastK = k;
+    if (yl == null) line.style.display = "none";
+    else { line.style.display = "block"; line.style.top = yl + "px"; line.style.width = w + "px";
+      line.querySelector(".h").textContent = `⇕ ${usd(V.ly)} = ${vnd(toV(V.ly))}/chỉ`; }
+    if (yb == null) beL.style.display = "none";
+    else { beL.style.display = "block"; beL.style.top = yb + "px"; beL.style.width = w + "px"; beL.querySelector("span").textContent = `Hoà vốn ${usd(be)} (giá mua TB ${vnd(t.avg)}/chỉ)`; }
+  }
+
+  setInterval(upd, 1000);
+  setTimeout(initTab, 2500); setTimeout(initLine, 1500);
+  window.tvlbVnd = { V, toV, toX };
+})();
