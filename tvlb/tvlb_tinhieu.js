@@ -1134,7 +1134,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     // ───────── vẽ ─────────
     function shape(d, a, act) {
       const col = d.col || COLS[0], pts = d.pts.map((p) => ({ x: tx(p.t), y: py(p.p) })), ok = pts.every((p) => p.x != null && p.y != null);
-      cx.strokeStyle = col; cx.fillStyle = col; const lw = d.w || 1.5; cx.lineWidth = act ? lw + 0.5 : lw; cx.setLineDash(d.dash === "dash" ? [7, 4] : d.dash === "dot" ? [2, 3] : []);
+      const lcol = d.la != null && d.la < 1 ? rgba(col, d.la) : col; cx.strokeStyle = lcol; cx.fillStyle = lcol; const lw = d.w || 1.5; cx.lineWidth = act ? lw + 0.5 : lw; cx.setLineDash(d.dash === "dash" ? [7, 4] : d.dash === "dot" ? [2, 3] : []);
       const handles = [];
       if (d.type === "hline") { const y = py(d.pts[0].p); if (y == null) return; cx.beginPath(); cx.moveTo(0, y); cx.lineTo(a.w, y); cx.stroke(); label(a.w - 2, y, f2(d.pts[0].p), col, "#0b0e12", "right"); handles.push([a.w / 2, y]); }
       else if (d.type === "vline") { const x = tx(d.pts[0].t); if (x == null) return; cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, a.h); cx.stroke(); label(x, a.h - 10, clk(d.pts[0].t), col, "#0b0e12", "center"); handles.push([x, a.h / 2]); }
@@ -1172,6 +1172,12 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
         else if (ok && pts.length) { if (d.type === "rect" || d.type === "range") { tx_ = Math.min(pts[0].x, pts[1].x) + 4; ty_ = Math.min(pts[0].y, pts[1].y) + 16; }
           else if (pts.length >= 2) { const A = pts[0], B = pts[pts.length - 1]; tx_ = (A.x + B.x) / 2; ty_ = (A.y + B.y) / 2 - 5; al = "center"; } else { tx_ = pts[0].x + 4; ty_ = pts[0].y - 4; } }
         if (tx_ != null) { cx.textAlign = al; cx.fillText(d.text, tx_, ty_); } }
+      if (d.al) { let bx = null, by = null;   // dấu chuông = hình đang có báo thức
+        if (d.type === "hline") { const y = py(d.pts[0].p); if (y != null) { bx = a.w - 92; by = y - 3; } }
+        else if (d.type === "vline") { const x = tx(d.pts[0].t); if (x != null) { bx = x + 4; by = 36; } }
+        else if (d.type === "long" || d.type === "short") { const g = posGeom(d); if (g.x0 != null && g.ye != null) { bx = Math.min(g.x0, g.x1) - 18; by = g.ye + 6; } }
+        else if (ok && pts.length) { bx = Math.max(...pts.map((p) => p.x)) + 4; by = Math.min(...pts.map((p) => p.y)) + 4; }
+        if (bx != null) { cx.setLineDash([]); cx.font = "13px sans-serif"; cx.textAlign = "left"; cx.textBaseline = "bottom"; cx.globalAlpha = 1; cx.fillText("🔔", Math.max(2, Math.min(bx, a.w - 18)), by); } }
       if (act) handles.forEach(([x, y]) => dot(x, y, d.type === "long" || d.type === "short" ? "#cfd6df" : col));
     }
     function draw() {
@@ -1301,7 +1307,12 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
 .dtEdit .sw{width:18px;height:18px;border-radius:4px;cursor:pointer;border:1px solid #3a4552}.dtEdit .sw.on{outline:2px solid #e0a83a;outline-offset:1px}
 .dtEdit .grid{display:grid;grid-template-columns:repeat(6,18px);gap:5px}
 .dtEdit .opt{padding:4px 8px;border-radius:4px;cursor:pointer;white-space:nowrap}.dtEdit .opt:hover,.dtEdit .opt.on{background:#2a3340;color:#fff}
-.dtEdit input{width:190px;background:#0f141a;color:#fff;border:1px solid #3a4552;border-radius:4px;padding:4px 6px;font:500 12px 'IBM Plex Sans',sans-serif}`;
+.dtEdit input[type=range]{width:150px;padding:0;border:0;background:none;accent-color:#e0a83a;vertical-align:middle;cursor:pointer}
+.dtEdit .rl{display:flex;align-items:center;gap:8px;margin-top:8px;white-space:nowrap;color:#9aa6b2;font-weight:500}.dtEdit .rl b{color:#fff;min-width:34px;text-align:right}
+.dtEdit .alx{max-width:250px;white-space:normal;font-weight:500;color:#cfd6df;line-height:1.45;margin-bottom:6px}
+.dtTBox{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:6px;align-items:center}
+.dtToast{background:#1c222b;border:1px solid #e0a83a;color:#fff;padding:10px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.6);font:600 14px 'IBM Plex Sans',sans-serif;cursor:pointer;max-width:92vw}
+.dtEdit input:not([type=range]){width:190px;background:#0f141a;color:#fff;border:1px solid #3a4552;border-radius:4px;padding:4px 6px;font:500 12px 'IBM Plex Sans',sans-serif}`;
     document.head.appendChild(ecss);
     const eb = document.createElement("div"); eb.className = "dtEdit"; wrap.appendChild(eb);
     ["pointerdown", "mousedown", "touchstart", "wheel", "dblclick", "contextmenu"].forEach((ev) => eb.addEventListener(ev, (e) => e.stopPropagation()));
@@ -1311,12 +1322,13 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       lk: '<rect x="5" y="9" width="10" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 9V6.5a3 3 0 016 0V9" fill="none" stroke="currentColor" stroke-width="1.5"/>',
       ul: '<rect x="5" y="9" width="10" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 9V6.5a3 3 0 015.8-1" fill="none" stroke="currentColor" stroke-width="1.5"/>',
       cp: '<rect x="7" y="7" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 13V5a1 1 0 011-1h8" fill="none" stroke="currentColor" stroke-width="1.5"/>',
-      dl: '<path d="M5 6h10M8 6V4h4v2M6 6l1 11h6l1-11" stroke="currentColor" stroke-width="1.5" fill="none"/>' };
+      dl: '<path d="M5 6h10M8 6V4h4v2M6 6l1 11h6l1-11" stroke="currentColor" stroke-width="1.5" fill="none"/>',
+      al: '<path d="M10 3a5 5 0 00-5 5v3.5L3.5 14h13L15 11.5V8a5 5 0 00-5-5z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 16.5a2 2 0 004 0" stroke="currentColor" stroke-width="1.5" fill="none"/>' };
     const svg = (k) => `<svg viewBox="0 0 20 20">${SV[k]}</svg>`;
     const curD = () => (sel ? D.find((x) => x.id === sel) : null);
     function ebRender() {
       const d = curD(); if (!d) { eb.style.display = "none"; ebKey = ""; return; }
-      const k = JSON.stringify([d.id, d.col, d.fill, d.fa, d.w, d.dash, d.text, d.fs, d.lock, d.ext, pop]); if (k === ebKey) return; ebKey = k;
+      const k = JSON.stringify([d.id, d.col, d.fill, d.fa, d.w, d.dash, d.text, d.fs, d.lock, d.ext, d.al, pop]); if (k === ebKey) return; ebKey = k;
       const isPos = d.type === "long" || d.type === "short", col = d.col || COLS[0], dashTxt = { solid: "───", dash: "─ ─", dot: "┄┄┄" }[d.dash || "solid"];
       let h = "";
       if (!isPos) h += `<span class="eb${pop === "lc" ? " on" : ""}" data-e="lc" title="Màu nét">${svg("lc")}<span class="cb" style="background:${col}"></span></span>`;
@@ -1324,11 +1336,15 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       h += `<span class="eb${pop === "tx" ? " on" : ""}" data-e="tx" title="Thêm / sửa chữ">${svg("tx")}</span>`;
       if (!isPos && d.type !== "range") h += `<span class="es"></span><span class="eb${pop === "lw" ? " on" : ""}" data-e="lw" title="Độ dày nét">${Math.round(d.w || 1.5)}px</span><span class="eb${pop === "ls" ? " on" : ""}" data-e="ls" title="Kiểu nét">${dashTxt}</span>`;
       if (d.type === "trend") h += `<span class="eb${d.ext ? " on" : ""}" data-e="ext" title="Kéo dài đường sang phải">${svg("ext")}</span>`;
+      if (ALOK(d)) h += `<span class="es"></span><span class="eb${pop === "al" || d.al ? " on" : ""}" data-e="al" title="${d.al ? "ĐANG BẬT báo thức · bấm để chỉnh/tắt" : "Đặt báo thức khi giá tới hình này"}">${svg("al")}${d.al ? '<span class="cb" style="background:#e0a83a"></span>' : ""}</span>`;
       h += `<span class="es"></span><span class="eb${d.lock ? " on" : ""}" data-e="lk" title="${d.lock ? "Đang KHOÁ (không kéo được) · bấm để mở khoá" : "Khoá hình (không kéo nhầm)"}">${svg(d.lock ? "lk" : "ul")}</span>`
         + `<span class="eb" data-e="cp" title="Nhân bản hình">${svg("cp")}</span><span class="eb" data-e="dl" title="Xoá hình (Delete)">${svg("dl")}</span>`;
       if (pop === "lc" || pop === "fc") { const cur = pop === "lc" ? col : d.fill || col;
         h += `<div class="pop" data-pop="1"><div class="grid">${PAL.map((c) => `<span class="sw${c === cur ? " on" : ""}" data-c="${c}" style="background:${c}"></span>`).join("")}</div>`
-          + (pop === "fc" ? `<div style="margin-top:7px;display:flex;gap:3px">${[0.08, 0.13, 0.25, 0.4, 0.6].map((a) => `<span class="opt${Math.abs((d.fa ?? 0.13) - a) < 0.01 ? " on" : ""}" data-a="${a}">${Math.round(a * 100)}%</span>`).join("")}</div>` : "") + "</div>"; }
+          + (pop === "fc" ? `<div class="rl">Độ đậm nền <input type="range" min="0" max="100" step="1" data-rg="fa" value="${Math.round((d.fa ?? 0.13) * 100)}"><b>${Math.round((d.fa ?? 0.13) * 100)}%</b></div>`
+            : `<div class="rl">Độ đậm nét <input type="range" min="5" max="100" step="1" data-rg="la" value="${Math.round((d.la ?? 1) * 100)}"><b>${Math.round((d.la ?? 1) * 100)}%</b></div>`) + "</div>"; }
+      if (pop === "al") h += `<div class="pop" data-pop="1"><div class="alx">🔔 Báo khi <b>${alDesc(d)}</b>.<br><span style="color:#9aa6b2">Kêu bíp + hiện thông báo trên màn hình (và Telegram nếu bạn đã bật). Chỉ chạy khi trang dashboard đang mở.</span></div>`
+        + [["once", "Báo 1 lần rồi tự tắt"], ["every", "Báo mỗi lần chạm (cách nhau ≥ 1 phút)"], ["off", "Tắt báo thức"]].map(([v, t]) => `<div class="opt${(d.al ? d.al.m : "off") === v ? " on" : ""}" data-al="${v}">${t}</div>`).join("") + "</div>";
       if (pop === "lw") h += `<div class="pop" data-pop="1">${[1, 1.5, 2, 3, 4].map((w) => `<div class="opt${(d.w || 1.5) === w ? " on" : ""}" data-w="${w}"><span style="display:inline-block;width:40px;height:${w}px;background:#cfd6df;vertical-align:middle;margin-right:8px"></span>${w}px</div>`).join("")}</div>`;
       if (pop === "ls") h += `<div class="pop" data-pop="1">${[["solid", "─── Liền"], ["dash", "─ ─ Gạch"], ["dot", "┄┄┄ Chấm"]].map(([v, t]) => `<div class="opt${(d.dash || "solid") === v ? " on" : ""}" data-ls="${v}">${t}</div>`).join("")}</div>`;
       if (pop === "tx") h += `<div class="pop" data-pop="1"><input id="dtTxt" placeholder="Gõ chữ rồi Enter (để trống = xoá chữ)" value="${(d.text || "").replace(/"/g, "&quot;")}"><div style="margin-top:6px;display:flex;gap:3px">${[10, 12, 14, 18, 24].map((f) => `<span class="opt${(d.fs || 12) === f ? " on" : ""}" data-fs="${f}">${f}</span>`).join("")}</div></div>`;
@@ -1340,12 +1356,13 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       placeEB();
     }
     eb.addEventListener("click", (e) => {
-      const d = curD(); if (!d) return; const t = e.target.closest("[data-e],[data-c],[data-a],[data-w],[data-ls],[data-fs]"); if (!t) return; const ds = t.dataset;
+      const d = curD(); if (!d) return; const t = e.target.closest("[data-e],[data-c],[data-a],[data-w],[data-ls],[data-fs],[data-al]"); if (!t) return; const ds = t.dataset;
       if (ds.c) { if (pop === "fc") d.fill = ds.c; else d.col = ds.c; pop = null; }
       else if (ds.a) d.fa = +ds.a;
       else if (ds.w) { d.w = +ds.w; pop = null; }
       else if (ds.ls) { d.dash = ds.ls === "solid" ? undefined : ds.ls; pop = null; }
       else if (ds.fs) d.fs = +ds.fs;
+      else if (ds.al) { d.al = ds.al === "off" ? undefined : { m: ds.al }; pop = null; if (d.al) toast(`🔔 Đã đặt báo thức: ${alDesc(d)}`, 3500); }
       else if (ds.e === "ext") d.ext = !d.ext || undefined;
       else if (ds.e === "lk") d.lock = !d.lock || undefined;
       else if (ds.e === "cp") { const c2 = JSON.parse(JSON.stringify(d)); c2.id = nid(); const dt = 8 * tfs(); c2.pts = c2.pts.map((q_) => ({ t: q_.t + dt, p: q_.p })); if (c2.t2) c2.t2 += dt; delete c2.lock; D.push(c2); sel = c2.id; pop = null; }
@@ -1353,6 +1370,50 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       else if (ds.e) pop = pop === ds.e ? null : ds.e;
       save(); ebKey = ""; ebRender(); kick();
     });
+    // thanh trượt độ đậm: kéo = xem ngay, thả = lưu (không vẽ lại thanh để khỏi mất thao tác kéo)
+    eb.addEventListener("input", (e) => { const r = e.target.closest("[data-rg]"); if (!r) return; const d = curD(); if (!d) return; const v = +r.value / 100;
+      d[r.dataset.rg] = r.dataset.rg === "la" && v >= 1 ? undefined : v; const b = r.parentElement.querySelector("b"); if (b) b.textContent = r.value + "%"; kick(); });
+    eb.addEventListener("change", (e) => { if (e.target.closest("[data-rg]")) save(); });
+
+    // ───────── va_143d: BÁO THỨC GIÁ theo hình vẽ ─────────
+    function ALOK(d) { return ["hline", "vline", "trend", "arrow", "rect", "long", "short"].includes(d.type); }
+    function alDesc(d) {
+      if (d.type === "hline") return `giá chạm / cắt qua ${f2(d.pts[0].p)}`;
+      if (d.type === "vline") return `đến thời điểm ${clk(d.pts[0].t)}`;
+      if (d.type === "rect") { const lo = Math.min(d.pts[0].p, d.pts[1].p), hi = Math.max(d.pts[0].p, d.pts[1].p); return `giá đi vào vùng ${f2(lo)} – ${f2(hi)}`; }
+      if (d.type === "long" || d.type === "short") return `giá chạm TP ${f2(d.tp)} hoặc SL ${f2(d.sl)}`;
+      return `giá cắt qua đường ${d.type === "arrow" ? "mũi tên" : "xu hướng"}${d.ext ? " (cả phần kéo dài)" : ""}`;
+    }
+    let tBox = null; function toast(msg, ms) { if (!tBox) { tBox = document.createElement("div"); tBox.className = "dtTBox"; document.body.appendChild(tBox); }
+      const t = document.createElement("div"); t.className = "dtToast"; t.textContent = msg; t.title = "Bấm để tắt"; t.onclick = () => t.remove(); tBox.appendChild(t); while (tBox.children.length > 4) tBox.firstChild.remove(); setTimeout(() => t.remove(), ms || 10000); }
+    const nowPx = () => { try { if (typeof lastPrice === "function") { const v = lastPrice(); if (v != null) return v; } } catch (_) { } const c = S.candles; return c && c.length ? c[c.length - 1].close : null; };
+    function lineAt(d, L) {   // giá của đường xu hướng tại nến logical L (null nếu ngoài đoạn và không kéo dài)
+      const A = d.pts[0], B = d.pts[d.pts.length - 1], la = t2l(A.t), lb = t2l(B.t); if (la == null || lb == null || la === lb) return null;
+      const lo = Math.min(la, lb), hi = Math.max(la, lb); if (L < lo - 0.5 || (L > hi + 0.5 && !(d.type === "trend" && d.ext))) return null;
+      return A.p + ((B.p - A.p) * (L - la)) / (lb - la);
+    }
+    const crossed = (a, b, lv) => lv != null && ((a < lv && b >= lv) || (a > lv && b <= lv));
+    let pPx = null, pT = null; const lastFire = {};
+    function alCheck() {
+      const c = S.candles; if (!c || !c.length) return; const px = nowPx(), nt = c[c.length - 1].time, L = c.length - 1; if (px == null) return;
+      if (pPx == null) { pPx = px; pT = nt; return; }
+      let chg = false;
+      for (const d of D) { if (!d.al) continue; let hit = null;
+        if (d.type === "hline") { if (crossed(pPx, px, d.pts[0].p)) hit = `giá ${f2(px)} cắt qua ${f2(d.pts[0].p)}`; }
+        else if (d.type === "vline") { if (pT < d.pts[0].t && nt >= d.pts[0].t) hit = `đã đến ${clk(d.pts[0].t)}`; }
+        else if (d.type === "rect") { const lo = Math.min(d.pts[0].p, d.pts[1].p), hi = Math.max(d.pts[0].p, d.pts[1].p), inN = px >= lo && px <= hi, inP = pPx >= lo && pPx <= hi;
+          if (inN && !inP) hit = `giá ${f2(px)} vào vùng ${f2(lo)} – ${f2(hi)}`; }
+        else if (d.type === "long" || d.type === "short") { if (crossed(pPx, px, d.tp)) hit = `giá ${f2(px)} chạm TP ${f2(d.tp)} ✅`; else if (crossed(pPx, px, d.sl)) hit = `giá ${f2(px)} chạm SL ${f2(d.sl)} ⛔`; }
+        else if (d.type === "trend" || d.type === "arrow") { const lv = lineAt(d, L); if (crossed(pPx, px, lv)) hit = `giá ${f2(px)} cắt đường tại ${f2(lv)}`; }
+        if (!hit) continue;
+        const now = Date.now(); if (d.al.m === "every" && lastFire[d.id] && now - lastFire[d.id] < 60000) continue; lastFire[d.id] = now;
+        const nm = { hline: "Đường ngang", vline: "Đường dọc", trend: "Đường xu hướng", arrow: "Mũi tên", rect: "Hộp", long: "Lệnh LONG", short: "Lệnh SHORT" }[d.type];
+        const msg = `🔔 ${nm}${d.text ? " «" + d.text + "»" : ""}: ${hit}`;
+        toast(msg); try { if (window.tvlbAlert) window.tvlbAlert("dw" + d.id + "_" + now, msg); } catch (_) { }
+        if (d.al.m !== "every") { d.al = undefined; chg = true; } }
+      pPx = px; pT = nt; if (chg) { save(); ebKey = ""; kick(); }
+    }
+    setInterval(alCheck, 1000);
     function shapeBox(d) {   // khung bao của hình (px) để đặt thanh tuỳ chỉnh
       const a = area(); let xs = [], ys = [];
       if (d.type === "hline") { const y = py(d.pts[0].p); xs = [a.w / 2]; ys = [y]; }
@@ -1372,7 +1433,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       eb.style.left = Math.max(4, Math.min(cxm - W / 2, b.a.w - W - 4)) + "px"; eb.style.top = Math.max(4, top) + "px";
     }
     sync(); kick();
-    window.tvlbDraw = { list: () => D, clear: () => { D = []; save(); kick(); } };
+    window.tvlbDraw = { list: () => D, clear: () => { D = []; save(); kick(); }, _alCheck: alCheck };
   }
   let kick = () => { };
 })();
