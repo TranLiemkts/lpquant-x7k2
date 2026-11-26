@@ -1666,3 +1666,31 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
   setTimeout(initTab, 2500); setTimeout(initLine, 1500);
   window.tvlbVnd = { V, toV, toX };
 })();
+
+/* va_146 (26/11/2026): ĐIỆN THOẠI — hàng tên menu trang (#pgbar) bị tràn / chồng nhau.
+   Màn hình hẹp (≤ 760 px) hoặc đang bật «Chế độ gọn»: đổi tên nút sang bản ngắn và xếp thành lưới 4 cột (2 hàng), không còn nút bị che.
+   Màn hình rộng: trả lại tên đầy đủ như cũ. */
+(function () {
+  "use strict";
+  if (window.__tvlbPgPhone) return; window.__tvlbPgPhone = 1;
+  const SHORT = [[/^\s*Strike/i, "Strike·AI"], [/^\s*Hedge/i, "Hedge"], [/^\s*Vào lệnh/i, "Vào lệnh"], [/^\s*Tín hiệu/i, "Tín hiệu"], [/^\s*Backtest/i, "Backtest"], [/Sổ tay/i, "📘 Sổ tay"], [/Vàng VNĐ/i, "🇻🇳 Vàng"]];
+  const css = document.createElement("style");
+  css.textContent = `#pgbar.pgPhone{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:4px!important;flex-wrap:wrap!important;width:100%!important;overflow:visible!important}
+#pgbar.pgPhone button{width:100%!important;min-width:0!important;padding:6px 3px!important;font-size:12.5px!important;line-height:1.25!important;text-align:center!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;margin:0!important}`;
+  document.head.appendChild(css);
+  const mq = (() => { try { return matchMedia("(max-width: 760px)"); } catch (e) { return null; } })();
+  const phone = () => (mq && mq.matches) || document.documentElement.classList.contains("tvlb-compact");
+  function apply() {
+    const bar = document.querySelector("#pgbar"); if (!bar) return;
+    const on = phone(); bar.classList.toggle("pgPhone", on);
+    bar.querySelectorAll("button").forEach((b) => {
+      if (on) {
+        if (b.dataset.pgFull == null) { const t = b.textContent; const m = SHORT.find(([re]) => re.test(t)); if (!m) return; b.dataset.pgFull = b.innerHTML; b.dataset.pgShort = m[1]; if (!b.title) b.title = t.trim(); }
+        if (b.textContent !== b.dataset.pgShort) b.textContent = b.dataset.pgShort;
+      } else if (b.dataset.pgFull != null) { b.innerHTML = b.dataset.pgFull; delete b.dataset.pgFull; delete b.dataset.pgShort; }
+    });
+  }
+  setInterval(apply, 1500); [300, 1200, 3000, 6000].forEach((t) => setTimeout(apply, t));
+  if (mq) { try { mq.addEventListener("change", apply); } catch (e) { mq.addListener && mq.addListener(apply); } }
+  addEventListener("resize", apply);
+})();
