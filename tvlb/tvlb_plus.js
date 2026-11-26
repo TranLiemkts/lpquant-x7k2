@@ -58,6 +58,11 @@
 @media (max-width: 760px) { #tvlbTip.full .pgroot { grid-template-columns: 1fr; } #tvlbTip.full .pg2 { border-left: 0; padding-left: 0; } }
 #tvlbTip .pghint { margin-top: 6px; padding-top: 3px; border-top: 1px dashed #e0a83a; color: #ffd54f; font-weight: 700; }
 #tvlbTip .pg2 > .pghint:first-child { margin: 0 0 6px; padding: 0 0 3px; border-top: 0; border-bottom: 1px dashed #e0a83a; }
+/* va_144: khung gộp 2 cột (tường trùng Magnet/Flip) cũng chia 2 trang: trang 2 THAY CHỖ trang 1 ở cột trái */
+#tvlbTip.wide.full .pgroot { display: block; }
+#tvlbTip.wide.full .pg1 { display: none; }
+#tvlbTip.wide.full .pg2 { border-left: 0; padding-left: 0; }
+#tvlbTip.wide > .tbody > .pghint { margin-top: 8px; }
 #tvlbTip.cols .pg1, #tvlbTip.cols .pg2 { break-inside: auto; }
 #tvlbTip .pg1 > div, #tvlbTip .pg2 > div { break-inside: avoid; }
 #tvlbCd { position: absolute; right: 64px; bottom: 30px; z-index: 5; padding: 2px 7px; border-radius: 4px; background: #e0a83a; color: #111;
@@ -168,7 +173,7 @@
   let tipKey = "", tipFull = false, tipFK = "";   // 7l số 129
   let mx = 0, my = 0;
   // 7l số 128: tách chú giải thành 2 trang. Trang 1 = từ sau dòng tiêu đề đến hết mục 3; trang 2 = từ mục "4. Giải nghĩa" đến hết. Không thấy mục 4 thì để nguyên.
-  function paginate(root) {
+  function paginate(root, noHint) {   // va_144: noHint = khung gộp 2 cột (dòng nhắc đặt ở đáy khung, không nằm trong cột)
     while (root.children.length === 1 && root.firstElementChild.tagName === "DIV") root = root.firstElementChild;
     const nodes = Array.from(root.childNodes);
     const i = nodes.findIndex((n) => n.nodeType === 1 && n.textContent.trim().indexOf("4. Giải nghĩa") === 0);
@@ -180,7 +185,7 @@
     for (let k = i; k < nodes.length; k++) p2.appendChild(nodes[k]);
     const h1 = document.createElement("div"); h1.className = "pghint"; h1.textContent = hintText();   // 7l số 129
     root.classList.add("pgroot");
-    root.appendChild(p1); root.appendChild(p2); root.appendChild(h1);   // 7l số 131: dòng nhắc dưới cùng
+    root.appendChild(p1); root.appendChild(p2); if (!noHint) root.appendChild(h1);   // 7l số 131: dòng nhắc dưới cùng
     return true;
   }
   function hintText() { const t = COARSE ? "👆 Chạm" : "🖱 Bấm chuột"; return tipFull ? t + " lần nữa để thu gọn về trang 1" : t + " để xem thêm trang 2/2: giải nghĩa thông số & công thức kiểm tra"; }   // 7l số 129
@@ -194,10 +199,16 @@
     const key = String(html).replace(/<[^>]*>/g, "").slice(0, 24), keep = tip.style.display === "flex" && key === tipKey ? tbody.scrollTop : 0; tipKey = key;
     const fk = String(html).replace(/<[^>]*>/g, "").slice(0, 52); if (fk !== tipFK) tipFull = false; tipFK = fk;   // 7l số 129: sang tường khác thì về trang 1
     const two = String(html).indexOf('data-2c="1"') >= 0;   // 7f: chú giải đã tự chia 2 cột (Magnet/Flip trùng tường) → giữ nguyên cách cũ
-    tip.style.display = "flex"; tip.classList.remove("cols"); tbody.innerHTML = html; tip.classList.toggle("wide", two); tip.classList.toggle("paged", !two && paginate(tbody)); tip.classList.toggle("full", tipFull && tip.classList.contains("paged"));
+    tip.style.display = "flex"; tip.classList.remove("cols"); tbody.style.removeProperty("zoom"); tbody.innerHTML = html; tip.classList.toggle("wide", two);
+    let pgd = false;
+    if (two) { const col = tbody.querySelector('[data-2c="1"] > div'); if (col && paginate(col, true)) { pgd = true; const h1 = document.createElement("div"); h1.className = "pghint"; h1.textContent = hintText(); tbody.appendChild(h1); } }
+    else pgd = paginate(tbody);
+    tip.classList.toggle("paged", pgd); tip.classList.toggle("full", tipFull && pgd);
     // 7k số 124: một cột không đủ chiều cao → chia 2 cột cạnh nhau; nếu 2 cột vẫn tràn (màn hình nhỏ) thì về 1 cột + Shift/lăn chuột
     fit();
-    tbody.scrollTop = keep; moreHint(); place(); }
+    shrink(); tbody.scrollTop = keep; moreHint(); place(); }
+  // va_144: máy tính — chú giải vẫn dài hơn khung thì thu nhỏ chữ cho vừa (tối đa còn 72%), đỡ phải giữ Shift + lăn chuột
+  function shrink() { if (COARSE) return; tbody.style.removeProperty("zoom"); const sh = tbody.scrollHeight, ch = tbody.clientHeight; if (sh > ch + 2 && ch > 50) tbody.style.zoom = String(Math.max(0.72, (ch - 4) / sh)); }
   function hideTip() { tip.style.display = "none"; tipKey = ""; tipFull = false; tipFK = ""; }
   function place() { const r = tip.getBoundingClientRect(); let x = mx + 14, y = my + 16;
     if (x + r.width > innerWidth - 6) x = mx - r.width - 14; if (y + r.height > innerHeight - 6) y = my - r.height - 14; tip.style.left = Math.max(4, x) + "px"; tip.style.top = Math.max(4, y) + "px"; }
@@ -233,7 +244,7 @@
     if (downXY && Math.abs(e.clientX - downXY[0]) + Math.abs(e.clientY - downXY[1]) > 5) return;
     tipFull = !tipFull; tip.classList.toggle("full", tipFull);
     const hh = tbody.querySelector(".pghint"); if (hh) hh.textContent = hintText();
-    tbody.scrollTop = 0; fit(); moreHint(); place();
+    tbody.scrollTop = 0; fit(); shrink(); moreHint(); place();
   }, true);
   document.addEventListener("wheel", (e) => {   // 7k số 124: Shift + lăn chuột = cuộn chú giải (chỉ khi chú giải đang hiện và dài hơn khung)
     if (!e.shiftKey || tip.style.display !== "flex" || tbody.scrollHeight <= tbody.clientHeight + 2) return;
