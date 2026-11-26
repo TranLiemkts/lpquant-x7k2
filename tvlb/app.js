@@ -1600,32 +1600,24 @@ function ofCtxExtra(M) {
       out.smc = `${h4} · ${tf} · ${od.length ? od.join(" · ") : "chưa có lệnh SMC chờ"}`; } } catch (e) { }
   return out;
 }
-// 26/11: «3 câu hỏi đầu mỗi phiên» (Sổ tay ①) trả lời TỰ ĐỘNG ở đầu bảng «Theo dõi diễn biến». Chỉ đọc số có sẵn (Bảng A, Flip, vùng đệm); không đổi tín hiệu/lệnh nào.
+// 26/11: «3 câu hỏi đầu mỗi phiên» (Sổ tay ①) trả lời TỰ ĐỘNG, 4 dòng gọn ngay dưới tiêu đề «Theo dõi diễn biến» (thay dòng «GAMMA ÂM…» cũ). Chỉ đọc số có sẵn; không đổi tín hiệu/lệnh nào.
 function of3Q(M) {
   const A = bangA(), B = 1e9, cm = (v, d = 1) => Number(v).toFixed(d).replace(".", ",");
-  const col = (t, c) => `<b style="color:${c}">${t}</b>`, G = "#26b384", R = "#ff6b6b", Y = "#f0b429";
-  let q1 = "chưa có Net GEX", lv = 0;   // lv: 0 trung tính · 1 vừa · 2 mạnh
-  if (A) { lv = A.sgn === 0 ? 0 : Math.abs(A.g) > 2 * B ? 2 : 1;
-    q1 = `tổng GC+GLD ${fmtK(A.g)}$ → ` + (A.sgn > 0 ? col(lv === 2 ? "DƯƠNG MẠNH" : "DƯƠNG", G) : A.sgn < 0 ? col(lv === 2 ? "ÂM MẠNH" : "ÂM", R) : col("TRUNG TÍNH", Y) + ` <span class="muted">(trong ±500M, nghiêng ${A.g < 0 ? "âm" : "dương"})</span>`); }
-  let q2 = "chưa rõ Flip";
-  if (M.flip != null) { const d = Math.abs(M.px - M.flip);
-    q2 = `Flip ${ofFm(M.flip)} · giá ${ofFm(M.px)} ${M.negG ? "DƯỚI" : "TRÊN"} Flip ${cm(d)}$ (${M.rgp.pctTxt}) → `
-      + (M.flipNear ? col("TRONG vùng đệm: dễ lật chế độ", Y) : M.rgp.far ? col("XA: chế độ ổn định cả ngày", G) : "ngoài vùng đệm" + (M.fbL ? ` ±${cm(M.fbL.w)}$` : "")); }
-  let q3 = "chưa đủ dữ liệu", go = "";
-  if (M.flip != null) {
-    const how = M.negG ? "ĐẠP GA (đẩy giá đi xa)" : "PHANH (kìm giá trong biên)", sp = !A ? "" : lv === 0 ? " · lực NHẸ" : lv === 2 ? " · lực MẠNH" : " · lực vừa";
-    const clash = A && A.sgn !== 0 && (A.sgn < 0) !== !!M.negG;
-    q3 = (M.flipNear ? col("ở RANH GIỚI, chưa rõ phanh hay đạp ga", Y) : col(how, M.negG ? R : G) + sp) + (clash ? ` · ${col("Bảng A KHÁC Flip", "#ff8a65")}` : "");
-    go = M.flipNear ? "9A (bật lại) đứng ngoài; chỉ xét 9B khi giá phá rõ khỏi vùng đệm (Sổ tay ⑮)."
-      : clash ? "Hai cách đo ngược nhau → thận trọng, ưu tiên đứng ngoài hoặc giảm khối lượng; dashboard vẫn chọn 9A/9B theo Flip."
-      : M.negG ? (lv === 0 ? "Nghiêng <b>9B: đi theo hướng phá</b>, không bắt đáy/đỉnh. Lực yếu → chờ nến phá rõ; giá đi ngang thì đứng ngoài."
-        : `<b>9B: đi theo hướng phá</b>, không bắt đáy/đỉnh${lv === 2 ? "; Net GEX < −2B: KHÔNG BUY dưới Flip (Module 28)" : ""}.`)
-      : (lv === 0 ? "Nghiêng <b>9A: đánh bật lại tại tường</b> trong biên, nhưng lực yếu → chờ nến xác nhận." : "<b>9A: đánh bật lại tại tường</b> trong biên (đảo chiều có xác nhận).");
-  }
-  return `<div style="font-weight:700;color:#e0a83a;margin-bottom:2px">3 câu hỏi đầu phiên</div>`
-    + `<div>① Net GEX dương, âm hay trung tính? ${q1}</div><div>② Giá cách Flip bao xa? ${q2}</div><div>③ Dealer phanh hay đạp ga? ${q3}</div>`
-    + (go ? `<div style="margin-top:3px">→ ${go}</div>` : "")
-    + `<div class="muted" style="font-size:10.5px">Bối cảnh, không phải tín hiệu vào lệnh · chưa kiểm định (Sổ tay ①, ⑬, ⑮).</div>`;
+  const col = (t, c) => `<b style="color:${c}">${t}</b>`, G = "#26b384", R = "#ff6b6b", Y = "#f0b429", lb = (t) => `<span class="muted">${t}</span>`;
+  const lv = !A ? 0 : A.sgn === 0 ? 0 : Math.abs(A.g) > 2 * B ? 2 : 1;
+  const l1 = !A ? "chưa có" : (A.sgn > 0 ? col(lv === 2 ? "DƯƠNG MẠNH" : "DƯƠNG", G) : A.sgn < 0 ? col(lv === 2 ? "ÂM MẠNH" : "ÂM", R) : col("TRUNG TÍNH", Y)) + ` ${lb(`(${fmtK(A.g)}$${A.sgn === 0 ? ", nghiêng " + (A.g < 0 ? "âm" : "dương") : ""})`)}`;
+  if (M.flip == null) return `<div>1. ${lb("Net GEX (Gamma):")} ${l1}</div><div>2. ${lb("Giá cách Flip:")} chưa rõ Flip</div>`;
+  const d = Math.abs(M.px - M.flip), bw = M.fbL ? ` ±${cm(M.fbL.w)}$` : "";
+  const l2 = `${cm(d)}$ (${M.rgp.pctTxt}) · ${lb("Vị trí giá:")} <b>${M.negG ? "DƯỚI" : "TRÊN"}</b> Flip ${ofFm(M.flip)} → `
+    + (M.flipNear ? col(`GẦN (trong vùng đệm${bw}): dễ lật chế độ`, Y) : M.rgp.far ? col("XA: chế độ ổn định cả ngày", G) : `VỪA (ngoài vùng đệm${bw}): chế độ khá ổn định`);
+  const sp = !A ? "" : lv === 0 ? " · lực NHẸ" : lv === 2 ? " · lực MẠNH" : " · lực vừa", clash = A && A.sgn !== 0 && (A.sgn < 0) !== !!M.negG;
+  const l3 = M.flipNear ? col("ở RANH GIỚI, chưa rõ phanh hay đạp ga", Y) : (M.negG ? col("ĐẠP GA", R) + " (đẩy giá đi xa)" : col("PHANH", G) + " (kìm giá trong biên)") + sp + (clash ? ` · ${col("Bảng A ngược Flip", "#ff8a65")}` : "");
+  const l4 = M.flipNear ? "<b>Đứng ngoài 9A</b>: giá trong vùng đệm; chỉ 9B khi phá rõ."
+    : clash ? "<b>Thận trọng</b>: hai cách đo ngược nhau → đứng ngoài hoặc giảm khối lượng."
+    : M.negG ? (lv === 0 ? "<b>Nghiêng 9B</b>: theo hướng phá, không bắt đáy/đỉnh · lực yếu → chờ nến phá rõ."
+      : `<b>9B</b>: theo hướng phá, không bắt đáy/đỉnh${lv === 2 ? " · Net GEX &lt; −2B: không BUY dưới Flip" : ""}.`)
+    : (lv === 0 ? "<b>Nghiêng 9A</b>: bật lại tại tường · lực yếu → chờ nến xác nhận." : "<b>9A</b>: bật lại tại tường, có nến xác nhận.");
+  return `<div>1. ${lb("Net GEX (Gamma):")} ${l1}</div><div>2. ${lb("Giá cách Flip:")} ${l2}</div><div>3. ${lb("Dealer:")} ${l3}</div><div>4. ${l4}</div>`;
 }
 function ofRender() {
   const wn = $("#ofWarn"), T = $("#ofT"); let w = ""; try { w = ofWarnText(); } catch { /* chưa có cấu hình */ }
@@ -1874,7 +1866,7 @@ function ofInitPage() {
   if (b3) bar.insertBefore(btn, b3); else bar.appendChild(btn);
   const page = document.createElement("div"); page.className = "page"; page.dataset.pg = "6"; page.hidden = true;
   page.innerHTML = `<div class="v3grid ofgrid">
-    <section class="panel v3track"><header><h2>Theo dõi diễn biến</h2><span class="muted small" id="ofReg"></span><span style="margin-left:auto;display:inline-flex;gap:4px"><button type="button" id="ofWide" title="Mở rộng sang ngang (bảng chiếm cả hàng trên)" style="cursor:pointer;border:1px solid #2b3440;background:#141a22;color:#9aa4b2;border-radius:5px;padding:2px 7px;font-size:12px;line-height:1.1">⇔</button><button type="button" id="ofTall" title="Phóng to chiều cao bảng" style="cursor:pointer;border:1px solid #2b3440;background:#141a22;color:#9aa4b2;border-radius:5px;padding:2px 7px;font-size:12px;line-height:1.1">⤢</button></span></header><div id="of3q" class="v3box" style="margin-bottom:6px;font-size:12px;line-height:1.5"></div><div id="ofNear" class="v3box">—</div><div id="ofT"></div></section>
+    <section class="panel v3track"><header><h2>Theo dõi diễn biến</h2><span id="ofReg" hidden></span><span style="margin-left:auto;display:inline-flex;gap:4px"><button type="button" id="ofWide" title="Mở rộng sang ngang (bảng chiếm cả hàng trên)" style="cursor:pointer;border:1px solid #2b3440;background:#141a22;color:#9aa4b2;border-radius:5px;padding:2px 7px;font-size:12px;line-height:1.1">⇔</button><button type="button" id="ofTall" title="Phóng to chiều cao bảng" style="cursor:pointer;border:1px solid #2b3440;background:#141a22;color:#9aa4b2;border-radius:5px;padding:2px 7px;font-size:12px;line-height:1.1">⤢</button></span></header><div id="of3q" title="Trả lời tự động 3 câu hỏi đầu phiên (Sổ tay ①). Bối cảnh, không phải tín hiệu vào lệnh · chưa kiểm định (Sổ tay ⑬, ⑮)." style="font-size:12px;line-height:1.45;margin:0 0 6px;padding:4px 6px;border-left:2px solid #e0a83a;background:#11161d"></div><div id="ofNear" class="v3box">—</div><div id="ofT"></div></section>
     <section class="panel v3ctx"><header><h2>Bối cảnh thị trường</h2></header><div class="v3kv" id="ofC"></div></section>
     <section class="panel v3plan"><header><h2>Kế hoạch giao dịch</h2><span class="muted small" id="ofAct"></span></header><div id="ofTabs"></div><div id="ofP"></div></section></div>`;
   { // B9b1: nút ⇔ (rộng ngang) và ⤢ (cao) cho bảng "Theo dõi diễn biến"; bảng luôn có thanh trượt khi nội dung dài

@@ -983,7 +983,7 @@ html.tvlb-wide .right.fly{visibility:visible;opacity:1;pointer-events:auto}
   apply();
 })();
 
-/* ═══════════════ va_143 · CÔNG CỤ VẼ KIỂU TRADINGVIEW (ghi 26/11/2026) ═══════════════
+/* ═══════════════ va_143 · CÔNG CỤ VẼ KIỂU TRADINGVIEW (ghi 26/11/2026; va_143b: crosshair chạy theo chuột khi kéo) ═══════════════
    Thanh công cụ ngay sau nút ⤢ trên hàng khung giờ:
    ↖ chọn/sửa · ― đường ngang · │ đường dọc · ╱ đường xu hướng · ➚ mũi tên · ▭ hộp · 〰 đường dẫn (nhiều điểm)
    · ⇕ đo khoảng cách giá · L / S hộp lệnh Long / Short (Entry · SL · TP · R:R) · 🧲 hút vào giá OHLC · 🎨 đổi màu · 🗑 xoá.
@@ -1205,7 +1205,8 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     const pos = (e) => { const r = wrap.getBoundingClientRect(), p = e.touches ? e.touches[0] || e.changedTouches[0] : e; return { x: p.clientX - r.left, y: p.clientY - r.top }; };
     const inPlot = (p) => { const a = area(); return p.x >= 0 && p.y >= 0 && p.x < a.w && p.y < a.h; };
     let block = false;   // đang chặn chart (không cho chart kéo/cuộn)
-    const stop = (e) => { e.stopPropagation(); if (e.cancelable) e.preventDefault(); };
+    const stop = (e) => { e.stopPropagation(); if (e.cancelable && e.type !== "pointerdown") e.preventDefault(); };   // pointerdown KHÔNG preventDefault: nếu chặn, trình duyệt ngừng gửi mousemove cho chart → crosshair đứng yên
+    const soft = (e) => { if (e.type === "touchmove" && e.cancelable) e.preventDefault(); };   // khi kéo: KHÔNG chặn sự kiện di chuột → đường nét đứt (crosshair) của chart vẫn chạy theo chuột
     function newShape(type, pt) {
       const d = { id: nid(), type, col: COLS[P.col], pts: [pt] };
       if (type === "long" || type === "short") { const a = area(), span = Math.abs((yp(0) ?? pt.p) - (yp(a.h) ?? pt.p)) || 20, rk = Math.max(1, Math.round(span * 0.06 * 2) / 2), s = type === "long" ? 1 : -1;
@@ -1232,9 +1233,9 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     }
     function move(e) {
       const p = pos(e); lastPos = p;
-      if (draft) { if (block) stop(e); const pt = snap(p.x, p.y); if (pt && draft.type !== "path") { draft.pts[1] = pt; if (Math.hypot(p.x - draft._x, p.y - draft._y) > 5) draft._mv = true; } kick(); return; }
-      if (drag && drag.temp) { stop(e); const pt = snap(p.x, p.y); if (pt) temp.pts[1] = pt; kick(); return; }
-      if (drag) { stop(e); const pt = snap(p.x, p.y); if (!pt) return; const d = drag.d, o = drag.orig, dT = pt.t - drag.t0, dP = pt.p - drag.p0;
+      if (draft) { if (block) soft(e); const pt = snap(p.x, p.y); if (pt && draft.type !== "path") { draft.pts[1] = pt; if (Math.hypot(p.x - draft._x, p.y - draft._y) > 5) draft._mv = true; } kick(); return; }
+      if (drag && drag.temp) { soft(e); const pt = snap(p.x, p.y); if (pt) temp.pts[1] = pt; kick(); return; }
+      if (drag) { soft(e); const pt = snap(p.x, p.y); if (!pt) return; const d = drag.d, o = drag.orig, dT = pt.t - drag.t0, dP = pt.p - drag.p0;
         if (d.type === "long" || d.type === "short") {
           if (drag.h === -1 || drag.h === 0) { d.pts[0] = { t: o.pts[0].t + dT, p: o.pts[0].p + dP }; d.t2 = o.t2 + dT; d.sl = o.sl + dP; d.tp = o.tp + dP; }
           else if (drag.h === 1) d.t2 = Math.max(o.pts[0].t + tfs(), pt.t);
@@ -1260,7 +1261,6 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     window.addEventListener("pointermove", (e) => { if (e.pointerType === "touch") return; move(e); }, { capture: true });
     window.addEventListener("touchmove", (e) => { if (draft || drag || block) move(e); }, { capture: true, passive: false });
     ["pointerup", "touchend"].forEach((ev) => window.addEventListener(ev, (e) => { if (ev === "pointerup" && e.pointerType === "touch") return; up(e); }, { capture: true, passive: false }));
-    wrap.addEventListener("mousemove", (e) => { if (block) e.stopPropagation(); }, { capture: true });
     wrap.addEventListener("dblclick", (e) => { if (draft && draft.type === "path") { stop(e); draft.pts.pop(); finish(draft); } else if (tool) stop(e); }, { capture: true });
     wrap.addEventListener("contextmenu", (e) => { if (draft || tool) { e.preventDefault(); e.stopPropagation(); } }, { capture: true });
     function delSel(ask) {
