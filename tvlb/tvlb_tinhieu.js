@@ -1438,47 +1438,65 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
   let kick = () => { };
 })();
 
-/* va_145 (26/11/2026): tab «🇻🇳 Vàng VNĐ» — quy đổi giá vàng thế giới (XAUUSD) ra VNĐ / chỉ,
-   thanh đo kéo trên chart (kéo tới đâu quy đổi tới đó), thống kê vàng đã mua và lời / lỗ.
-   Công thức: 1 chỉ = 3,75 g · 1 ounce (troy) = 31,1034768 g → VNĐ/chỉ = XAU × tỷ giá × 3,75 ÷ 31,1034768 + chênh lệch SJC/vật chất. */
+/* va_145 (26/11/2026): tab «🇻🇳 Vàng VNĐ» — theo dõi vàng VẬT CHẤT đã đầu tư.
+   • Quy đổi giá thế giới (XAUUSD) ra VNĐ / chỉ: VNĐ/chỉ = XAU × tỷ giá × 3,75 ÷ 31,1034768 + chênh lệch SJC/vật chất.
+   • Nhiều NHÀ ĐẦU TƯ, mỗi người nhiều LẦN MUA (số chỉ + giá mua) → giá mua trung bình, vốn, lời / lỗ.
+   • Thanh đo kéo trên chart (kéo tới đâu quy đổi tới đó) và mốc giá XAU hoà vốn của nhà đầu tư đang chọn.
+   Dữ liệu lưu trong trình duyệt (localStorage "tvlb.vnd"); có nút Xuất / Nhập file để chuyển sang máy khác. */
 (function () {
   "use strict";
   if (window.__tvlbVnd) return; window.__tvlbVnd = 1;
   const KEY = "tvlb.vnd", CHI = 3.75 / 31.1034768;
-  const V = Object.assign({ rate: 25825, prem: 0, lots: [{ chi: 1.5, gia: 12990000 }], on: false, ly: null, be: true },
+  const V = Object.assign({ rate: 25825, prem: 0, on: false, ly: null, be: true, cur: 0, inv: null },
     (() => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { return {}; } })());
+  if (!Array.isArray(V.inv) || !V.inv.length) { V.inv = [{ name: "Nhà đầu tư 1", lots: Array.isArray(V.lots) && V.lots.length ? V.lots : [{ chi: 1.5, gia: 12990000, ngay: "" }] }]; }
+  delete V.lots;
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(V)); } catch (e) { } };
   const vnd = (x) => (x == null || !isFinite(x) ? "—" : Math.round(x).toLocaleString("vi-VN") + " đ");
   const usd = (x) => (x == null || !isFinite(x) ? "—" : Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const toV = (xau) => xau * V.rate * CHI + (+V.prem || 0);           // XAU (USD/oz) → VNĐ/chỉ
   const toX = (v) => (v - (+V.prem || 0)) / (V.rate * CHI);            // VNĐ/chỉ → XAU
   const px = () => { try { const v = lastPrice(); if (v != null) return v; } catch (e) { } try { const c = S.candles; return c[c.length - 1].close; } catch (e) { return null; } };
-  const tot = () => { let c = 0, m = 0; (V.lots || []).forEach((l) => { const a = +l.chi || 0, g = +l.gia || 0; if (a > 0 && g > 0) { c += a; m += a * g; } }); return { chi: c, von: m, avg: c ? m / c : null }; };
+  const curI = () => { if (!(V.cur >= 0 && V.cur < V.inv.length)) V.cur = 0; return V.inv[V.cur]; };
+  const sumL = (lots) => { let c = 0, m = 0; (lots || []).forEach((l) => { const a = +l.chi || 0, g = +l.gia || 0; if (a > 0 && g > 0) { c += a; m += a * g; } }); return { chi: c, von: m, avg: c ? m / c : null }; };
+  const tot = () => sumL(curI().lots);
   const num = (s) => { const n = parseFloat(String(s).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", ".")); return isFinite(n) ? n : 0; };
+  const chiN = (s) => { const n = parseFloat(String(s).replace(",", ".")); return isFinite(n) ? n : 0; };
+  const plTxt = (pl0, base) => { const pl = Math.round(pl0) || 0; return `<span class="${pl >= 0 ? "up" : "dn"}">${pl >= 0 ? "+" : "−"}${vnd(Math.abs(pl))}${base ? ` (${pl >= 0 ? "+" : "−"}${Math.abs((100 * pl) / base).toFixed(2)}%)` : ""}</span>`; };
 
-  // ───────── CSS ─────────
+  // ───────── CSS (đặt !important cho các thuộc tính hay bị CSS chung của dashboard ghi đè) ─────────
   const css = document.createElement("style");
-  css.textContent = `.vgp{font:13px/1.5 'IBM Plex Sans',sans-serif;color:#d7dde5;padding:4px 6px}
-.vgp table.vt{border-collapse:collapse;width:100%;margin:0 0 10px}
-.vgp .vt th{background:#232a6b;color:#fff;font-weight:700;padding:6px 8px;border:1px solid #39407d}
-.vgp .vt td{padding:6px 8px;border:1px solid #2b3440;text-align:center}.vgp .vt td:first-child{font-weight:600;color:#cfd6df;background:#151b23}
-.vgp .big{font-size:20px;font-weight:700}.vgp .up{color:#26c281}.vgp .dn{color:#ef5350}.vgp .yl{color:#ffd54f}.vgp .og{color:#ff9800}
-.vgp h4{margin:12px 0 6px;font-size:11.5px;letter-spacing:.08em;color:#9aa6b2;text-transform:uppercase}
-.vgp .row{display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap}.vgp .row label{flex:1 1 170px;color:#cfd6df}
-.vgp input{width:150px;background:#0f141a;color:#fff;border:1px solid #3a4552;border-radius:5px;padding:5px 8px;font:500 13px 'IBM Plex Mono',monospace;text-align:right}
-.vgp .btn{cursor:pointer;border:1px solid #3a4552;background:#1a212b;color:#cfd6df;border-radius:6px;padding:6px 10px;font:600 12.5px 'IBM Plex Sans',sans-serif}
-.vgp .btn:hover{border-color:#e0a83a;color:#fff}.vgp .btn.on{background:#e0a83a;color:#111;border-color:#e0a83a}
-.vgp table.lots{border-collapse:collapse;width:100%}.vgp .lots td,.vgp .lots th{padding:4px 6px;border-bottom:1px solid #222a35;text-align:right}.vgp .lots th{color:#9aa6b2;font-weight:600;font-size:11.5px}
-.vgp .lots input{width:120px}.vgp .lots .x{cursor:pointer;color:#ef5350;font-weight:700;padding:0 6px}
-.vgp .note{color:#7d8796;font-size:11.5px;margin-top:8px}
+  css.textContent = `#vgBody{font:13px/1.5 'IBM Plex Sans',sans-serif!important;color:#d7dde5;padding:4px 6px}
+#vgBody *{box-sizing:border-box}
+#vgBody table{border-collapse:collapse!important;width:100%!important;margin:0 0 10px!important;table-layout:auto!important}
+#vgBody .vt th{background:#232a6b;color:#fff;font-weight:700;padding:6px 8px;border:1px solid #39407d;text-align:center}
+#vgBody .vt td{padding:5px 8px;border:1px solid #2b3440;text-align:center;font-family:'IBM Plex Sans',sans-serif!important}
+#vgBody .vt td:first-child{font-weight:600;color:#cfd6df;background:#151b23;width:46%}
+#vgBody .big{font-size:20px;font-weight:700}#vgBody .up{color:#26c281}#vgBody .dn{color:#ef5350}#vgBody .yl{color:#ffd54f}#vgBody .og{color:#ff9800}#vgBody .mu{color:#7d8796}
+#vgBody h4{margin:14px 0 6px!important;font-size:11.5px!important;letter-spacing:.08em;color:#9aa6b2!important;text-transform:uppercase;font-weight:700}
+#vgBody .vgr{display:flex!important;align-items:center!important;gap:8px!important;margin:6px 0!important;flex-wrap:wrap!important;text-align:left!important}
+#vgBody .vgr > .lb{flex:1 1 180px!important;color:#cfd6df;display:inline-block!important;text-align:left!important}
+#vgBody input,#vgBody select{display:inline-block!important;width:150px!important;max-width:100%!important;height:30px!important;background:#0f141a!important;color:#fff!important;border:1px solid #3a4552!important;border-radius:5px!important;padding:3px 8px!important;font:500 13px 'IBM Plex Mono',monospace!important;text-align:right!important;margin:0!important}
+#vgBody select{text-align:left!important;width:190px!important;font-family:'IBM Plex Sans',sans-serif!important}
+#vgBody input.nm{width:190px!important;text-align:left!important;font-family:'IBM Plex Sans',sans-serif!important}
+#vgBody input[type=date]{width:140px!important;text-align:left!important}
+#vgBody .btn{display:inline-block!important;width:auto!important;cursor:pointer;border:1px solid #3a4552;background:#1a212b;color:#cfd6df;border-radius:6px;padding:5px 10px!important;font:600 12.5px 'IBM Plex Sans',sans-serif!important;margin:0!important}
+#vgBody .btn:hover{border-color:#e0a83a;color:#fff}#vgBody .btn.on{background:#e0a83a;color:#111;border-color:#e0a83a}#vgBody .btn.red{border-color:#ef5350;color:#ef9a9a}
+#vgBody .lots td,#vgBody .lots th,#vgBody .ivs td,#vgBody .ivs th{padding:4px 6px;border-bottom:1px solid #222a35;text-align:right;white-space:nowrap}
+#vgBody .lots th,#vgBody .ivs th{color:#9aa6b2;font-weight:600;font-size:11.5px}
+#vgBody .lots input{width:100%!important;min-width:0!important;padding:3px 5px!important}#vgBody .lots input[type=date]{width:128px!important}#vgBody .lots td.pl,#vgBody .lots td.sp{white-space:normal!important;font-size:12px}#vgBody .lots td:nth-child(4){width:118px}#vgBody .lots td:nth-child(3){width:64px}
+#vgBody .lots tr.sum td,#vgBody .ivs tr.sum td{border-top:2px solid #3a4552;font-weight:700;color:#fff}
+#vgBody .ivs tr[data-k]{cursor:pointer}#vgBody .ivs tr[data-k]:hover td{background:#18202a}#vgBody .ivs tr.cur td{background:#2a2412}
+#vgBody .x{cursor:pointer;color:#ef5350;font-weight:700;padding:0 6px}
+#vgBody .card{border:1px solid #2b3440;border-radius:8px;padding:8px 10px;margin:0 0 10px;background:#11161d}
+#vgBody .note{color:#7d8796;font-size:11.5px;margin-top:8px;text-align:left}
 #vgLine{position:absolute;left:0;height:0;border-top:2px solid #ff5a6e;z-index:9;display:none;pointer-events:none}
 #vgLine .h{position:absolute;right:0;top:-12px;height:22px;pointer-events:auto;cursor:ns-resize;display:flex;align-items:center;gap:6px;padding:0 8px;background:#ff5a6e;color:#fff;border-radius:4px;font:700 12px 'IBM Plex Sans',sans-serif;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.5)}
-#vgLine .g{position:absolute;left:0;right:0;top:-6px;height:12px;pointer-events:auto;cursor:ns-resize}
 #vgBe{position:absolute;left:0;height:0;border-top:1px dashed #ffd54f;z-index:8;display:none;pointer-events:none}
 #vgBe span{position:absolute;left:6px;top:-18px;color:#ffd54f;font:600 11px 'IBM Plex Sans',sans-serif;background:rgba(11,14,18,.75);padding:0 4px;border-radius:3px}`;
   document.head.appendChild(css);
 
-  // ───────── tab + trang ─────────
   let page = null, tries = 0;
   function initTab() {
     const bar = document.querySelector("#pgbar"), aside = document.querySelector(".right");
@@ -1494,62 +1512,115 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     bar.addEventListener("click", (e) => { const b = e.target.closest("button[data-pg]"); if (b && b !== btn) { page.hidden = true; btn.classList.remove("on"); } }, true);
   }
 
+
+  let delArm = 0, edOpen = false;
+  // Màn hình chính chỉ có: chọn nhà đầu tư + nút Nhập liệu + bảng thông số + 2 nút chart. Mọi phần nhập liệu nằm trong khung «Nhập liệu» (bấm mới mở).
   function build() {
     const b = page && page.querySelector("#vgBody"); if (!b) return;
-    b.innerHTML = `<table class="vt"><thead><tr><th>Thông số</th><th>Giá trị thực tế</th></tr></thead><tbody id="vgT"></tbody></table>
-      <div class="row"><button type="button" class="btn" id="vgOn"></button><button type="button" class="btn" id="vgBeOn"></button></div>
-      <div id="vgM" style="margin:4px 0 2px"></div>
-      <h4>Cấu hình giá Việt Nam</h4>
-      <div class="row"><label>Tỷ giá USD/VNĐ</label><input id="vgRate" inputmode="decimal"><button type="button" class="btn" id="vgGet" title="Lấy tỷ giá tham khảo trên mạng (tỷ giá liên ngân hàng, có thể lệch tỷ giá ngân hàng bạn dùng)">🌐 Lấy tỷ giá</button></div>
-      <div class="row"><label>Chênh lệch SJC / vật chất (VNĐ/chỉ)</label><input id="vgPrem" inputmode="decimal"></div>
-      <h4>Vàng đã mua (mỗi dòng = một lần mua)</h4>
-      <table class="lots"><thead><tr><th style="text-align:left">#</th><th>Số chỉ</th><th>Giá mua (VNĐ/chỉ)</th><th>Lời / lỗ</th><th></th></tr></thead><tbody id="vgL"></tbody></table>
-      <div class="row"><button type="button" class="btn" id="vgAdd">＋ Thêm lần mua</button></div>
-      <div class="note">• Giá VNĐ/chỉ = XAU × tỷ giá × 3,75 ÷ 31,1035 + chênh lệch. Đây là giá quy đổi từ giá thế giới, KHÔNG phải giá mua/bán niêm yết của tiệm vàng (giá tiệm thường cao hơn — nhập phần chênh vào ô “Chênh lệch” để khớp).<br>• Lời / lỗ = (giá VNĐ/chỉ hiện tại − giá mua) × số chỉ; chưa trừ chênh lệch mua–bán của tiệm.<br>• Thanh đo: bấm nút để hiện thanh đỏ trên chart, nắm nhãn đỏ bên phải kéo lên / xuống. Thanh vàng nét đứt = giá XAU hoà vốn.</div>`;
+    b.innerHTML = `<div class="vgr" style="justify-content:flex-start!important"><span class="lb" style="flex:0 0 auto!important"><b>👤 Nhà đầu tư</b></span><select id="vgSel" title="Chọn tên của bạn để xem danh mục của bạn, hoặc chọn «＋ Thêm người mới»"></select>
+        <button type="button" class="btn" id="vgEdB">✎ Nhập liệu</button></div>
+      <div class="card" id="vgEd" style="display:none">
+        <h4 style="margin-top:2px!important">Thông tin nhà đầu tư</h4>
+        <div class="vgr"><span class="lb">Tên nhà đầu tư</span><input class="nm" id="vgName" placeholder="Tên nhà đầu tư"><button type="button" class="btn red" id="vgDel">🗑 Xoá người này</button></div>
+        <h4 id="vgLh">Các lần mua</h4>
+        <table class="lots"><thead><tr><th style="text-align:left">Lần</th><th style="text-align:left">Ngày mua</th><th>Số chỉ</th><th>Giá mua (VNĐ/chỉ)</th><th>Vốn</th><th>Lời / lỗ</th><th></th></tr></thead><tbody id="vgL"></tbody></table>
+        <div class="vgr"><button type="button" class="btn" id="vgAdd">＋ Thêm lần mua</button><span class="mu" style="font-size:11.5px">Giá mua điền sẵn = giá vàng VN hiện tại, sửa lại theo giá bạn mua thật.</span></div>
+        <h4>Chênh lệch giá vàng Việt Nam so với thế giới</h4>
+        <div class="vgr"><span class="lb">Tỷ giá USD/VNĐ</span><input id="vgRate" inputmode="decimal"><button type="button" class="btn" id="vgGet" title="Lấy tỷ giá tham khảo trên mạng (liên ngân hàng, có thể lệch tỷ giá ngân hàng bạn dùng)">🌐 Lấy tỷ giá</button></div>
+        <div class="vgr"><span class="lb">Giá tiệm vàng / SJC hiện tại (VNĐ/chỉ)<br><span class="mu" style="font-size:11.5px">nhập giá tiệm → tự tính chênh lệch</span></span><input id="vgShop" inputmode="decimal" placeholder="vd 15.200.000"></div>
+        <div class="vgr"><span class="lb">Chênh lệch VN − thế giới (VNĐ/chỉ)<br><span class="mu" style="font-size:11.5px">hoặc nhập thẳng số chênh</span></span><input id="vgPrem" inputmode="decimal"></div>
+        <h4>Danh sách nhà đầu tư <span class="mu" style="text-transform:none;letter-spacing:0;font-weight:500">(bấm một dòng để chuyển người)</span></h4>
+        <table class="ivs"><thead><tr><th style="text-align:left">Tên</th><th>Số lần</th><th>Số chỉ</th><th>Giá mua TB</th><th>Vốn</th><th>Lời / lỗ</th></tr></thead><tbody id="vgI"></tbody></table>
+        <h4>Sao lưu</h4>
+        <div class="vgr"><button type="button" class="btn" id="vgExp">⬇ Xuất file danh mục</button><button type="button" class="btn" id="vgImp">⬆ Nhập file danh mục</button><input type="file" id="vgFile" accept=".json,application/json" style="display:none!important"><span class="mu" id="vgImpMsg" style="font-size:11.5px"></span></div>
+        <div class="note">• Giá thế giới quy đổi = XAU × tỷ giá × 3,75 ÷ 31,1035. Giá vàng VN = giá thế giới quy đổi + chênh lệch (giá tiệm/SJC thường cao hơn thế giới; chênh lệch đổi theo ngày, nên cập nhật khi biết giá tiệm mới).<br>• Giá mua TB = tổng (số chỉ × giá mua) ÷ tổng số chỉ. Lời / lỗ = (giá vàng VN hiện tại − giá mua) × số chỉ, chưa trừ chênh lệch mua–bán của tiệm.<br>• Danh mục lưu trong trình duyệt của máy này. Dùng ở máy khác: “Xuất file” rồi “Nhập file” ở máy kia.</div>
+        <div class="vgr" style="justify-content:center!important"><button type="button" class="btn on" id="vgEdC">✓ Xong · đóng nhập liệu</button></div>
+      </div>
+      <table class="vt"><thead><tr><th>Thông số</th><th id="vgWho">Giá trị thực tế</th></tr></thead><tbody id="vgT"></tbody></table>
+      <div class="vgr" style="justify-content:center!important"><button type="button" class="btn" id="vgOn"></button><button type="button" class="btn" id="vgBeOn"></button></div>
+      <div id="vgM" style="margin:4px 0 2px;text-align:center"></div>`;
     const q = (s) => b.querySelector(s);
-    q("#vgRate").value = V.rate; q("#vgPrem").value = V.prem;
-    q("#vgRate").addEventListener("input", (e) => { V.rate = num(e.target.value) || V.rate; save(); upd(); });
-    q("#vgPrem").addEventListener("input", (e) => { V.prem = num(e.target.value); save(); upd(); });
+    const setEd = (o) => { edOpen = o; q("#vgEd").style.setProperty("display", o ? "block" : "none", "important"); q("#vgEdB").classList.toggle("on", o); q("#vgEdB").textContent = o ? "✎ Đang nhập liệu · bấm để đóng" : "✎ Nhập liệu"; };
+    setEd(edOpen);
+    q("#vgEdB").onclick = () => setEd(!edOpen); q("#vgEdC").onclick = () => setEd(false);
+    q("#vgRate").value = V.rate; q("#vgPrem").value = Math.round(+V.prem || 0).toLocaleString("vi-VN");
+    q("#vgRate").addEventListener("input", (e) => { const v = num(e.target.value); if (v > 0) { V.rate = v; save(); upd(); } });
+    q("#vgPrem").addEventListener("input", (e) => { V.prem = num(e.target.value); q("#vgShop").value = ""; save(); upd(); });
+    q("#vgShop").addEventListener("input", (e) => { const s = num(e.target.value), p = px(); if (s > 0 && p != null) { V.prem = Math.round(s - p * V.rate * CHI); q("#vgPrem").value = V.prem.toLocaleString("vi-VN"); save(); upd(); } });
+    q("#vgSel").addEventListener("change", (e) => {
+      if (e.target.value === "new") { V.inv.push({ name: "Nhà đầu tư " + (V.inv.length + 1), lots: [] }); V.cur = V.inv.length - 1; save(); people(); lots(); upd(); setEd(true); const n = q("#vgName"); n.focus(); n.select(); return; }
+      V.cur = +e.target.value; save(); people(); lots(); upd(); });
+    q("#vgName").addEventListener("input", (e) => { curI().name = e.target.value; save(); const o = q("#vgSel").options[V.cur]; if (o) o.textContent = e.target.value || "(chưa đặt tên)"; upd(); });
+    q("#vgDel").onclick = (e) => { const bt = e.currentTarget;
+      if (Date.now() - delArm > 4000) { delArm = Date.now(); bt.textContent = `Bấm lần nữa để xoá «${curI().name}»`; setTimeout(() => { bt.textContent = "🗑 Xoá người này"; }, 4000); return; }
+      delArm = 0; V.inv.splice(V.cur, 1); if (!V.inv.length) V.inv.push({ name: "Nhà đầu tư 1", lots: [] }); V.cur = 0; save(); bt.textContent = "🗑 Xoá người này"; people(); lots(); upd(); };
     q("#vgOn").onclick = () => { V.on = !V.on; if (V.on && V.ly == null) V.ly = px(); save(); upd(); };
     q("#vgBeOn").onclick = () => { V.be = !V.be; save(); upd(); };
-    q("#vgAdd").onclick = () => { V.lots.push({ chi: 1, gia: Math.round(toV(px() || 0) / 1000) * 1000 }); save(); lots(); upd(); };
+    q("#vgAdd").onclick = () => { const L = curI().lots; L.push({ chi: 1, gia: Math.round(toV(px() || 0) / 1000) * 1000, ngay: new Date().toISOString().slice(0, 10) }); save(); lots(); upd(); };
     q("#vgGet").onclick = async (e) => { const bt = e.currentTarget; bt.textContent = "… đang lấy";
       try { const r = await (await fetch("https://open.er-api.com/v6/latest/USD")).json(); const v = r && r.rates && r.rates.VND; if (!v) throw 0;
         V.rate = Math.round(v); q("#vgRate").value = V.rate; save(); upd(); bt.textContent = "✓ " + V.rate.toLocaleString("vi-VN"); }
       catch (err) { bt.textContent = "❌ Không lấy được, nhập tay"; }
       setTimeout(() => { bt.textContent = "🌐 Lấy tỷ giá"; }, 3000); };
-    lots(); upd();
+    q("#vgExp").onclick = () => { const blob = new Blob([JSON.stringify({ tvlbVnd: 1, rate: V.rate, prem: V.prem, inv: V.inv }, null, 1)], { type: "application/json" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "danhmuc_vang_" + new Date().toISOString().slice(0, 10) + ".json"; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
+    q("#vgImp").onclick = () => q("#vgFile").click();
+    q("#vgFile").onchange = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; const rd = new FileReader();
+      rd.onload = () => { try { const o = JSON.parse(rd.result); if (!Array.isArray(o.inv) || !o.inv.length) throw 0; V.inv = o.inv; if (o.rate > 0) V.rate = o.rate; if (o.prem != null) V.prem = o.prem; V.cur = 0; save(); build(); q("#vgImpMsg").textContent = `✓ Đã nhập ${o.inv.length} nhà đầu tư`; }
+        catch (err) { q("#vgImpMsg").textContent = "❌ File không đúng định dạng"; } };
+      rd.readAsText(f); e.target.value = ""; };
+    people(); lots(); upd();
+  }
+  function people() {
+    const b = page && page.querySelector("#vgBody"); if (!b) return;
+    const s = b.querySelector("#vgSel"); s.innerHTML = V.inv.map((v, i) => `<option value="${i}">${esc(v.name || "(chưa đặt tên)")}</option>`).join("") + `<option value="new">＋ Thêm người mới…</option>`; s.value = String(V.cur);
+    b.querySelector("#vgName").value = curI().name || "";
   }
   function lots() {
     const tb = page && page.querySelector("#vgL"); if (!tb) return;
-    tb.innerHTML = (V.lots || []).map((l, i) => `<tr data-i="${i}"><td style="text-align:left">${i + 1}</td><td><input data-f="chi" value="${l.chi}" inputmode="decimal" style="width:70px"></td><td><input data-f="gia" value="${Math.round(l.gia).toLocaleString("vi-VN")}" inputmode="decimal"></td><td class="pl"></td><td><span class="x" title="Xoá dòng này">✕</span></td></tr>`).join("")
-      || `<tr><td colspan="5" style="text-align:center;color:#7d8796">Chưa có lần mua nào.</td></tr>`;
-    tb.querySelectorAll("input").forEach((inp) => inp.addEventListener("input", () => { const i = +inp.closest("tr").dataset.i; V.lots[i][inp.dataset.f] = inp.dataset.f === "chi" ? parseFloat(inp.value.replace(",", ".")) || 0 : num(inp.value); save(); upd(); }));
-    tb.querySelectorAll(".x").forEach((x) => x.onclick = () => { V.lots.splice(+x.closest("tr").dataset.i, 1); save(); lots(); upd(); });
+    const L = curI().lots;
+    tb.innerHTML = L.map((l, i) => `<tr data-i="${i}"><td style="text-align:left">Lần ${i + 1}</td><td style="text-align:left"><input type="date" data-f="ngay" value="${esc(l.ngay || "")}"></td><td><input data-f="chi" value="${String(l.chi).replace(".", ",")}" inputmode="decimal" style="width:60px!important"></td><td><input data-f="gia" value="${Math.round(l.gia || 0).toLocaleString("vi-VN")}" inputmode="decimal"></td><td class="vn"></td><td class="pl"></td><td><span class="x" title="Xoá lần mua này">✕</span></td></tr>`).join("")
+      + (L.length ? `<tr class="sum"><td style="text-align:left" colspan="2">Trung bình / Tổng</td><td class="sc"></td><td class="sa"></td><td class="sv"></td><td class="sp"></td><td></td></tr>` : `<tr><td colspan="7" style="text-align:center" class="mu">Chưa có lần mua nào — bấm “＋ Thêm lần mua”.</td></tr>`);
+    tb.querySelectorAll("input").forEach((inp) => inp.addEventListener(inp.type === "date" ? "change" : "input", () => { const l = curI().lots[+inp.closest("tr").dataset.i], f = inp.dataset.f;
+      l[f] = f === "chi" ? chiN(inp.value) : f === "gia" ? num(inp.value) : inp.value; save(); upd(); }));
+    tb.querySelectorAll('input[data-f="gia"]').forEach((inp) => inp.addEventListener("blur", () => { const v = num(inp.value); if (v) inp.value = Math.round(v).toLocaleString("vi-VN"); }));
+    tb.querySelectorAll(".x").forEach((x) => x.onclick = () => { curI().lots.splice(+x.closest("tr").dataset.i, 1); save(); lots(); upd(); });
   }
-  const plTxt = (pl, base) => `<span class="${pl >= 0 ? "up" : "dn"}">${pl >= 0 ? "+" : "−"}${vnd(Math.abs(pl))}${base ? ` (${pl >= 0 ? "+" : "−"}${Math.abs((100 * pl) / base).toFixed(2)}%)` : ""}</span>`;
   function upd() {
     if (!page || page.hidden) return;
     const T = page.querySelector("#vgT"); if (!T) return;
-    const p = px(), cur = p != null ? toV(p) : null, t = tot(), val = cur != null ? cur * t.chi : null, pl = val != null && t.chi ? val - t.von : null, be = t.avg ? toX(t.avg) : null;
+    const I = curI(), p = px(), cur = p != null ? toV(p) : null, t = sumL(I.lots), val = cur != null ? cur * t.chi : null, pl = val != null && t.chi ? val - t.von : null, be = t.avg ? toX(t.avg) : null;
+    const who = page.querySelector("#vgWho"); if (who) who.textContent = `Giá trị thực tế · ${I.name || "(chưa đặt tên)"}`;
+    const lh = page.querySelector("#vgLh"); if (lh) lh.textContent = `Các lần mua của ${I.name || "(chưa đặt tên)"}`;
     T.innerHTML = [
       ["XAUUSD (Ounce)", `<span class="yl">${usd(p)} USD</span>`],
       ["Tỷ giá USD/VNĐ", `<span class="yl">${Math.round(V.rate).toLocaleString("vi-VN")} đ</span>`],
-      ["Vàng VNĐ / Chỉ", `<span class="big up">${vnd(cur)}</span>`],
-      ["Vàng VNĐ / Lượng (10 chỉ)", vnd(cur != null ? cur * 10 : null)],
-      ["Số vàng đầu tư", `<span class="og">${t.chi ? t.chi.toLocaleString("vi-VN") + " chỉ" : "—"}</span>`],
-      ["Giá mua vào TB (VNĐ/chỉ)", `<span class="og">${vnd(t.avg)}</span>`],
+      ["Giá thế giới quy đổi / chỉ", vnd(p != null ? p * V.rate * CHI : null)],
+      ["Chênh lệch giá VN − thế giới", `<span class="${(+V.prem || 0) >= 0 ? "og" : "up"}">${(+V.prem || 0) >= 0 ? "+" : "−"}${vnd(Math.abs(+V.prem || 0))}/chỉ</span>${p != null && V.prem ? ` <span class="mu">(${(100 * (+V.prem) / (p * V.rate * CHI)).toFixed(1)}%)</span>` : V.prem ? "" : ' <span class="mu">(chưa nhập — bấm ✎ Nhập liệu)</span>'}`],
+      ["Giá vàng VN / Chỉ (hiện tại)", `<span class="big up">${vnd(cur)}</span>`],
+      ["Giá vàng VN / Lượng (10 chỉ)", vnd(cur != null ? cur * 10 : null)],
+      ["Số vàng đầu tư", `<span class="og">${t.chi ? t.chi.toLocaleString("vi-VN") + " chỉ" : "—"}</span> <span class="mu">(${I.lots.length} lần mua)</span>`],
+      ["Giá mua vào trung bình (VNĐ/chỉ)", `<span class="og">${vnd(t.avg)}</span>`],
       ["Tổng vốn", vnd(t.von || null)],
       ["Giá trị hiện tại", vnd(t.chi ? val : null)],
       ["Lợi nhuận", pl == null ? "—" : `<span class="big">${plTxt(pl, t.von)}</span>`],
-      ["Giá XAU hoà vốn", be ? `${usd(be)} USD <span class="muted">(${p != null ? (be >= p ? "cần tăng " : "đang trên ") + usd(Math.abs(be - p)) + "$" : ""})</span>` : "—"],
+      ["Giá XAU hoà vốn", be ? `${usd(be)} USD <span class="mu">(${p != null ? (be >= p ? "cần tăng " : "đang trên ") + usd(Math.abs(be - p)) + "$" : ""})</span>` : "—"],
     ].map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
-    page.querySelectorAll("#vgL tr[data-i]").forEach((tr) => { const l = V.lots[+tr.dataset.i], c = tr.querySelector(".pl"); if (!l || !c) return; c.innerHTML = cur != null && l.chi && l.gia ? plTxt((cur - l.gia) * l.chi, l.gia * l.chi) : "—"; });
+    page.querySelectorAll("#vgL tr[data-i]").forEach((tr) => { const l = I.lots[+tr.dataset.i]; if (!l) return; const ok = l.chi > 0 && l.gia > 0;
+      tr.querySelector(".vn").textContent = ok ? vnd(l.chi * l.gia) : "—"; tr.querySelector(".pl").innerHTML = ok && cur != null ? plTxt((cur - l.gia) * l.chi, l.gia * l.chi) : "—"; });
+    const sr = page.querySelector("#vgL tr.sum"); if (sr) { sr.querySelector(".sc").textContent = t.chi ? t.chi.toLocaleString("vi-VN") + " chỉ" : "—"; sr.querySelector(".sa").textContent = vnd(t.avg) + " (TB)"; sr.querySelector(".sv").textContent = vnd(t.von || null); sr.querySelector(".sp").innerHTML = pl == null ? "—" : plTxt(pl, t.von); }
+    const IV = page.querySelector("#vgI");
+    if (IV) { let ac = 0, am = 0;
+      const rows = V.inv.map((v, i) => { const s = sumL(v.lots); ac += s.chi; am += s.von; const pp = cur != null && s.chi ? cur * s.chi - s.von : null;
+        return `<tr data-k="${i}" class="${i === V.cur ? "cur" : ""}"><td style="text-align:left">${i === V.cur ? "▸ " : ""}${esc(v.name || "(chưa đặt tên)")}</td><td>${v.lots.length}</td><td>${s.chi ? s.chi.toLocaleString("vi-VN") : "—"}</td><td>${vnd(s.avg)}</td><td>${vnd(s.von || null)}</td><td>${pp == null ? "—" : plTxt(pp, s.von)}</td></tr>`; }).join("");
+      const ap = cur != null && ac ? cur * ac - am : null;
+      const k = rows + ac; if (IV.dataset.k !== k) { IV.dataset.k = k; IV.innerHTML = rows + (V.inv.length > 1 ? `<tr class="sum"><td style="text-align:left">Tổng tất cả</td><td></td><td>${ac ? ac.toLocaleString("vi-VN") : "—"}</td><td>${vnd(ac ? am / ac : null)}</td><td>${vnd(am || null)}</td><td>${ap == null ? "—" : plTxt(ap, am)}</td></tr>` : "");
+        IV.querySelectorAll("tr[data-k]").forEach((tr) => tr.onclick = () => { V.cur = +tr.dataset.k; save(); people(); lots(); upd(); }); } }
     const on = page.querySelector("#vgOn"), bo = page.querySelector("#vgBeOn");
     if (on) { on.textContent = V.on ? "📏 Thanh đo trên chart: BẬT" : "📏 Bật thanh đo trên chart"; on.classList.toggle("on", !!V.on); }
     if (bo) { bo.textContent = V.be ? "Mốc hoà vốn trên chart: BẬT" : "Mốc hoà vốn trên chart: TẮT"; bo.classList.toggle("on", !!V.be); }
     const M = page.querySelector("#vgM");
-    if (M) M.innerHTML = V.on && V.ly != null ? `Thanh đo ở <b class="yl">${usd(V.ly)} USD</b> = <b class="up">${vnd(toV(V.ly))}/chỉ</b>${t.chi ? ` · nếu giá về đây: ${plTxt((toV(V.ly) - t.avg) * t.chi, t.von)}` : ""}` : "";
+    if (M) M.innerHTML = V.on && V.ly != null ? `Thanh đo ở <b class="yl">${usd(V.ly)} USD</b> = <b class="up">${vnd(toV(V.ly))}/chỉ</b>${t.chi ? ` · nếu giá về đây, ${esc(I.name)}: ${plTxt((toV(V.ly) - t.avg) * t.chi, t.von)}` : ""}` : "";
   }
 
   // ───────── thanh đo + mốc hoà vốn trên chart ─────────
