@@ -983,7 +983,7 @@ html.tvlb-wide .right.fly{visibility:visible;opacity:1;pointer-events:auto}
   apply();
 })();
 
-/* ═══════════════ va_143 · CÔNG CỤ VẼ KIỂU TRADINGVIEW (ghi 26/11/2026; va_143b: crosshair chạy theo chuột khi kéo) ═══════════════
+/* ═══════════════ va_143 · CÔNG CỤ VẼ KIỂU TRADINGVIEW (ghi 26/11/2026; va_143b: crosshair chạy theo chuột khi kéo; va_143c: thanh tuỳ chỉnh nổi khi chọn hình, hộp có chấm giữa cạnh) ═══════════════
    Thanh công cụ ngay sau nút ⤢ trên hàng khung giờ:
    ↖ chọn/sửa · ― đường ngang · │ đường dọc · ╱ đường xu hướng · ➚ mũi tên · ▭ hộp · 〰 đường dẫn (nhiều điểm)
    · ⇕ đo khoảng cách giá · L / S hộp lệnh Long / Short (Entry · SL · TP · R:R) · 🧲 hút vào giá OHLC · 🎨 đổi màu · 🗑 xoá.
@@ -1054,7 +1054,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     document.head.appendChild(css);
     // ───────── thanh công cụ ─────────
     const bar = document.createElement("div"); bar.className = "dtools";
-    const order = ["sel", "|", "hline", "vline", "trend", "arrow", "rect", "path", "|", "range", "long", "short", "|", "mag", "col", "del"];
+    const order = ["sel", "|", "hline", "vline", "trend", "arrow", "rect", "path", "|", "range", "long", "short", "|", "mag", "del"];
     bar.innerHTML = order.map((k) => k === "|" ? '<span class="dsep"></span>' : `<button type="button" data-dt="${k}" title="${TIP[k]}"><svg viewBox="0 0 20 20">${ICON[k]}</svg></button>`).join("");
     const wt = q("#wBtn").parentElement; wt.appendChild(bar);
     bar.addEventListener("click", (e) => {
@@ -1126,7 +1126,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       cx.fillStyle = bg; cx.beginPath(); cx.roundRect ? cx.roundRect(x0, y0, w, h, 3) : cx.rect(x0, y0, w, h); cx.fill();
       cx.fillStyle = fg || "#fff"; cx.textAlign = "left"; cx.textBaseline = "middle"; lines.forEach((s, i) => cx.fillText(s, x0 + 5, y0 + 9 + i * 15));
     }
-    const dot = (x, y, col) => { cx.fillStyle = "#0b0e12"; cx.strokeStyle = col; cx.lineWidth = 1.6; cx.beginPath(); cx.arc(x, y, 4.5, 0, 7); cx.fill(); cx.stroke(); };
+    const dot = (x, y, col) => { cx.setLineDash([]); cx.lineWidth = 1.6; cx.fillStyle = "#0b0e12"; cx.strokeStyle = col; cx.lineWidth = 1.6; cx.beginPath(); cx.arc(x, y, 4.5, 0, 7); cx.fill(); cx.stroke(); };
     const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
     // hộp lệnh: pts[0] = {t, p: giá vào}, d.t2 = thời điểm cạnh phải, d.sl, d.tp
     function posGeom(d) { const x0 = tx(d.pts[0].t), x1 = tx(d.t2), ye = py(d.pts[0].p), ys = py(d.sl), yt = py(d.tp); return { x0, x1, ye, ys, yt }; }
@@ -1134,18 +1134,19 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     // ───────── vẽ ─────────
     function shape(d, a, act) {
       const col = d.col || COLS[0], pts = d.pts.map((p) => ({ x: tx(p.t), y: py(p.p) })), ok = pts.every((p) => p.x != null && p.y != null);
-      cx.strokeStyle = col; cx.fillStyle = col; cx.lineWidth = act ? 2 : 1.5; cx.setLineDash([]);
+      cx.strokeStyle = col; cx.fillStyle = col; const lw = d.w || 1.5; cx.lineWidth = act ? lw + 0.5 : lw; cx.setLineDash(d.dash === "dash" ? [7, 4] : d.dash === "dot" ? [2, 3] : []);
       const handles = [];
       if (d.type === "hline") { const y = py(d.pts[0].p); if (y == null) return; cx.beginPath(); cx.moveTo(0, y); cx.lineTo(a.w, y); cx.stroke(); label(a.w - 2, y, f2(d.pts[0].p), col, "#0b0e12", "right"); handles.push([a.w / 2, y]); }
       else if (d.type === "vline") { const x = tx(d.pts[0].t); if (x == null) return; cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, a.h); cx.stroke(); label(x, a.h - 10, clk(d.pts[0].t), col, "#0b0e12", "center"); handles.push([x, a.h / 2]); }
       else if ((d.type === "trend" || d.type === "arrow" || d.type === "path") && ok && pts.length) {
         cx.beginPath(); pts.forEach((p, i) => (i ? cx.lineTo(p.x, p.y) : cx.moveTo(p.x, p.y))); if (d === draft && lastPos && d.type === "path") cx.lineTo(lastPos.x, lastPos.y); cx.stroke();
+        if (d.type === "trend" && d.ext && pts.length === 2 && pts[1].x !== pts[0].x) { const [A, B] = pts, k = (B.y - A.y) / (B.x - A.x), xe = B.x > A.x ? a.w : 0; cx.beginPath(); cx.moveTo(B.x, B.y); cx.lineTo(xe, B.y + k * (xe - B.x)); cx.stroke(); }
         if (d.type === "arrow" && pts.length > 1) { const A = pts[pts.length - 2], B = pts[pts.length - 1], an = Math.atan2(B.y - A.y, B.x - A.x), L = 12;
           cx.beginPath(); cx.moveTo(B.x, B.y); cx.lineTo(B.x - L * Math.cos(an - 0.45), B.y - L * Math.sin(an - 0.45)); cx.lineTo(B.x - L * Math.cos(an + 0.45), B.y - L * Math.sin(an + 0.45)); cx.closePath(); cx.fill(); }
         pts.forEach((p) => handles.push([p.x, p.y])); }
       else if ((d.type === "rect" || d.type === "range") && ok && pts.length === 2) {
         const [A, B] = pts, x0 = Math.min(A.x, B.x), y0 = Math.min(A.y, B.y), w = Math.abs(B.x - A.x), h = Math.abs(B.y - A.y);
-        if (d.type === "rect") { cx.fillStyle = rgba(col, 0.13); cx.fillRect(x0, y0, w, h); cx.strokeRect(x0, y0, w, h); handles.push([A.x, A.y], [B.x, B.y], [A.x, B.y], [B.x, A.y]); }
+        if (d.type === "rect") { cx.fillStyle = rgba(d.fill || col, d.fa ?? 0.13); cx.fillRect(x0, y0, w, h); cx.strokeRect(x0, y0, w, h); handles.push([A.x, A.y], [B.x, B.y], [A.x, B.y], [B.x, A.y], [x0 + w / 2, y0], [x0 + w / 2, y0 + h], [x0, y0 + h / 2], [x0 + w, y0 + h / 2]); }
         else { const up = d.pts[1].p >= d.pts[0].p, c2 = up ? "#26a69a" : "#ef5350", dp = d.pts[1].p - d.pts[0].p, pc = (100 * dp) / d.pts[0].p, dt = d.pts[1].t - d.pts[0].t, nb = Math.round(t2l(d.pts[1].t) - t2l(d.pts[0].t));
           cx.fillStyle = rgba(c2, 0.16); cx.fillRect(x0, y0, w, h); cx.strokeStyle = c2; cx.lineWidth = 1; cx.strokeRect(x0, y0, w, h);
           const mx = (A.x + B.x) / 2; cx.lineWidth = 1.5; cx.beginPath(); cx.moveTo(mx, A.y); cx.lineTo(mx, B.y); cx.stroke();
@@ -1165,6 +1166,12 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
         if (act || hover === d.id) label(mx, g.ye + (L ? 11 : -11), `${L ? "LONG" : "SHORT"} vào ${f2(e)} · R:R ${rr.toFixed(2)}`, "#37414f", "#fff", "center");
         else label(x0 + 2, g.ye, `R:R ${rr.toFixed(2)}`, "rgba(55,65,79,.9)", "#fff", "left");
         handles.push([x0, g.ye], [x0 + w, g.ye], [mx, g.yt], [mx, g.ys]); }
+      if (d.text) { cx.setLineDash([]); cx.font = `600 ${d.fs || 12}px 'IBM Plex Sans', sans-serif`; cx.fillStyle = col; cx.textBaseline = "bottom"; let tx_ = null, ty_ = null, al = "left";
+        if (d.type === "hline") { const y = py(d.pts[0].p); if (y != null) { tx_ = 8; ty_ = y - 3; } }
+        else if (d.type === "vline") { const x = tx(d.pts[0].t); if (x != null) { tx_ = x + 4; ty_ = 18; } }
+        else if (ok && pts.length) { if (d.type === "rect" || d.type === "range") { tx_ = Math.min(pts[0].x, pts[1].x) + 4; ty_ = Math.min(pts[0].y, pts[1].y) + 16; }
+          else if (pts.length >= 2) { const A = pts[0], B = pts[pts.length - 1]; tx_ = (A.x + B.x) / 2; ty_ = (A.y + B.y) / 2 - 5; al = "center"; } else { tx_ = pts[0].x + 4; ty_ = pts[0].y - 4; } }
+        if (tx_ != null) { cx.textAlign = al; cx.fillText(d.text, tx_, ty_); } }
       if (act) handles.forEach(([x, y]) => dot(x, y, d.type === "long" || d.type === "short" ? "#cfd6df" : col));
     }
     function draw() {
@@ -1176,6 +1183,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
         if (draft) shape(draft, a, true);
         if (temp) shape(temp, a, false);
         cx.restore();
+        placeEB();
       } catch (e) { }
     }
 
@@ -1192,6 +1200,9 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
           if (x >= x0 && x <= x1 && Math.abs(y - g.yt) <= 5) return { d, h: 2 }; if (x >= x0 && x <= x1 && Math.abs(y - g.ys) <= 5) return { d, h: 3 };
           if (Math.hypot(x - mx, y - g.yt) <= R) return { d, h: 2 }; if (Math.hypot(x - mx, y - g.ys) <= R) return { d, h: 3 };
           if (x >= x0 && x <= x1 && y >= Math.min(g.yt, g.ys) && y <= Math.max(g.yt, g.ys)) return { d, h: -1 }; continue; }
+        if (d.id === sel && d.type === "rect") { const [A, B] = pts, iL = A.x <= B.x ? 0 : 1, iT = A.y <= B.y ? 0 : 1, x0 = Math.min(A.x, B.x), x1 = Math.max(A.x, B.x), y0 = Math.min(A.y, B.y), y1 = Math.max(A.y, B.y), xm = (x0 + x1) / 2, ym = (y0 + y1) / 2;
+          const E = [[xm, y0, iT, "p"], [xm, y1, 1 - iT, "p"], [x0, ym, iL, "t"], [x1, ym, 1 - iL, "t"]];
+          for (let k2 = 0; k2 < 4; k2++) if (Math.hypot(x - E[k2][0], y - E[k2][1]) <= R) return { d, h: 10 + k2, e: { i: E[k2][2], f: E[k2][3] } }; }
         if (d.id === sel || d.type === "range") { const hs = d.type === "rect" ? pts.concat([{ x: pts[0].x, y: pts[1].y }, { x: pts[1].x, y: pts[0].y }]) : pts;
           const i = hs.findIndex((p) => Math.hypot(x - p.x, y - p.y) <= R); if (i >= 0) return { d, h: i }; }
         if (d.type === "rect" || d.type === "range") { const [A, B] = pts, x0 = Math.min(A.x, B.x), x1 = Math.max(A.x, B.x), y0 = Math.min(A.y, B.y), y1 = Math.max(A.y, B.y);
@@ -1228,8 +1239,8 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       if (temp) { temp = null; kick(); }
       const h = hit(p.x, p.y);
       if (!h) { if (sel) { sel = null; kick(); } return; }
-      stop(e); block = true; sel = h.d.id; const st = snap(p.x, p.y);
-      drag = { d: h.d, h: h.h, x: p.x, y: p.y, t0: st ? st.t : null, p0: st ? st.p : null, orig: JSON.parse(JSON.stringify(h.d)) }; kick();
+      stop(e); block = true; sel = h.d.id; if (h.d.lock) { kick(); return; } const st = snap(p.x, p.y);
+      drag = { d: h.d, h: h.h, e: h.e, x: p.x, y: p.y, t0: st ? st.t : null, p0: st ? st.p : null, orig: JSON.parse(JSON.stringify(h.d)) }; kick();
     }
     function move(e) {
       const p = pos(e); lastPos = p;
@@ -1242,6 +1253,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
           else if (drag.h === 2) { const L = d.type === "long"; d.tp = L ? Math.max(pt.p, o.pts[0].p + 0.01) : Math.min(pt.p, o.pts[0].p - 0.01); }
           else if (drag.h === 3) { const L = d.type === "long"; d.sl = L ? Math.min(pt.p, o.pts[0].p - 0.01) : Math.max(pt.p, o.pts[0].p + 0.01); } }
         else if (drag.h === -1) d.pts = o.pts.map((q_) => ({ t: d.type === "hline" ? q_.t : q_.t + dT, p: d.type === "vline" ? q_.p : q_.p + dP }));
+        else if (d.type === "rect" && drag.h >= 10) d.pts[drag.e.i][drag.e.f] = pt[drag.e.f];
         else if (d.type === "rect" && drag.h >= 2) { if (drag.h === 2) { d.pts[0].t = pt.t; d.pts[1].p = pt.p; } else { d.pts[1].t = pt.t; d.pts[0].p = pt.p; } }
         else d.pts[drag.h] = pt;
         kick(); return; }
@@ -1255,6 +1267,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       block = false; kick();
     }
     ["pointerdown", "mousedown", "touchstart"].forEach((ev) => wrap.addEventListener(ev, (e) => {
+      if (e.target && e.target.closest && e.target.closest(".dtEdit")) return;   // bấm trên thanh tuỳ chỉnh: không đụng chart / hình
       if (ev === "pointerdown" && e.pointerType === "touch") return;   // trên điện thoại dùng touchstart
       if (ev === "mousedown") { if (block || tool) stop(e); return; }   // pointerdown đã xử lý; chỉ chặn chart
       down(e); }, { capture: true, passive: false }));
@@ -1275,6 +1288,89 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       if ((e.key === "Delete" || e.key === "Backspace") && sel) { e.preventDefault(); delSel(false); return; }
       if (e.altKey && !e.ctrlKey) { const m = { h: "hline", v: "vline", t: "trend", r: "rect", m: "range" }[e.key.toLowerCase()]; if (m) { e.preventDefault(); setTool(m); } }
     });
+    // ───────── va_143c: THANH TUỲ CHỈNH NỔI (giống TradingView) khi chọn một hình ─────────
+    // màu nét · màu nền + độ đậm (hộp) · chữ · cỡ chữ · độ dày · kiểu nét · kéo dài (đường xu hướng) · khoá · nhân bản · xoá
+    const PAL = ["#4fc3f7", "#2962ff", "#26a69a", "#00e676", "#ffd54f", "#ff9800", "#ef5350", "#ff4081", "#ce93d8", "#9e9e9e", "#ffffff", "#000000"];
+    const ecss = document.createElement("style");
+    ecss.textContent = `.dtEdit{position:absolute;z-index:20;display:none;align-items:center;gap:1px;padding:3px 4px;background:#1c222b;border:1px solid #2f3a47;border-radius:7px;box-shadow:0 6px 18px rgba(0,0,0,.55);font:600 12px 'IBM Plex Sans',sans-serif;color:#cfd6df;user-select:none}
+.dtEdit .eb{position:relative;min-width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;gap:3px;padding:0 5px;border-radius:5px;cursor:pointer;color:#cfd6df}
+.dtEdit .eb:hover,.dtEdit .eb.on{background:#2a3340;color:#fff}.dtEdit .eb svg{width:18px;height:18px}
+.dtEdit .cb{position:absolute;left:6px;right:6px;bottom:3px;height:3px;border-radius:2px}
+.dtEdit .es{width:1px;height:18px;background:#2f3a47;margin:0 3px}
+.dtEdit .pop{position:absolute;top:calc(100% + 6px);left:0;background:#1c222b;border:1px solid #2f3a47;border-radius:7px;padding:7px;box-shadow:0 6px 18px rgba(0,0,0,.55);z-index:21;cursor:default}
+.dtEdit .sw{width:18px;height:18px;border-radius:4px;cursor:pointer;border:1px solid #3a4552}.dtEdit .sw.on{outline:2px solid #e0a83a;outline-offset:1px}
+.dtEdit .grid{display:grid;grid-template-columns:repeat(6,18px);gap:5px}
+.dtEdit .opt{padding:4px 8px;border-radius:4px;cursor:pointer;white-space:nowrap}.dtEdit .opt:hover,.dtEdit .opt.on{background:#2a3340;color:#fff}
+.dtEdit input{width:190px;background:#0f141a;color:#fff;border:1px solid #3a4552;border-radius:4px;padding:4px 6px;font:500 12px 'IBM Plex Sans',sans-serif}`;
+    document.head.appendChild(ecss);
+    const eb = document.createElement("div"); eb.className = "dtEdit"; wrap.appendChild(eb);
+    ["pointerdown", "mousedown", "touchstart", "wheel", "dblclick", "contextmenu"].forEach((ev) => eb.addEventListener(ev, (e) => e.stopPropagation()));
+    let ebKey = "", pop = null;
+    const SV = { lc: '<path d="M4 16l1-4L13 4l3 3-8 8z" fill="none" stroke="currentColor" stroke-width="1.5"/>', fc: '<path d="M4 10l6-6 6 6-6 6z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M16 13c1 1.5 1.5 2.3 1.5 3a1.5 1.5 0 01-3 0c0-.7.5-1.5 1.5-3z" fill="currentColor"/>',
+      tx: '<path d="M4 4h12M10 4v13M7 17h6" stroke="currentColor" stroke-width="1.7" fill="none"/>', ext: '<path d="M3 15L13 6M13 6h4" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="3" cy="15" r="1.8" fill="currentColor"/><path d="M15 4l2 2-2 2" stroke="currentColor" stroke-width="1.4" fill="none"/>',
+      lk: '<rect x="5" y="9" width="10" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 9V6.5a3 3 0 016 0V9" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+      ul: '<rect x="5" y="9" width="10" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 9V6.5a3 3 0 015.8-1" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+      cp: '<rect x="7" y="7" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 13V5a1 1 0 011-1h8" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+      dl: '<path d="M5 6h10M8 6V4h4v2M6 6l1 11h6l1-11" stroke="currentColor" stroke-width="1.5" fill="none"/>' };
+    const svg = (k) => `<svg viewBox="0 0 20 20">${SV[k]}</svg>`;
+    const curD = () => (sel ? D.find((x) => x.id === sel) : null);
+    function ebRender() {
+      const d = curD(); if (!d) { eb.style.display = "none"; ebKey = ""; return; }
+      const k = JSON.stringify([d.id, d.col, d.fill, d.fa, d.w, d.dash, d.text, d.fs, d.lock, d.ext, pop]); if (k === ebKey) return; ebKey = k;
+      const isPos = d.type === "long" || d.type === "short", col = d.col || COLS[0], dashTxt = { solid: "───", dash: "─ ─", dot: "┄┄┄" }[d.dash || "solid"];
+      let h = "";
+      if (!isPos) h += `<span class="eb${pop === "lc" ? " on" : ""}" data-e="lc" title="Màu nét">${svg("lc")}<span class="cb" style="background:${col}"></span></span>`;
+      if (d.type === "rect") h += `<span class="eb${pop === "fc" ? " on" : ""}" data-e="fc" title="Màu nền và độ đậm">${svg("fc")}<span class="cb" style="background:${d.fill || col};opacity:${Math.max(0.35, d.fa ?? 0.13)}"></span></span>`;
+      h += `<span class="eb${pop === "tx" ? " on" : ""}" data-e="tx" title="Thêm / sửa chữ">${svg("tx")}</span>`;
+      if (!isPos && d.type !== "range") h += `<span class="es"></span><span class="eb${pop === "lw" ? " on" : ""}" data-e="lw" title="Độ dày nét">${Math.round(d.w || 1.5)}px</span><span class="eb${pop === "ls" ? " on" : ""}" data-e="ls" title="Kiểu nét">${dashTxt}</span>`;
+      if (d.type === "trend") h += `<span class="eb${d.ext ? " on" : ""}" data-e="ext" title="Kéo dài đường sang phải">${svg("ext")}</span>`;
+      h += `<span class="es"></span><span class="eb${d.lock ? " on" : ""}" data-e="lk" title="${d.lock ? "Đang KHOÁ (không kéo được) · bấm để mở khoá" : "Khoá hình (không kéo nhầm)"}">${svg(d.lock ? "lk" : "ul")}</span>`
+        + `<span class="eb" data-e="cp" title="Nhân bản hình">${svg("cp")}</span><span class="eb" data-e="dl" title="Xoá hình (Delete)">${svg("dl")}</span>`;
+      if (pop === "lc" || pop === "fc") { const cur = pop === "lc" ? col : d.fill || col;
+        h += `<div class="pop" data-pop="1"><div class="grid">${PAL.map((c) => `<span class="sw${c === cur ? " on" : ""}" data-c="${c}" style="background:${c}"></span>`).join("")}</div>`
+          + (pop === "fc" ? `<div style="margin-top:7px;display:flex;gap:3px">${[0.08, 0.13, 0.25, 0.4, 0.6].map((a) => `<span class="opt${Math.abs((d.fa ?? 0.13) - a) < 0.01 ? " on" : ""}" data-a="${a}">${Math.round(a * 100)}%</span>`).join("")}</div>` : "") + "</div>"; }
+      if (pop === "lw") h += `<div class="pop" data-pop="1">${[1, 1.5, 2, 3, 4].map((w) => `<div class="opt${(d.w || 1.5) === w ? " on" : ""}" data-w="${w}"><span style="display:inline-block;width:40px;height:${w}px;background:#cfd6df;vertical-align:middle;margin-right:8px"></span>${w}px</div>`).join("")}</div>`;
+      if (pop === "ls") h += `<div class="pop" data-pop="1">${[["solid", "─── Liền"], ["dash", "─ ─ Gạch"], ["dot", "┄┄┄ Chấm"]].map(([v, t]) => `<div class="opt${(d.dash || "solid") === v ? " on" : ""}" data-ls="${v}">${t}</div>`).join("")}</div>`;
+      if (pop === "tx") h += `<div class="pop" data-pop="1"><input id="dtTxt" placeholder="Gõ chữ rồi Enter (để trống = xoá chữ)" value="${(d.text || "").replace(/"/g, "&quot;")}"><div style="margin-top:6px;display:flex;gap:3px">${[10, 12, 14, 18, 24].map((f) => `<span class="opt${(d.fs || 12) === f ? " on" : ""}" data-fs="${f}">${f}</span>`).join("")}</div></div>`;
+      eb.innerHTML = h; eb.style.display = "flex";
+      const inp = eb.querySelector("#dtTxt"); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
+        const ok_ = () => { d.text = inp.value.trim() || undefined; pop = null; save(); ebKey = ""; ebRender(); kick(); };
+        inp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") ok_(); if (e.key === "Escape") { pop = null; ebKey = ""; ebRender(); } });
+        inp.addEventListener("input", () => { d.text = inp.value || undefined; kick(); }); }
+      placeEB();
+    }
+    eb.addEventListener("click", (e) => {
+      const d = curD(); if (!d) return; const t = e.target.closest("[data-e],[data-c],[data-a],[data-w],[data-ls],[data-fs]"); if (!t) return; const ds = t.dataset;
+      if (ds.c) { if (pop === "fc") d.fill = ds.c; else d.col = ds.c; pop = null; }
+      else if (ds.a) d.fa = +ds.a;
+      else if (ds.w) { d.w = +ds.w; pop = null; }
+      else if (ds.ls) { d.dash = ds.ls === "solid" ? undefined : ds.ls; pop = null; }
+      else if (ds.fs) d.fs = +ds.fs;
+      else if (ds.e === "ext") d.ext = !d.ext || undefined;
+      else if (ds.e === "lk") d.lock = !d.lock || undefined;
+      else if (ds.e === "cp") { const c2 = JSON.parse(JSON.stringify(d)); c2.id = nid(); const dt = 8 * tfs(); c2.pts = c2.pts.map((q_) => ({ t: q_.t + dt, p: q_.p })); if (c2.t2) c2.t2 += dt; delete c2.lock; D.push(c2); sel = c2.id; pop = null; }
+      else if (ds.e === "dl") { pop = null; delSel(false); ebRender(); return; }
+      else if (ds.e) pop = pop === ds.e ? null : ds.e;
+      save(); ebKey = ""; ebRender(); kick();
+    });
+    function shapeBox(d) {   // khung bao của hình (px) để đặt thanh tuỳ chỉnh
+      const a = area(); let xs = [], ys = [];
+      if (d.type === "hline") { const y = py(d.pts[0].p); xs = [a.w / 2]; ys = [y]; }
+      else if (d.type === "vline") { xs = [tx(d.pts[0].t)]; ys = [a.h / 2]; }
+      else if (d.type === "long" || d.type === "short") { const g = posGeom(d); xs = [g.x0, g.x1]; ys = [g.ys, g.yt, g.ye]; }
+      else d.pts.forEach((q_) => { xs.push(tx(q_.t)); ys.push(py(q_.p)); });
+      if (xs.concat(ys).some((v) => v == null || !isFinite(v))) return null;
+      return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys), a };
+    }
+    let ebSel = null;
+    function placeEB() {
+      const d = curD(); if ((d && d.id) !== ebSel) { ebSel = d && d.id; pop = null; ebKey = ""; if (d) ebRender(); } if (!d || tool || draft) { if (eb.style.display !== "none") eb.style.display = "none"; ebKey = d && !tool && !draft ? ebKey : ""; if (!d) pop = null; return; }
+      if (eb.style.display === "none" || ebKey === "") { ebRender(); if (eb.style.display === "none") return; }
+      const b = shapeBox(d); if (!b) { eb.style.display = "none"; ebKey = ""; return; }
+      const W = eb.offsetWidth || 300, H = eb.offsetHeight || 34, cxm = (b.x0 + b.x1) / 2;
+      let top = b.y0 - H - 16; if (top < 4) top = Math.min(b.y1 + 16, b.a.h - H - 4);
+      eb.style.left = Math.max(4, Math.min(cxm - W / 2, b.a.w - W - 4)) + "px"; eb.style.top = Math.max(4, top) + "px";
+    }
     sync(); kick();
     window.tvlbDraw = { list: () => D, clear: () => { D = []; save(); kick(); } };
   }
