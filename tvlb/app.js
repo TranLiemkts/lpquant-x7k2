@@ -78,6 +78,8 @@ const prim = () => opt(S.primary) || opt(S.primary === "GC" ? "GLD" : "GC");
 // Bước 3: ô chọn kỳ hạn chỉ đổi phần XEM (Strike Profile + mốc vẽ trên chart); tín hiệu & Agent luôn dùng "Mọi kỳ hạn"
 const optV = (src) => { const o = opt(src); return !o || S.tenor === "all" ? o : (o.by_tenor?.[S.tenor] || o); };
 const primV = () => optV(S.primary) || optV(S.primary === "GC" ? "GLD" : "GC");
+// 9b-7b: máy chủ đang chạy Chuẩn quy đổi 4 bước (có STATE.combo) → mốc chart của server = strike − basis (GC) / strike × k (GLD); trình duyệt KHÔNG tự nhân tỉ lệ nữa. Khi chạy lại nến cũ (S.lvOv) giữ cách cũ.
+const c4bOn = () => !S.lvOv && !!(S.state && S.state.combo);
 const TENOR_TXT = { all: "Mọi kỳ hạn", short: "0DTE + Tuần (≤ 7 ngày)", month: "> 7 ngày (Tháng)" };
 function lastPrice() { const c = S.candles; return c.length ? c[c.length - 1].close : null; }
 
@@ -477,13 +479,13 @@ function drawOverlayBase() {
     const c = P.chart;
     const yF = c.gamma_flip != null ? Y(c.gamma_flip) : null;
     if (yF != null) {
-      const t = window.TVLB_COMPACT ? `Γ ${Math.round(c.gamma_flip)}` : `Γ FLIP ${fmt(c.gamma_flip)}`;
+      const t = window.TVLB_COMPACT ? `Γ ${Math.round(c.gamma_flip)}` : `Γ FLIP${c4bOn() ? " gộp" : ""} ${fmt(c.gamma_flip)}`;
       if (OLD) { hline(ctx, yF, 0, plotW, OLD_COL.flip, 1.8, [], 0.95); oldItems.push({ y: yF, txt: t, color: OLD_COL.flip, strong: true, pri: 1, meta: { k: "flip" } }); }
       else { hline(ctx, yF, 0, plotW, C.flip, 1.2, [6, 4], 0.9); tagBox(ctx, plotW * 0.5, yF, t, C.flip, "left", true, { k: "flip" }); }
     }
     const yM = c.magnet != null ? Y(c.magnet) : null;
     if (yM != null) {
-      const t = window.TVLB_COMPACT ? `◎ ${Math.round(c.magnet)}` : `◎ MAGNET ${fmt(c.magnet)}`;
+      const t = window.TVLB_COMPACT ? `◎ ${Math.round(c.magnet)}` : `◎ MAGNET${c4bOn() && (P.magnet_gop || c.magnet_src !== undefined || P.magnet_src !== undefined) ? " gộp" : ""} ${fmt(c.magnet)}`;
       if (OLD) { hline(ctx, yM, 0, plotW, OLD_COL.mag, 1.6, [], 0.9); oldItems.push({ y: yM, txt: t, color: OLD_COL.mag, strong: true, pri: 2, meta: { k: "magnet" } }); }   // kiểu cũ có thêm vạch Magnet (kiểu TVLB chỉ có nhãn)
       else tagBox(ctx, plotW * 0.5, yM, t, C.mag, "left", true, { k: "magnet" });
     }
@@ -916,7 +918,7 @@ const ofFlipTxt = () => (OF_FLIP_OPTS.find((o) => o[0] === ofFlipMode()) || ["",
 const OF_FILTERS = [
   ["x_noflip", "BỎ HẲN FLIP: không dùng Flip để chọn 9A/9B (và 9C/9D) và không chặn theo Flip; tường gần luôn xét kiểu 9A/9C (bật lại: tường trên giá = SELL, dưới giá = BUY). TRÁI với bản nháp B10b (Gamma âm = 9B); chỉ để THỬ, chưa kiểm định"],
   ["x_flipnear", "Giá trong VÙNG ĐỆM quanh Flip (%, ATR hoặc $ ở dòng dưới) thì ĐỨNG NGOÀI: vùng chuyển Gamma (anh Nam 25/11; độ rộng vùng anh chưa cho số → tham số, chưa kiểm định)"],
-  ["x_flipfar", "Ngày Flip xa (cách giá > 2,5%) thì ĐỨNG NGOÀI (theo B6; chờ xác nhận câu 4)"],
+  ["x_flipfar", "ĐÃ BỎ (9b-7b, C7): không còn ngưỡng Flip xa 2,5%"],
   ["x_near", "Hiện thêm TƯỜNG GẦN theo B10b: top 3 OI trong ±2,5% quanh giá mở ngày (anh Nam chốt ở biên bản niêm phong; xấp xỉ, chưa kiểm định)"],
   ["x_regime", "Bẫy chỉ khi Gamma DƯƠNG, Thủng/Squeeze chỉ khi Gamma ÂM (anh Nam B1, 23/11: Positive đánh đảo chiều, Negative đánh theo hướng phá)"],
 ];
@@ -971,11 +973,11 @@ function ofModel() {
   const i = c.length - 2, k = c[i], px = c[c.length - 1].close, tol = sc.touch_tol, buf = sc.sl_buffer;
   const cw = L.call_wall, pw = L.put_wall, flip = L.gamma_flip, negG = flip != null && px < flip, blockG = ofOn("gamma") && negG;
   const tNow = c[c.length - 1].time, fbL = ofFlipBuf(flip, tNow);   // B9b5d: vùng đệm Flip tại nến hiện tại
-  const rgp = regimePct(px, flip), noFlip = ofX("x_noflip"), flipFar = !noFlip && ofX("x_flipfar") && flip != null && rgp.far, flipNear = !noFlip && ofX("x_flipnear") && flip != null && Math.abs(px - flip) <= fbL.w, flipOut = flipFar || flipNear, regX = ofX("x_regime") && flip != null;   // TVLB B9b1 · B9b5d: «gần» = trong vùng đệm %/ATR/$ thay cho 20$ cố định
+  const rgp = regimePct(px, flip), noFlip = ofX("x_noflip"), flipFar = false, flipNear = !noFlip && ofX("x_flipnear") && flip != null && Math.abs(px - flip) <= fbL.w, flipOut = flipFar || flipNear, regX = ofX("x_regime") && flip != null;   // TVLB B9b1 · B9b5d: «gần» = trong vùng đệm %/ATR/$ thay cho 20$ cố định
   const nwBlk = (brk) => flipNear && ofFbOn(brk ? "B" : "A");   // B9b5d: 9A/9B chỉ đứng ngoài khi công tắc của ĐÚNG loại lệnh đang bật
   const tfOk = (TF_SEC[S.tf] || 0) >= 300, sessOn = sc.session_only && ofOn("session"), inS = inUsSession(c[c.length - 1].time);
   const since = i - S.lastSigIdx, cdOk = since > sc.cooldown_bars || since === 0, gatesOk = tfOk && (!sessOn || inS) && !flipOut, gatesOkNw = tfOk && (!sessOn || inS);   // B9b5d: 9A/9B có cổng Flip riêng theo loại lệnh (trong kế hoạch)
-  const gates = [[tfOk, "Khung nến ≥ M5 (đang " + S.tf + ")"], [!sessOn || inS, sessOn ? (inS ? "Trong phiên Mỹ 19:00-23:00 VN" : "Ngoài phiên Mỹ 19:00-23:00 VN") : "Không lọc phiên"], [!flipOut, flipNear ? `Flip chỉ cách giá ${Math.abs(px - flip).toFixed(1).replace(".", ",")}$ (≤ vùng đệm ${fbL.w.toFixed(1).replace(".", ",")}$ = ${fbL.txt}): vùng chuyển Gamma, TL1·TL2·HG đứng ngoài; 9A ${ofFbOn("A") ? "đứng ngoài" : "KHÔNG chặn"} · 9B ${ofFbOn("B") ? "đứng ngoài" : "KHÔNG chặn"} (công tắc theo loại lệnh)` : flipFar ? `Flip cách giá ${rgp.pctTxt}: ngày "không rõ", đứng ngoài («Cách dùng Flip» đang lọc Flip xa, B6)` : "Không lọc theo khoảng cách Flip"], [cdOk, cdOk ? "Hết nghỉ sau tín hiệu trước" : "Đang nghỉ " + (sc.cooldown_bars - since + 1) + " nến sau tín hiệu trước"]];
+  const gates = [[tfOk, "Khung nến ≥ M5 (đang " + S.tf + ")"], [!sessOn || inS, sessOn ? (inS ? "Trong phiên Mỹ 19:00-23:00 VN" : "Ngoài phiên Mỹ 19:00-23:00 VN") : "Không lọc phiên"], [!flipOut, flipNear ? `Flip chỉ cách giá ${Math.abs(px - flip).toFixed(1).replace(".", ",")}$ (≤ vùng đệm ${fbL.w.toFixed(1).replace(".", ",")}$ = ${fbL.txt}): vùng chuyển Gamma, TL1·TL2·HG đứng ngoài; 9A ${ofFbOn("A") ? "đứng ngoài" : "KHÔNG chặn"} · 9B ${ofFbOn("B") ? "đứng ngoài" : "KHÔNG chặn"} (công tắc theo loại lệnh)` : "Không lọc theo khoảng cách Flip"], [cdOk, cdOk ? "Hết nghỉ sau tín hiệu trước" : "Đang nghỉ " + (sc.cooldown_bars - since + 1) + " nến sau tín hiệu trước"]];
   const plans = [];
   const add = (o) => {
     o.past = (o.id === "bd" && px < o.lo) || (o.id === "sq" && px > o.hi); // giá đã ở phía bên kia tường: không còn "chờ tới vùng"
@@ -1003,7 +1005,7 @@ function ofModel() {
     const o = ofX("x_near") ? prim() : null;
     if (o) {
       const day = vnDate(c[c.length - 1].time), f0 = c.find((x) => vnDate(x.time) === day), ref = f0 ? f0.open : px, unclear = !noFlip && flip == null;   // B9b5d: chỉ còn «không rõ» khi CHƯA có Flip; Flip gần chặn theo loại lệnh (nwBlk), Flip xa không chặn
-      const r0 = ofRatio0(o), frz = ofOn("wfreeze") && o.ratio > 0 && r0 > 0, cv = (s) => (frz && s.strike != null ? s.strike * r0 : s.chart);
+      const r0 = ofRatio0(o), frz = !c4bOn() && ofOn("wfreeze") && o.ratio > 0 && r0 > 0, cv = (s) => (frz && s.strike != null ? s.strike * r0 : s.chart);
       S.wFrz = frz ? { r0, now: o.ratio_raw || o.ratio } : null;
       const top3 = o.strikes.filter((s) => Math.abs(cv(s) / ref - 1) <= 0.025).sort((a, b) => (b.call_oi + b.put_oi) - (a.call_oi + a.put_oi)).slice(0, 3);
       try {   // 9b-5 (số 223): danh sách tường 9A/9B của ngày → ofWallsPost ghi lên máy chủ (data/walls9a/<ngày>.jsonl)
@@ -1024,7 +1026,7 @@ function ofModel() {
       if (ofX("x_gld9")) try {
         const o2 = opt(o.source === "GLD" ? "GC" : "GLD");
         if (o2 && o2.strikes && o2.strikes.length) {
-          const r2 = ofRatio0(o2, o2.source), frz2 = ofOn("wfreeze") && o2.ratio > 0 && r2 > 0, cv2 = (s) => (frz2 && s.strike != null ? s.strike * r2 : s.chart);
+          const r2 = ofRatio0(o2, o2.source), frz2 = !c4bOn() && ofOn("wfreeze") && o2.ratio > 0 && r2 > 0, cv2 = (s) => (frz2 && s.strike != null ? s.strike * r2 : s.chart);
           const nm2 = o2.source || "GLD", lv1 = top3.map((s) => cv(s));
           const top3b = o2.strikes.filter((s) => cv2(s) > 0 && Math.abs(cv2(s) / ref - 1) <= 0.025 && !lv1.some((l) => Math.abs(cv2(s) / l - 1) <= 0.001)).sort((a, b) => (b.call_oi + b.put_oi) - (a.call_oi + a.put_oi)).slice(0, 3);
           top3b.forEach((s, n) => {
@@ -1411,6 +1413,7 @@ function ofRatio0(o, src) {
 function ofFreezeRatio(st) {
   try {
     if (STATIC || !st || !st.options || !ofOn("wfreeze")) return;
+    if (st.combo) return;   // 9b-7b: chuẩn 4 bước — mốc chart do server tính (strike − basis / × k), không nhân lại strike × tỉ lệ
     let kGC = null;
     for (const [src, o] of Object.entries(st.options)) {
       if (!o || !(o.ratio > 0) || !o.chart || !Array.isArray(o.strikes)) continue;
@@ -1655,7 +1658,7 @@ function of3Q(M) {
   if (M.flip == null) return { l1, l2: "chưa rõ Flip", l3: "chưa rõ", l4: "chưa rõ", d4: D4 };
   const d = Math.abs(M.px - M.flip), bw = M.fbL ? ` ±${cm(M.fbL.w)}$` : "";
   const l2 = `${cm(d)}$ (${M.rgp.pctTxt}) · giá <b>${M.negG ? "DƯỚI" : "TRÊN"}</b> Flip → `
-    + (M.flipNear ? col(`GẦN (trong vùng đệm${bw}): dễ lật chế độ`, Y) : M.rgp.far ? col("XA: chế độ ổn định cả ngày", G) : `VỪA (ngoài vùng đệm${bw}): khá ổn định`);
+    + (M.flipNear ? col(`GẦN (trong vùng đệm${bw}): dễ lật chế độ`, Y) : `NGOÀI vùng đệm${bw}: chế độ theo dấu giá − Flip (không còn ngưỡng «xa»)`);
   const sp = !A ? "" : lv === 0 ? " · lực NHẸ" : lv === 2 ? " · lực MẠNH" : " · lực vừa", clash = A && A.sgn !== 0 && (A.sgn < 0) !== !!M.negG;
   const l3 = M.flipNear ? col("ở RANH GIỚI, chưa rõ phanh hay đạp ga", Y) : (M.negG ? col("ĐẠP GA", R) + " (đẩy giá đi xa)" : col("PHANH", G) + " (kìm giá trong biên)") + sp + (clash ? ` · ${col("Bảng A ngược Flip", "#ff8a65")}` : "");
   const l4 = M.flipNear ? "<b>Đứng ngoài 9A</b>: giá trong vùng đệm; chỉ 9B khi phá rõ."
@@ -1692,7 +1695,7 @@ function ofRender() {
     + `<div style="margin-top:8px"><b>Cổng kiểm</b>${M.gates.map(gate).join("")}</div>` + ofCondHtml(M);
   const kv = (a, b) => `<div class="muted">${a}</div><div>${b}</div>`, k = M.k, sc = M.sc, dxy = S.state?.macro?.DXY?.chg_n_pct;
   const X = ofCtxExtra(M);   // B9b5c-3: thêm các dòng của bảng «Bối cảnh» trang «Vào lệnh» (đã bỏ trang đó)
-  const Q = of3Q(M), dFlip = (M.flip == null ? "chưa rõ Flip" : `Theo Flip: <b>${M.negG ? "ÂM" : "DƯƠNG"}</b> · Flip ${ofFm(M.flip)} · cách ${M.rgp.pctTxt}${M.rgp.far ? " (Flip xa: chế độ ổn định, KHÔNG chặn lệnh — anh Nam 25/11)" : ""}${M.flipNear ? ` (trong vùng đệm ${M.fbL.w.toFixed(1).replace(".", ",")}$: TL1·TL2·HG đứng ngoài${ofFbOn("A") ? ", 9A đứng ngoài" : ""}${ofFbOn("B") ? ", 9B đứng ngoài" : ""})` : M.fbL ? ` · vùng đệm ±${M.fbL.w.toFixed(1).replace(".", ",")}$ (${M.fbL.txt})` : ""}` + (M.blockG ? " → BUY bắt đáy bị chặn" : "")), dBang = String((() => { const A = bangA(); if (!A) return "<br>Theo Bảng A: —"; const v = M.flip == null ? "" : bangAvsFlip(A, M.negG); return `<br>Theo Bảng A (tổng GC+GLD ${fmtK(A.g)}$): <b>${A.short}</b>${v ? ` → <b style="color:${v === "KHÁC" ? "#ff8a65" : v === "khớp" ? "#26b384" : "#f0b429"}">${v === "KHÁC" ? "KHÁC chế độ theo Flip" : v === "khớp" ? "khớp chế độ theo Flip" : "trung tính, Flip quyết"}</b>` : ""} <span class="muted">(chỉ để xem; 9A/9B/9C/9D vẫn chọn theo Flip; thiếu pool XAU/QTY)</span>`; })()).replace(/^<br>/, "");
+  const Q = of3Q(M), dFlip = (M.flip == null ? "chưa rõ Flip" : `Theo Flip: <b>${M.negG ? "ÂM" : "DƯƠNG"}</b> · Flip ${ofFm(M.flip)} · cách ${M.rgp.pctTxt}${M.flipNear ? ` (trong vùng đệm ${M.fbL.w.toFixed(1).replace(".", ",")}$: TL1·TL2·HG đứng ngoài${ofFbOn("A") ? ", 9A đứng ngoài" : ""}${ofFbOn("B") ? ", 9B đứng ngoài" : ""})` : M.fbL ? ` · vùng đệm ±${M.fbL.w.toFixed(1).replace(".", ",")}$ (${M.fbL.txt})` : ""}` + (M.blockG ? " → BUY bắt đáy bị chặn" : "")), dBang = String((() => { const A = bangA(); if (!A) return "<br>Theo Bảng A: —"; const v = M.flip == null ? "" : bangAvsFlip(A, M.negG); return `<br>Theo Bảng A (tổng GC+GLD ${fmtK(A.g)}$): <b>${A.short}</b>${v ? ` → <b style="color:${v === "KHÁC" ? "#ff8a65" : v === "khớp" ? "#26b384" : "#f0b429"}">${v === "KHÁC" ? "KHÁC chế độ theo Flip" : v === "khớp" ? "khớp chế độ theo Flip" : "trung tính, Flip quyết"}</b>` : ""} <span class="muted">(chỉ để xem; 9A/9B/9C/9D vẫn chọn theo Flip; thiếu pool XAU/QTY)</span>`; })()).replace(/^<br>/, "");
   $("#ofC").innerHTML = of3Row(1, "1. Net GEX", Q.l1, X.gex)
     + of3Row(2, "2. Giá ↔ Flip", Q.l2, dFlip)
     + of3Row(3, "3. Dealer", Q.l3, dBang)
@@ -1957,7 +1960,6 @@ function evaluate(i, live) {
   if (!L || L.call_wall == null || L.put_wall == null) return null;
   if (i < Math.max(sc.div_lookback, sc.vol_sma, sc.cvd_slope_bars) + 2) return null;
   if (sc.session_only && ofOn("session") && !inUsSession(k.time)) return null;
-  if (!ofX("x_noflip") && ofX("x_flipfar") && L.gamma_flip != null && regimePct(k.close, L.gamma_flip).far) return null;
   if (!ofX("x_noflip") && ofX("x_flipnear") && L.gamma_flip != null && ofNearFlip(k.close, L.gamma_flip, k.time)) return null;   // B9b5d: vùng đệm %/ATR/$ (TL1·TL2·HG vẫn đứng ngoài khi gần Flip như trước)   // v23ab   // TVLB B9b1: lọc ngày Flip xa (mặc định tắt)
   if ((TF_SEC[S.tf] || 0) < 300) return null;   // Options Flow: chỉ báo trên khung từ M5 trở lên (giống TradingView)
   if (i - S.lastSigIdx <= sc.cooldown_bars) return null;
@@ -2197,12 +2199,12 @@ function renderProfile() {
 
 // ─── 7f: HIỂN THỊ chế độ Gamma theo % khoảng cách tới Flip (B2), cảnh báo CME chậm, hệ số kỳ hạn ───
 // Chỉ đổi NHÃN hiển thị; Agent, kế hoạch, tín hiệu vẫn dùng dấu trên/dưới Flip như cũ.
-// FLIP_FAR_PCT = 2,5%: ngưỡng do Claude chọn, tương đương 100 điểm ở giá 4.000 (quy tắc "không rõ" của bước 6 là 100 điểm cố định). Chưa kiểm định.
-const FLIP_FAR_PCT = 2.5;
+// 9b-7b (C7, số 293): BỎ ngưỡng «không rõ» FLIP_FAR_PCT = 2,5% (≈ 100 điểm) theo chỉ thị anh Nam 27/11: chế độ chỉ theo dấu giá − Flip gộp, chỉ HIỆN khoảng cách ($ và %).
+// Giữ trường far = false, farTxt = "" để file khác (tvlb_tinhieu.js) gọi regimePct vẫn chạy.
 function regimePct(p, flip) {
-  const fx = (v) => Number(v).toFixed(1).replace(".", ","), farTxt = fx(FLIP_FAR_PCT);
+  const fx = (v) => Number(v).toFixed(1).replace(".", ","), farTxt = "";
   if (p == null || flip == null || !(flip > 0)) return { cls: "unk", pct: null, far: false, pctTxt: "", farTxt, short: "không rõ (không có Flip)" };
-  const pct = ((p - flip) / flip) * 100, far = Math.abs(pct) > FLIP_FAR_PCT, pctTxt = `${pct >= 0 ? "+" : "−"}${fx(Math.abs(pct))}%`;
+  const pct = ((p - flip) / flip) * 100, far = false, pctTxt = `${pct >= 0 ? "+" : "−"}${fx(Math.abs(pct))}%`;
   return { cls: pct >= 0 ? "pos" : "neg", pct, far, pctTxt, farTxt, short: `${pct >= 0 ? "Long γ" : "Short γ"} ${pctTxt}` };
 }
 window.regimePct = regimePct;
@@ -3011,10 +3013,23 @@ function exportCsv() {
 }
 
 // ─────────────────────────── backend ───────────────────────────
+// 9b-7b (C6, số 300): máy chủ chỉ ghi Magnet GỘP vào GC (GC còn magnet_src = Magnet riêng cũ). GLD vẫn gửi Magnet RIÊNG → khi chọn GLD làm nguồn chính,
+// board sẽ vẽ Magnet khác. Ở đây chép Magnet gộp (toạ độ chart của GC, cùng kỳ hạn) sang GLD; Magnet riêng của GLD giữ ở chart.magnet_src.
+// Tường OI (Call/Put Wall) vẫn riêng từng nguồn (C6). Máy chủ không gửi tường GEX ra board (app.js không vẽ tường GEX) nên không cần ẩn gì thêm.
+function c4bMagnet(st) {
+  try {
+    const gc = st?.options?.GC, gl = st?.options?.GLD; if (!st?.combo || !gc || !gl) return;
+    const gop = (t) => t && t.chart && (t.magnet_src !== undefined || t.chart.magnet_src !== undefined);
+    if (!gop(gc)) return;   // máy chủ không gộp Magnet (c6_levels "rieng") → giữ nguyên
+    const put = (g, l) => { if (!g?.chart || !l?.chart || g.chart.magnet == null) return; if (l.chart.magnet_src === undefined) l.chart.magnet_src = l.chart.magnet ?? null; l.chart.magnet = g.chart.magnet; l.magnet_gop = true; };
+    put(gc, gl); for (const [k, bt] of Object.entries(gl.by_tenor || {})) put(gop(gc.by_tenor?.[k]) ? gc.by_tenor[k] : gc, bt);
+  } catch { /* giữ dữ liệu gốc */ }
+}
 async function pollState(first = false) {
   try {
     const st = await (await fetch(API("/api/state") + (STATIC ? "?t=" + Date.now() : ""))).json();
     ofFreezeRatio(st);   // v23ak: khóa tỉ lệ quy đổi trước khi so sánh/hiển thị
+    c4bMagnet(st);   // 9b-7b (số 300)
     const changed = JSON.stringify(st.options) !== JSON.stringify(S.state?.options);
     S.state = st; S.cfg = st.config;
     if (first) return;
