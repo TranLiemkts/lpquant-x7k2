@@ -72,7 +72,8 @@ const vnClock = (t) => new Date((t + TZ) * 1000).toISOString().slice(11, 16);
 const vnDate = (t) => new Date((t + TZ) * 1000).toISOString().slice(0, 10);
 const nowSec = () => Math.floor(Date.now() / 1000);
 function chip(sel, cls, text) { const el = $(sel); el.className = "chip " + cls; el.lastChild.textContent = text; }
-const opt = (src) => S.state?.options?.[src] || null;
+// B9b6: S.lvOv = bộ mốc GHI ĐÈ tạm thời khi trang Backtest chạy lại NẾN CŨ (tường của đúng ngày đó từ data\oi_history). Chỉ đặt trong try/finally của tvlb_tinhieu.js; bình thường = null.
+const opt = (src) => (S.lvOv ? S.lvOv.opt[src] || null : S.state?.options?.[src] || null);
 const prim = () => opt(S.primary) || opt(S.primary === "GC" ? "GLD" : "GC");
 // Bước 3: ô chọn kỳ hạn chỉ đổi phần XEM (Strike Profile + mốc vẽ trên chart); tín hiệu & Agent luôn dùng "Mọi kỳ hạn"
 const optV = (src) => { const o = opt(src); return !o || S.tenor === "all" ? o : (o.by_tenor?.[S.tenor] || o); };
@@ -2885,7 +2886,7 @@ function drawEquity(done) {
 // ─────────────────────────── Bước 5: mô phỏng Rebalance Hedge của LP ───────────────────────────
 // Backend tính N(ΔP) = số HĐ GC tương đương LP phải MUA (+) / BÁN (−) trên lưới ±100 USD quanh giá lúc tính.
 // Board dời theo giá live: N từ giá hiện tại = N(x0 + ΔP) − N(x0), x0 = giá live − giá lúc tính.
-const hedgeSt = () => S.state?.hedge || null;
+const hedgeSt = () => (S.lvOv ? S.lvOv.hedge || null : S.state?.hedge || null);   // B9b6: nến cũ không có vùng Hedge lịch sử (số 217) → null
 function interp(xs, ys, x) {
   if (!xs?.length) return null;
   if (x <= xs[0]) return ys[0];
