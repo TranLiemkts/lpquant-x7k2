@@ -1795,7 +1795,8 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
         }
         // cổng của nến j (như chkFor): lọc phiên · có Flip · ngoài giờ nghỉ 11:30–20:00 Chicago (giờ ĐÓNG nến) · số 264 · vùng đệm Flip theo loại A (bật lại) / B (theo xu hướng)
         const cmc = chiMin(k.time + tf), fbw = flip != null ? H.fbW(flip, k.time) : 0, nearOut = flip != null && Math.abs(k.close - flip) > fbw;
-        const G = { all: !(H.sessOn && !H.inSess(k.time)) && flip != null && !(H.nightOn && cmc >= 690 && cmc < 1200) && !(H.realOI && !(w.gcAvail > lastClose(k.time))),
+        const G = { all: !(H.sessOn && !H.inSess(k.time)) && flip != null && !(H.nightOn && cmc >= 690 && cmc < 1200) && !(H.realOI && !(w.gcAvail > lastClose(k.time)))
+            && !(H.cmeOn && !H.cmeOpen(k.time)),   // 9b-6c số 292: CME đóng cửa (cuối tuần, nghỉ 16:00–17:00 Chicago, ngày nghỉ cả ngày) → không xét lệnh
           A: !(flip != null && H.fbOn("A")) || nearOut, B: !(flip != null && H.fbOn("B")) || nearOut };
         const brk = flip != null && neg === true, plans = [];
         w.main.forEach((m) => plans.push({ typ: brk ? "b" : "a", gx: false, lvl: m.lvl, kid: "M" + (m.strike != null ? m.strike : m.lvl.toFixed(2)) }));
@@ -1812,6 +1813,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
           const n2 = !!seen[key]; seen[key] = true;
           if (!c.full) continue;
           const idx = c.idx; if (idx == null || !B[idx + 1] || idx + 1 > N - 1) continue;
+          if (H.cmeOn && !H.cmeOpen(B[idx + 1].time)) { dropped.push({ time: B[idx].time, side: sd, tag: p.typ, day, why: "CME đóng cửa lúc vào" }); continue; }   // 9b-6c số 292
           const en = B[idx + 1].open, rk = en * 0.003, wl = (H.shown(B[idx].time) || []).filter((x) => (sell ? x <= en - rk : x >= en + rk)).sort((a, b) => (sell ? b - a : a - b));
           const tag = p.typ === "a" ? (p.gx ? "9C" : "9A") : p.gx ? "9D" : "9B";
           ev.push({ i: idx, j, time: B[idx].time, side: sd, entry: en, sl: en * (sell ? 1.003 : 0.997), tp1: wl.length ? wl[0] : en * (sell ? 0.994 : 1.006), tpWall: wl.length > 0, tag, gx: p.gx, typ: p.typ, n2, rt: p.typ === "r", fl: p.typ === "f", wall: p.lvl, flip, neg, day });
@@ -1844,9 +1846,9 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     return { trades, dropped, dayInfo };
   }
   // ───────────── B9b6: GIAO DIỆN backtest 9A-9D (trang Backtest, khung #t4bt9). Chỉ ĐỌC dữ liệu, không ghi nhật ký/localStorage ngoài khóa tvlb.bt9 ─────────────
-  const LS9 = "tvlb.bt9", C9 = Object.assign({ src: "wh", reg: "bar", oi: "chi" }, (() => { try { const o = JSON.parse(localStorage.getItem(LS9) || "{}"); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; } })());
+  const LS9 = "tvlb.bt9", C9 = Object.assign({ src: "wh", reg: "bar", oi: "chi", flip: "gop", cme: "mo" }, (() => { try { const o = JSON.parse(localStorage.getItem(LS9) || "{}"); return o && typeof o === "object" ? o : {}; } catch (e) { return {}; } })());
   const save9 = () => { try { localStorage.setItem(LS9, JSON.stringify(C9)); } catch (e) { } };
-  const D9 = { kl: null, klAt: 0, klErr: "", w9: null, w9At: 0, res: null, B: null, sig: "", busy: false, err: "", html: "", at: 0, tryAt: 0, bound: false };
+  const D9 = { kl: null, klAt: 0, klErr: "", w9: null, w9At: 0, fh: null, fhAt: 0, fhErr: "", fhInfo: null, res: null, B: null, sig: "", busy: false, err: "", html: "", at: 0, tryAt: 0, bound: false };
   const g2 = (x) => (x == null || !isFinite(x) ? "—" : Number(x).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   const sgn2 = (x) => (x == null || !isFinite(x) ? "—" : (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2));
   const vnT = (t) => (t == null || !isFinite(t) ? "—" : new Date(t * 1000).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }));
@@ -1856,6 +1858,32 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     if (!force && D9.kl && Date.now() - D9.klAt < 30 * 60e3) return;
     try { const r = await (await fetch(API("/api/klines?tf=5m") + (force ? "&refresh=1" : ""))).json(); if (!r || !r.ok) throw new Error((r && r.error) || "lỗi tải nến"); D9.kl = r.rows || []; D9.klAt = Date.now(); D9.klErr = ""; }
     catch (e) { D9.klErr = String((e && e.message) || e); }
+  }
+  // 9b-6c số 289: Flip GỘP theo giờ (máy chủ /api/fliphist: cùng hàm chuẩn của board, bản OI có giờ biết ≤ t, nến đã đóng)
+  async function loadFH9(force) {
+    if (!force && D9.fh && Date.now() - D9.fhAt < 30 * 60e3) return;
+    try { const r = await (await fetch(API("/api/fliphist") + "?t=" + Date.now())).json(); if (!r || !r.ok) throw new Error((r && r.error) || "lỗi /api/fliphist");
+      D9.fh = (r.points || []).filter((p) => p && p.ts != null).sort((a, b) => a.ts - b.ts); D9.fhTs = D9.fh.map((p) => p.ts); D9.fhK = r.kiem || []; D9.fhInfo = { n: r.n, step: r.step_min, giay: r.giay, ver: r.ver, lech: r.lech }; D9.fhAt = Date.now(); D9.fhErr = ""; }
+    catch (e) { D9.fhErr = String((e && e.message) || e); }
+  }
+  function fhAt(t) {   // điểm Flip gộp mới nhất có ts ≤ t (không cũ quá 2 giờ); null = không có
+    const a = D9.fhTs; if (!a || !a.length) return null; let lo = 0, hi = a.length - 1, b = -1;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (a[m] <= t) { b = m; lo = m + 1; } else hi = m - 1; }
+    return b >= 0 && t - a[b] <= 7200 ? D9.fh[b] : null;
+  }
+  const fhOn = () => C9.flip !== "cu" && !!(D9.fh && D9.fh.length);
+  // 9b-6c số 292: giờ CME Globex của vàng (giờ Chicago): CN 17:00 → T6 16:00, nghỉ 16:00–17:00 mỗi ngày; ngày nghỉ cả ngày (và tối hôm trước từ 16:00).
+  // Ngày nghỉ nửa ngày KHÔNG cần: giờ đóng sớm của chúng (≥ 12:00) đã nằm trong giờ nghỉ đêm 11:30–20:00 của B10b.
+  const CME_FULL = new Set(["2026-12-25", "2027-01-01", "2027-03-26", "2027-12-24", "2027-12-31"]);   // GIẢ THUYẾT theo lịch CME; kiểm lại hằng năm
+  const nextDay = (d) => new Date(Date.parse(d + "T12:00:00Z") + 86400e3).toISOString().slice(0, 10);
+  const cmeMemo = new Map();
+  function cmeOpen(t) {
+    let v = cmeMemo.get(t); if (v !== undefined) return v;
+    const cm = chiMin(t), d = chiSlot(t).d, wd = new Date(d + "T12:00:00Z").getUTCDay();
+    if (CME_FULL.has(d) || (cm >= 960 && CME_FULL.has(nextDay(d)))) v = false;
+    else if (wd === 6) v = false; else if (wd === 0) v = cm >= 1020; else if (wd === 5) v = cm < 960;
+    else v = !(cm >= 960 && cm < 1020);
+    if (cmeMemo.size > 200000) cmeMemo.clear(); cmeMemo.set(t, v); return v;
   }
   async function loadW9() {   // mọi ngày có data\walls9a (lùi từng ngày tới khi 4 ngày liền không có)
     if (D9.w9 && Date.now() - D9.w9At < 10 * 60e3) return;
@@ -1882,13 +1910,16 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     const prim = S.primary === "GLD" ? "GLD" : "GC", g = pickE(t, "GC"), d = pickE(t, "GLD"), P = prim === "GLD" ? d || g : g || d, Q = P === g ? d : g; if (!P) return null;
     const k = P.src + P.avail + "|" + (Q ? Q.avail : 0) + "|" + ref; let w = memo9.get(k);
     if (!w) { const main = top3(P, ref); w = { main, gld: Q ? top3(Q, ref, main.map((m) => m.lvl)) : [], flip: P.chart && P.chart.gamma_flip != null ? P.chart.gamma_flip : null, gcAvail: g ? g.avail : -Infinity, oiDay: P.day }; memo9.set(k, w); }
+    if (fhOn()) { const f = fhAt(t); return { ...w, flip: f ? f.flip : null, flipSrc: "gop", flipPt: f }; }   // 9b-6c số 289: Flip gộp theo giờ
     return w;
   }
   const w9Flip = (x) => x.kind === "flip" || x.id === "nwbf";
   const w9Gld = (x) => x.kind === "gld9" || (!w9Flip(x) && parseInt(String(x.id || "").replace(/^nw[ab]/, ""), 10) >= 5);
+  // 9b-6c số 311: dòng walls9a tối 27/11 (16:39 → 17:47 UTC) tính theo HĐ tháng 12 (basis −1,95) rồi tắt chuẩn → BỎ (không có tường lúc đó)
+  const W9_BO = [[1795797540, 1795801659]], w9Bo = (ts) => W9_BO.some(([a, b]) => ts >= a && ts < b);
   function wFromW9(t) {   // tường board đã thấy (data\walls9a): dòng mới nhất cùng ngày VN có ts ≤ t
     const day = vnDate(t), rows = (D9.w9 || {})[day]; if (!rows || !rows.length) return null;
-    let row = null; for (const r of rows) { if (r.ts <= t) row = r; else break; } if (!row) return null;
+    let row = null; for (const r of rows) { if (r.ts <= t) row = r; else break; } if (!row || w9Bo(row.ts)) return null;
     const k = "w9|" + day + "|" + row.ts + "|" + rows.indexOf(row); let w = memo9.get(k);
     if (!w) { const ws = (row.walls || []).filter((x) => !w9Flip(x) && x.lvl != null), g = pickE(t, "GC");
       w = { main: ws.filter((x) => !w9Gld(x)).map((x) => ({ lvl: x.lvl, strike: x.strike })), gld: ws.filter(w9Gld).map((x) => ({ lvl: x.lvl, strike: x.strike })), flip: row.flip ?? null, gcAvail: g ? g.avail : -Infinity, w9: true }; memo9.set(k, w); }
@@ -1904,19 +1935,22 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     const sc = S.cfg.signals;
     return { tf: 300, j0: Math.max(sc.vol_sma, sc.cvd_slope_bars, sc.div_lookback + 1, 12) + 2, vnDate, chiMin, chiDay: (t) => chiSlot(t).d, sessOn: !!(sc.session_only && ofOn("session")), inSess: inUsSession,
       fbOn: ofFbOn, fbW: (flip, t) => ofFlipBuf(flip, t).w, nightOn: OFS.b10bTime !== false, f9B: ofOn("b10bF9B"), capOn: ofOn("b10bCap"), oneOn: ofOn("b10bOne"),
-      rr: (g, B) => rrNatural(g, B, true), shown: shown9, regime: C9.reg === "t0" ? "t0" : "bar", realOI: C9.oi === "real" };
+      rr: (g, B) => rrNatural(g, B, true), shown: shown9, regime: C9.reg === "t0" ? "t0" : "bar", realOI: C9.oi === "real",
+      cmeOn: C9.cme !== "luon", cmeOpen };   // 9b-6c số 292
   }
+  const C4B_TS = 1795801659;   // 9b-6c: 00:47 VN 28/11 = lần đầu board chạy chuẩn 4 bước với HĐ đúng (2027-02)
   // ── K3: tường dựng lại (oi_history) so với walls9a; độ trôi basis ──
   function k3() {
-    const o = { n: 0, same: 0, diff: [], none: 0, dFlip: [], dLvl: [], ref: [] }, B = D9.B || [];
+    const o = { n: 0, same: 0, diff: [], none: 0, dFlip: [], dFlipCu: [], dLvl: [], ref: [], bo: 0 }, B = D9.B || [];
     for (const [day, rows] of Object.entries(D9.w9 || {}).sort()) {
       for (const r of rows) {
         const m9 = (r.walls || []).filter((x) => !w9Flip(x) && !w9Gld(x) && x.strike != null); if (!m9.length || !r.ref) continue;
+        if (w9Bo(r.ts)) { o.bo++; continue; }   // 9b-6c số 311
         const w = wFromWH(r.ts, r.ref); if (!w) { o.none++; continue; }
         o.n++; const a = m9.map((x) => x.strike).sort((p, q) => p - q).join(" · "), b = w.main.map((x) => x.strike).sort((p, q) => p - q).join(" · ");
         if (a === b) o.same++; else if (o.diff.length < 12) o.diff.push({ ts: r.ts, a, b });
         for (const x of m9) { const y = w.main.find((z) => z.strike === x.strike); if (y) o.dLvl.push(y.lvl - x.lvl); }
-        if (r.flip != null && w.flip != null) o.dFlip.push(w.flip - r.flip);
+        if (r.flip != null && w.flip != null) (r.ts >= C4B_TS ? o.dFlip : o.dFlipCu).push(w.flip - r.flip);   // trước 17:47 UTC 27/11 board dùng Flip cách cũ
       }
       const i0 = B.findIndex((b) => vnDate(b.time) === day), refs = rows.map((r) => r.ref).filter((x) => x != null).sort((p, q) => p - q);
       if (i0 >= 0 && refs.length) o.ref.push({ day, w9: refs[Math.floor(refs.length / 2)], lo: refs[0], hi: refs[refs.length - 1], bt: B[i0].open });
@@ -1936,16 +1970,16 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     return { nJ: J.length, days: [...days].sort(), match: m, onlyJ, onlyB: T.filter((g) => !used.has(g)) };
   }
   function tbl264() {   // số 264: giờ OI GC thật (avail) so với 20:00 Chicago
-    const L = (window.tvlbWH ? window.tvlbWH.list() : []).filter((e) => e.src === "GC").slice(-15);
+    const L = (window.tvlbWH ? window.tvlbWH.list() : []).filter((e) => e.src === "GC" && e.first !== false).slice(-15);   // 9b-6c: chỉ bản ĐẦU của mỗi ngày OI
     return L.map((e) => { const cm = chiMin(e.avail), hm = String(Math.floor(cm / 60)).padStart(2, "0") + ":" + String(cm % 60).padStart(2, "0"), late = cm >= 1200 || cm < 690;
-      return `<tr><td>${e.day}</td><td>${vnT(e.avail)}</td><td>${hm}</td><td class="${late ? "loss" : "win"}">${late ? "SAU 20:00 hoặc trong cửa sổ → OI về muộn" : "trước 20:00 → kịp mở cửa sổ"}</td><td>${e.imported ? "nhập" : ""}${e.ratio_est ? " · ratio ước" : ""}</td></tr>`; });
+      return `<tr><td>${e.day}</td><td>${vnT(e.avail)}</td><td>${hm}</td><td class="${late ? "loss" : "win"}">${late ? "SAU 20:00 hoặc trong cửa sổ → OI về muộn" : "trước 20:00 → kịp mở cửa sổ"}</td><td>${e.imported ? "nhập" : ""}${e.ratio_est ? " · ratio ước" : ""}${e.avail_src === "ban_ngay" ? " · giờ của file ngày (có thể muộn)" : e.avail_src === "versions" ? " · versions" : ""}${e.uoc && e.uoc.length ? " · " + e.uoc.join(", ") : ""}</td></tr>`; });
   }
   // ── chạy + vẽ ──
-  function sig9() { let w = 0; try { w = window.tvlbWH ? window.tvlbWH.list().length : 0; } catch (e) { } return JSON.stringify([C9, w, D9.kl ? D9.kl.length : 0, S.primary, S.tf, OFS, S.candles && S.candles.length ? S.candles[S.candles.length - 1].time : 0, (S.journal || []).length]); }
+  function sig9() { let w = 0; try { w = window.tvlbWH ? window.tvlbWH.list().length : 0; } catch (e) { } return JSON.stringify([C9, w, D9.kl ? D9.kl.length : 0, D9.fh ? D9.fh.length : 0, S.primary, S.tf, OFS, S.candles && S.candles.length ? S.candles[S.candles.length - 1].time : 0, (S.journal || []).length]); }
   async function run9(force) {
     if (D9.busy) return; D9.busy = true; D9.err = ""; draw9();
     try {
-      await loadKl9(force); await loadW9();
+      await loadKl9(force); await loadW9(); await loadFH9(force);
       const B = barsBT(); if (!B.length) throw new Error(D9.klErr || "chưa có nến M5 trong data\\klines");
       if (!(window.tvlbWH && window.tvlbWH.list().length)) throw new Error("chưa có tường theo ngày (/api/wallhist rỗng hoặc lỗi: " + (window.tvlbWH ? window.tvlbWH.err() || "?" : "?") + ")");
       memo9.clear(); shMemo9.clear();
@@ -1954,7 +1988,8 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
     } catch (e) { D9.err = String((e && e.message) || e); }
     finally { D9.busy = false; D9.tryAt = Date.now(); D9.sig = sig9(); draw9(); }
   }
-  const OPT9 = { src: [["wh", "oi_history (mọi ngày có OI)"], ["w9", "walls9a (đúng board thấy, 24/11 trở đi, để đối chiếu)"]], reg: [["bar", "Chế độ ngày theo giá từng nến (như board)"], ["t0", "Chế độ ngày chốt lúc mở cửa sổ t0 (B10b, số 261)"]], oi: [["chi", "Mở cửa sổ 20:00 Chicago (như board)"], ["real", "Chỉ khi có OI GC mới thật (số 264)"]] };
+  const OPT9 = { src: [["wh", "oi_history (mọi ngày có OI)"], ["w9", "walls9a (đúng board thấy, 24/11 trở đi, để đối chiếu)"]], reg: [["bar", "Chế độ ngày theo giá từng nến (như board)"], ["t0", "Chế độ ngày chốt lúc mở cửa sổ t0 (B10b, số 261)"]], oi: [["chi", "Mở cửa sổ 20:00 Chicago (như board)"], ["real", "Chỉ khi có OI GC mới thật (số 264)"]],
+    flip: [["gop", "Flip GỘP theo giờ (chuẩn 4 bước, số 289)"], ["cu", "Flip trong bản OI (cách cũ, chỉ GC)"]], cme: [["mo", "Chỉ khi CME mở cửa (số 292)"], ["luon", "Cả lúc CME đóng (như bản 9b-6)"]] };
   function draw9() {
     const box = document.querySelector("#t4bt9"); if (!box) return;
     const ui = window.tvlbBTui; if (!ui) return;
@@ -1963,7 +1998,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       box.addEventListener("click", (ev) => { if (ev.target && ev.target.dataset && ev.target.dataset.act9 === "run") run9(true); }); }
     const sel = (k) => `<select data-k9="${k}" class="btn sm" style="font-size:11px;max-width:260px">${OPT9[k].map(([v, t]) => `<option value="${v}"${C9[k] === v ? " selected" : ""}>${t}</option>`).join("")}</select>`;
     let h = `<div style="border-top:1px solid #2b3440;margin-top:8px;padding-top:6px"><b style="color:#e0a83a">TƯỜNG 9A · 9B · 9C · 9D</b> <span class="muted">(luật B10b như board, tường ĐÚNG TỪNG THỜI ĐIỂM, nến M5 đã lưu ở máy chủ)</span></div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">${sel("src")}${sel("reg")}${sel("oi")}<button class="btn sm" data-act9="run" title="Tải lại nến M5 từ Binance rồi chạy lại">Chạy lại</button></div>`;
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0">${sel("src")}${sel("reg")}${sel("oi")}${sel("flip")}${sel("cme")}<button class="btn sm" data-act9="run" title="Tải lại nến M5 từ Binance rồi chạy lại">Chạy lại</button></div>`;
     if (D9.busy) h += `<div class="muted">Đang tính…</div>`;
     if (D9.err) h += `<div class="loss" style="font-size:11.5px">⚠ ${D9.err}</div>`;
     const R = D9.res, B = D9.B || [];
@@ -1975,8 +2010,13 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       if (ofX("x_nwconf")) warn.push("Menu đang bật «x_nwconf» (thêm ô xác nhận cho 9A/9B): backtest này BỎ QUA ô xác nhận vì nến lưu không có CVD/Delta → kết quả theo B10b gốc.");
       if (ofFbMode && ofFbMode() === "atr") warn.push("Vùng đệm Flip đang theo ATR: nến cũ hơn dữ liệu chart dùng tạm % (như board khi thiếu ATR).");
       warn.push(`Nến = Binance ${firstSym() || ""} + basis HIỆN TẠI ${sgn2(basis9())}$ cho mọi nến (board cũng vậy). Basis trôi vài $ theo thời gian (xem K3) → lệnh sát ngưỡng 0,10-0,15% có thể khác.`);
+      if (C9.src === "w9") warn.push("Nguồn walls9a: Flip = Flip board ĐÃ THẤY lúc đó (trước 00:47 VN 28/11 là Flip cách cũ, chỉ GC); ô «Flip» không áp dụng. Bỏ dòng 23:39–00:47 VN 27-28/11 (số 311).");
+      else if (C9.flip === "cu") warn.push("Ô «Flip trong bản OI (cách cũ)»: Flip chỉ GC, cố định theo bản OI — KHÁC board hiện nay (số 289).");
+      else if (!fhOn()) warn.push("⚠ Chưa có Flip gộp theo giờ (" + (D9.fhErr || "máy chủ chưa có /api/fliphist") + ") → đang dùng Flip cách cũ trong bản OI.");
+      else warn.push(`Flip GỘP theo giờ: ${D9.fhInfo.n} mốc, mỗi ${D9.fhInfo.step} phút + lúc có bản OI mới; cùng hàm board (bản ${D9.fhInfo.ver}). File OI cũ chưa có basis/k lúc tải dùng số ƯỚC (số 312, xem K5).`);
+      if (C9.cme !== "luon") warn.push("Không xét lệnh lúc CME đóng cửa (cuối tuần, 16:00–17:00 Chicago, ngày nghỉ cả ngày) — số 292.");
       warn.push(`Mẫu NHỎ (${dW.length} ngày có tường) → chỉ để thăm dò, CHƯA kết luận edge. Chưa trừ phí/spread.`);
-      h += `<div class="muted" style="font-size:11px;line-height:1.5">${B.length} nến M5 · ${vnT(B[0].time)} → ${vnT(B[B.length - 1].time)} · ${dW.length} ngày VN có tường (${dW.length ? dW[0].day + " → " + dW[dW.length - 1].day : "—"}) · nguồn tường: <b>${OPT9.src.find((x) => x[0] === C9.src)[1]}</b> · ${OPT9.reg.find((x) => x[0] === C9.reg)[1]} · ${OPT9.oi.find((x) => x[0] === C9.oi)[1]} · tính lúc ${new Date(D9.at).toLocaleTimeString("vi-VN")}</div>`;
+      h += `<div class="muted" style="font-size:11px;line-height:1.5">${B.length} nến M5 · ${vnT(B[0].time)} → ${vnT(B[B.length - 1].time)} · ${dW.length} ngày VN có tường (${dW.length ? dW[0].day + " → " + dW[dW.length - 1].day : "—"}) · nguồn tường: <b>${OPT9.src.find((x) => x[0] === C9.src)[1]}</b> · ${OPT9.reg.find((x) => x[0] === C9.reg)[1]} · ${OPT9.oi.find((x) => x[0] === C9.oi)[1]} · ${OPT9.flip.find((x) => x[0] === C9.flip)[1]} · ${OPT9.cme.find((x) => x[0] === C9.cme)[1]} · tính lúc ${new Date(D9.at).toLocaleTimeString("vi-VN")}</div>`;
       h += `<div style="font-size:11px;color:#ffb74d;line-height:1.45">${warn.map((x) => "• " + x).join("<br>")}</div>`;
       const byTag = (l, tg, f) => l.filter((g) => g.tag === tg && (!f || f(g)));
       const rows = [ui.grpRow("B10b chính: 9A + 9B (suất 1 lệnh/phía, 2 lệnh/ngày; không mở khi lệnh trước còn mở)"), row("9A bật lại", byTag(M, "9A")), row("9B phá tường", byTag(M, "9B", (g) => !g.fl)), row("9B tại Gamma Flip", byTag(M, "9B", (g) => g.fl)), row("<b>B10b chính (cộng)</b>", M),
@@ -1993,7 +2033,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
       // K3
       const K3 = D9.k3, mean = (a) => (a.length ? a.reduce((p, q) => p + q, 0) / a.length : null);
       if (K3) h += `<details style="margin-top:4px"><summary style="cursor:pointer">K3 · Tường dựng lại (oi_history) so với walls9a (board đã thấy)</summary><div style="font-size:11px;line-height:1.5">
-        ${K3.n ? `<b>${K3.same}/${K3.n}</b> dòng walls9a có cùng 3 strike với bản dựng lại (${K3.none} dòng không có bản OI) · lệch giá tường TB ${sgn2(mean(K3.dLvl))}$ · lệch Flip TB ${sgn2(mean(K3.dFlip))}$.` : "Chưa có dòng walls9a để so."}
+        ${K3.n ? `<b>${K3.same}/${K3.n}</b> dòng walls9a có cùng 3 strike với bản dựng lại (${K3.none} dòng không có bản OI) · lệch giá tường TB ${sgn2(mean(K3.dLvl))}$ · lệch Flip TB ${sgn2(mean(K3.dFlip))}$ (${K3.dFlip.length} dòng từ 00:47 VN 28/11, board đã dùng chuẩn 4 bước) · lệch so Flip cách cũ của board trước đó TB ${sgn2(mean(K3.dFlipCu))}$ (${K3.dFlipCu.length} dòng, khác cách tính là bình thường)${K3.bo ? ` · bỏ ${K3.bo} dòng (số 311)` : ""}.` : "Chưa có dòng walls9a để so."}
         ${K3.diff.length ? "<br>Khác nhau (walls9a ⇄ dựng lại): " + K3.diff.map((x) => `${vnT(x.ts)}: ${x.a} ⇄ ${x.b}`).join(" · ") : ""}
         ${K3.ref.length ? "<br>Độ trôi basis (giá mở ngày walls9a − nến backtest): " + K3.ref.map((x) => `${x.day}: ${sgn2(x.w9 - x.bt)}$ (walls9a ${g2(x.lo)}–${g2(x.hi)})`).join(" · ") : ""}
         <br><span class="muted">Khác strike thường do board dùng bản OI MỚI hơn bản cuối lưu trong file, hoặc giá mở ngày (ref) lệch vì basis làm tường ở mép ±2,5% vào/ra.</span></div></details>`;
@@ -2005,8 +2045,14 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
           ${K4.onlyJ.length ? "<br>Chỉ nhật ký: " + K4.onlyJ.map((e) => `${vnT(e.t)} ${e.tag || e.name} ${e.side}${e.alt ? " (" + e.alt + ")" : ""}`).join(" · ") : ""}
           ${K4.onlyB.length ? "<br>Chỉ backtest: " + K4.onlyB.map((g) => `${vnT(g.time)} ${g.tag} ${g.side}${g.rt ? " (retest)" : g.n2 ? " (lan2)" : ""}`).join(" · ") : ""}
           <br><span class="muted">Chọn nguồn «walls9a» để so công bằng (cùng tường board đã thấy). Lệch còn lại có thể do: board chỉ tính khi đang mở, menu lúc đó khác menu bây giờ, basis, lệnh LẦN 2/HỒI TEST chỉ có khi công tắc bật.</span>` : "Nhật ký chưa có lệnh OF9 nào trong khoảng nến này."}</div></details>`;
+      // K5 (9b-6c số 289/313): Flip gộp của backtest so với Flip board thật (data\combo_history), tính lại tại ĐÚNG giờ + giá của từng dòng board
+      const K5 = D9.fhK || [];
+      if (K5.length) { const aB = K5.filter((x) => x.lech_bt != null).map((x) => Math.abs(x.lech_bt)), aI = K5.filter((x) => x.lech_vao_board != null).map((x) => Math.abs(x.lech_vao_board)), mx = (a) => (a.length ? Math.max(...a) : null), nReg = K5.filter((x) => x.regime_bt && x.regime_board && x.regime_bt !== x.regime_board).length;
+        h += `<details style="margin-top:4px"><summary style="cursor:pointer">K5 · Flip gộp backtest so với Flip board (data\\combo_history, ${K5.length} dòng)</summary><div style="font-size:11px;line-height:1.5">
+          (a) Đầu vào từ file OI: |lệch| TB <b>${g2(mean(aB))}$</b>, lớn nhất ${g2(mx(aB))}$ · khác chế độ <b>${nReg}</b> dòng.<br>(b) Dùng basis + k của CHÍNH dòng board: |lệch| TB <b>${g2(mean(aI))}$</b>, lớn nhất ${g2(mx(aI))}$ → (b) ≈ 0 nghĩa là HÀM giống board, phần lệch ở (a) do ĐẦU VÀO (basis/k/bản OI).</div>`
+          + ui.tbl(["Giờ VN", "File", "Giá", "Flip board", "Flip backtest (a)", "Lệch (a)", "Lệch (b)", "basis board / bt", "k board / bt", "Cùng bản OI GC·GLD"], K5.slice(-12).reverse().map((x) => `<tr><td>${vnT(x.ts)}</td><td>${x.file}</td><td>${g2(x.S)}</td><td>${g2(x.flip_board)} ${x.regime_board ? x.regime_board.slice(0, 3) : ""}</td><td>${g2(x.flip_bt)} ${x.regime_bt ? x.regime_bt.slice(0, 3) : ""}</td><td>${sgn2(x.lech_bt)}</td><td>${sgn2(x.lech_vao_board)}</td><td>${g2(x.basis_board)} / ${g2(x.basis_bt)}</td><td>${x.k_board != null ? (+x.k_board).toFixed(4) : "—"} / ${x.k_bt != null ? (+x.k_bt).toFixed(4) : "—"}</td><td>${x.gc_cung_hash ? "✓" : "✗"} · ${x.gld_cung_hash ? "✓" : "✗"}</td></tr>`)) + `</details>`; }
       h += `<details style="margin-top:4px"><summary style="cursor:pointer">Số 264 · Giờ OI GC có thật (avail của máy chủ) so với 20:00 Chicago</summary>` + ui.tbl(["Ngày file", "Giờ có (VN)", "Giờ Chicago", "So với 20:00 Chicago", "Ghi chú"], tbl264())
-        + `<div class="muted" style="font-size:10.5px">avail = max(lúc tải, 23:00 UTC ngày settle) — tính ở máy chủ. Máy chủ chỉ giữ bản CUỐI của mỗi file nên giờ này có thể MUỘN hơn lúc OI thật sự có (bảo thủ).</div></details>`;
+        + `<div class="muted" style="font-size:10.5px">avail = max(lúc tải, 23:00 UTC ngày settle) — tính ở máy chủ. 9b-6c: ngày có thư mục versions\\ dùng giờ tải của BẢN ĐẦU (lúc board thấy OI đó lần đầu, số 275); ngày cũ chưa có versions\\ vẫn dùng giờ ghi cuối của file (có thể muộn, bảo thủ).</div></details>`;
     }
     if (h !== D9.html) { D9.html = h; box.innerHTML = h; }
   }
