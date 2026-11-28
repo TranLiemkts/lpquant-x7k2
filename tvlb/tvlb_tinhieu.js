@@ -1853,7 +1853,10 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
   const sgn2 = (x) => (x == null || !isFinite(x) ? "—" : (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2));
   const vnT = (t) => (t == null || !isFinite(t) ? "—" : new Date(t * 1000).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }));
   const firstSym = () => { try { return feeds()[0].symbol; } catch (e) { return null; } };
-  const basis9 = () => { try { return basisNow(firstSym()) || 0; } catch (e) { return S.basis || 0; } };
+  const basisLive9 = () => { try { return basisNow(firstSym()) || 0; } catch (e) { return S.basis || 0; } };
+  // 9b-6c số 320: cuối tuần giá giao ngay (Swissquote) đứng còn XAUUSDT vẫn chạy → chênh «hiện tại» sai vài $ (28/11: −11,5 thay vì ~−7).
+  // Dùng chênh máy chủ lưu lúc CME MỞ CỬA (cùng số /api/fliphist dùng cho S) để nến backtest cùng hệ với Flip theo giờ.
+  const basis9 = () => (D9.fhInfo && D9.fhInfo.lech != null ? +D9.fhInfo.lech : basisLive9());
   async function loadKl9(force) {
     if (!force && D9.kl && Date.now() - D9.klAt < 30 * 60e3) return;
     try { const r = await (await fetch(API("/api/klines?tf=5m") + (force ? "&refresh=1" : ""))).json(); if (!r || !r.ok) throw new Error((r && r.error) || "lỗi tải nến"); D9.kl = r.rows || []; D9.klAt = Date.now(); D9.klErr = ""; }
@@ -1898,7 +1901,7 @@ html.dt-tool #chartWrap{cursor:crosshair}`;
   }
   function barsBT() {   // nến M5 đã lưu ở máy chủ (data\klines_<mã>_5m.json, giá Binance) + basis HIỆN TẠI (như board); nối thêm nến đang xem nếu khung M5
     const b = basis9(), out = (D9.kl || []).map((k) => ({ time: k[0], open: k[1] + b, high: k[2] + b, low: k[3] + b, close: k[4] + b }));
-    if (S.tf === "5m" && S.candles && S.candles.length) { const t1 = out.length ? out[out.length - 1].time : 0; for (const c of S.candles) if (c.time > t1) out.push({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }); }
+    if (S.tf === "5m" && S.candles && S.candles.length) { const t1 = out.length ? out[out.length - 1].time : 0; const d = b - basisLive9(); for (const c of S.candles) if (c.time > t1) out.push({ time: c.time, open: c.open + d, high: c.high + d, low: c.low + d, close: c.close + d }); }   // 9b-6c số 320: nến đang xem đổi về cùng chênh
     return out;
   }
   // ── nguồn tường ──
